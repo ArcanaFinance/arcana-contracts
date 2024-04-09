@@ -130,40 +130,16 @@ contract DJUSDTest is Test, MintingBaseSetup {
         assertNotEq(_djUsdToken.owner(), address(0));
     }
 
-    function testownershipTransferRequiresTwoSteps() public {
-        vm.prank(owner);
-        _djUsdToken.transferOwnership(_newOwner);
-        assertEq(_djUsdToken.owner(), owner);
-        assertNotEq(_djUsdToken.owner(), _newOwner);
-    }
-
     function test_CanTransferOwnership() public {
         vm.prank(owner);
         _djUsdToken.transferOwnership(_newOwner);
-        vm.prank(_newOwner);
-        _djUsdToken.acceptOwnership();
         assertEq(_djUsdToken.owner(), _newOwner);
-        assertNotEq(_djUsdToken.owner(), owner);
-    }
-
-    function test_CanCancelOwnershipChange() public {
-        vm.startPrank(owner);
-        _djUsdToken.transferOwnership(_newOwner);
-        _djUsdToken.transferOwnership(address(0));
-        vm.stopPrank();
-
-        vm.prank(_newOwner);
-        vm.expectRevert();
-        _djUsdToken.acceptOwnership();
-        assertEq(_djUsdToken.owner(), owner);
-        assertNotEq(_djUsdToken.owner(), _newOwner);
     }
 
     function test_NewOwnerCanPerformOwnerActions() public {
         vm.prank(owner);
         _djUsdToken.transferOwnership(_newOwner);
         vm.startPrank(_newOwner);
-        _djUsdToken.acceptOwnership();
         _djUsdToken.setMinter(_newMinter);
         vm.stopPrank();
         assertEq(_djUsdToken.minter(), _newMinter);
@@ -229,7 +205,6 @@ contract DJUSDTest is Test, MintingBaseSetup {
         vm.prank(owner);
         _djUsdToken.transferOwnership(_newOwner);
         vm.prank(_newOwner);
-        _djUsdToken.acceptOwnership();
         assertNotEq(_djUsdToken.owner(), owner);
         assertEq(_djUsdToken.owner(), _newOwner);
         vm.prank(owner);
@@ -241,11 +216,7 @@ contract DJUSDTest is Test, MintingBaseSetup {
     function test_OldOwnerCantSetMinter() public {
         vm.prank(owner);
         _djUsdToken.transferOwnership(_newOwner);
-        vm.prank(_newOwner);
-        _djUsdToken.acceptOwnership();
-        assertNotEq(_djUsdToken.owner(), owner);
         assertEq(_djUsdToken.owner(), _newOwner);
-        vm.prank(owner);
         vm.expectRevert();
         _djUsdToken.setMinter(_newMinter);
         assertEq(_djUsdToken.minter(), _minter);

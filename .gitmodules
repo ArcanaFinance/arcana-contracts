@@ -2,17 +2,7 @@
 	path = lib/forge-std
 	url = https://github.com/foundry-rs/forge-std
 
-[submodule "lib/openzeppelin-contracts"]
-	path = lib/openzeppelin-contracts
-	branch = release-v5.0
-	url = git@github.com:OpenZeppelin/openzeppelin-contracts.git
-
-[submodule "lib/openzeppelin-contracts-upgradeable"]
-	path = lib/openzeppelin-contracts-upgradeable
-	branch = release-v5.0
-	url = git@github.com:OpenZeppelin/openzeppelin-contracts-upgradeable.git
-
-[submodule "lib/layerzerolabs"]
-	path = lib/layerzerolabs
-	url = https://github.com/LayerZero-Labs/solidity-examples
+[submodule "lib/tangible-foundation-contracts"]
+	path = lib/tangible-foundation-contracts
+	url = https://github.com/TangibleTNFT/tangible-foundation-contracts
 	branch = main

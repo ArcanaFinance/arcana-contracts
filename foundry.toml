@@ -3,12 +3,6 @@ src = "src"
 out = "out"
 libs = ["lib"]
 solc = "0.8.20"
+evm_version = "shanghai"
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
-
-remappings = [
-    "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
-    "@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/",
-    "@layerzerolabs/contracts/=lib/layerzerolabs/contracts/",
-    "@layerzerolabs/contracts-upgradeable/=src/utils/layerzero/"
-]
