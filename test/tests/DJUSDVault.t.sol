@@ -39,6 +39,8 @@ contract DJUSDVaultTest is BaseSetup {
         assertEq(djUsdVault.balanceOf(bob), 0);
         assertEq(djUsdVault.totalSupply(), 0);
 
+        uint256 preview = djUsdVault.previewDeposit(bob, amount);
+
         // ~ Bob deposits into Vault ~
 
         vm.startPrank(bob);
@@ -50,17 +52,23 @@ contract DJUSDVaultTest is BaseSetup {
 
         assertEq(djUsdToken.balanceOf(bob), 0);
         assertEq(djUsdToken.balanceOf(address(djUsdVault)), amount);
+        assertEq(djUsdToken.balanceOf(address(djUsdVault)), preview);
         assertEq(djUsdVault.balanceOf(bob), amount);
         assertEq(djUsdVault.totalSupply(), amount);
     }
 
-    function test_vault_deposit_fuzzing(uint256 amount) public {
+    function test_vault_deposit_fuzzing(uint256 amount, bool disableRebase) public {
         amount = bound(amount, 1, 1_000_000 ether);
 
         // ~ Config ~
 
         vm.prank(address(djUsdMintingContract));
         djUsdToken.mint(bob, amount);
+
+        if (disableRebase) {
+            vm.prank(bob);
+            djUsdToken.disableRebase(bob, disableRebase);
+        }
 
         // ~ Pre-state check ~
 
@@ -116,7 +124,7 @@ contract DJUSDVaultTest is BaseSetup {
         assertEq(djUsdVault.balanceOf(bob), 0);
     }
 
-    function test_vault_redeem_fuzzing(uint256 amount) public {
+    function test_vault_redeem_fuzzing(uint256 amount, bool disableRebase) public {
         amount = bound(amount, 1, 1_000_000 ether);
 
         // ~ Config ~
@@ -124,6 +132,11 @@ contract DJUSDVaultTest is BaseSetup {
         deal(address(djUsdVault), bob, amount);
         vm.prank(address(djUsdMintingContract));
         djUsdToken.mint(address(djUsdVault), amount);
+
+        if (disableRebase) {
+            vm.prank(bob);
+            djUsdToken.disableRebase(bob, disableRebase);
+        }
 
         // ~ Pre-state check ~
 
