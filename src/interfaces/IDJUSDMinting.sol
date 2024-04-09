@@ -9,22 +9,14 @@ interface IDJUSDMinting is IDJUSDMintingEvents {
         Redeemer
     }
 
-    enum OrderType {
-        MINT,
-        REQUEST,
-        CLAIM
-    }
-
     struct Route {
         address[] addresses;
         uint256[] ratios;
     }
 
     struct Order {
-        OrderType order_type;
         uint256 expiry;
         uint256 nonce;
-        address account;
         address collateral_asset;
         uint256 collateral_amount;
     }
@@ -51,7 +43,7 @@ interface IDJUSDMinting is IDJUSDMintingEvents {
 
     function verifyOrder(Order calldata order) external view returns (bool);
 
-    function verifyRoute(Route calldata route, OrderType order_type) external view returns (bool);
+    function verifyRoute(Route calldata route) external view returns (bool);
 
     function verifyNonce(address sender, uint256 nonce) external view returns (bool, uint256, uint256, uint256);
 

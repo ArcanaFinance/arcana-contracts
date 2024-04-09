@@ -11,10 +11,10 @@ import {Vm} from "forge-std/Vm.sol";
 
 import { DJUSD } from "../../src/DJUSD.sol";
 import { DJUSDTaxManager } from "../../src/DJUSDTaxManager.sol";
-import { MintingBaseSetup } from "../MintingBaseSetup.sol";
+import { BaseSetup } from "../BaseSetup.sol";
 import { LZEndpointMock } from "../mock/LZEndpointMock.sol";
 
-contract DJUSDRebaseTest is Test, MintingBaseSetup {
+contract DJUSDRebaseTest is Test, BaseSetup {
     DJUSD internal _djUsdToken;
     DJUSDTaxManager internal _taxCollector;
 

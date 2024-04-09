@@ -10,10 +10,10 @@ import {SigUtils} from "../utils/SigUtils.sol";
 import {Vm} from "forge-std/Vm.sol";
 
 import { DJUSD } from "../../src/DJUSD.sol";
-import { MintingBaseSetup } from "../MintingBaseSetup.sol";
+import { BaseSetup } from "../BaseSetup.sol";
 import { LZEndpointMock } from "../mock/LZEndpointMock.sol";
 
-contract DJUSDLzAppTest is Test, MintingBaseSetup {
+contract DJUSDLzAppTest is Test, BaseSetup {
     DJUSD internal _djUsdToken;
 
     // mock

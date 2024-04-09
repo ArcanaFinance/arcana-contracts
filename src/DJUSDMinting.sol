@@ -26,51 +26,52 @@ contract DJUSDMinting is UUPSUpgradeable, IDJUSDMinting, Ownable2StepUpgradeable
     using EnumerableSet for EnumerableSet.AddressSet;
     using Checkpoints for Checkpoints.Trace208;
 
-    /* --------------- CONSTANTS --------------- */
+    // ---------------
+    // State Variables
+    // ---------------
 
     /// @notice route type
     bytes32 private constant ROUTE_TYPE = keccak256("Route(address[] addresses,uint256[] ratios)");
-
-
-    /* --------------- STATE VARIABLES --------------- */
-
     /// @notice djusd stablecoin
     IDJUSD public djusd;
-
     /// @notice Supported assets
     EnumerableSet.AddressSet internal _supportedAssets;
-
     /// @notice custodian addresses
     EnumerableSet.AddressSet internal _custodianAddresses;
-
     /// @notice user deduplication
     mapping(address => mapping(uint256 => uint256)) private _orderBitmaps;
-
     /// @notice Stores the total amount of `asset` that has been requested using checkpoints.
     mapping(address asset => Checkpoints.Trace208) internal totalRequestCheckpoints;
-
     /// @notice Returns the total amount of `asset` that has been claimed.
     mapping(address asset => uint256) public totalClaimed;
-
     /// @notice Tracks the total amount of an `asset` requested to claim by an `account`.
     mapping(address account => mapping(address asset => Checkpoints.Trace208)) internal accountRequestCheckpoints;
-
     /// @notice Tracks the total amount of an `asset` that has been claimed by an `account`.
     mapping(address account => mapping(address asset => uint256 amountClaimed)) public claimed;
-
     /// @notice Stores the minimum amount of seconds between asset request and asset claim.
     uint48 public claimDelay;
 
 
-    /* --------------- CONSTRUCTOR --------------- */
+    // -----------
+    // Constructor
+    // -----------
 
     constructor() {
         _disableInitializers();
     }
 
 
-    /* --------------- INITIALIZER --------------- */
+    // -----------
+    // Initializer
+    // -----------
 
+    /**
+     * @notice Initializes this contract
+     * @param _djusd DJUSD Contract address
+     * @param _assets Array of ERC20 stablecoins that will be used as collateral for DJUSD
+     * @param _custodians Array of addresses in which collateral is deposited
+     * @param _admin Initial owner of this contract
+     */
     function initialize(
         IDJUSD _djusd,
         address[] memory _assets,
@@ -102,25 +103,28 @@ contract DJUSDMinting is UUPSUpgradeable, IDJUSDMinting, Ownable2StepUpgradeable
         }
     }
 
-    /* --------------- EXTERNAL --------------- */
+
+    // ----------------
+    // External Methods
+    // ----------------
 
     /**
     * @notice Mint DJUSD from assets
     * @param order struct containing order details
     */
     function mint(Order calldata order, Route calldata route) external override nonReentrant {
-        if (order.order_type != OrderType.MINT) revert InvalidOrder();
         verifyOrder(order);
-        if (!verifyRoute(route, order.order_type)) revert InvalidRoute();
-        if (!_deduplicateOrder(order.account, order.nonce)) revert Duplicate();
+
+        if (!verifyRoute(route)) revert InvalidRoute();
+        if (!_deduplicateOrder(msg.sender, order.nonce)) revert Duplicate();
         // transfer asset from minter to this contract
 
         uint256 received = _transferCollateral(
-            order.collateral_amount, order.collateral_asset, order.account, route.addresses, route.ratios
+            order.collateral_amount, order.collateral_asset, msg.sender, route.addresses, route.ratios
         );
         
-        djusd.mint(order.account, received);
-        emit Mint(order.account, order.collateral_asset, received);
+        djusd.mint(msg.sender, received);
+        emit Mint(msg.sender, order.collateral_asset, received);
     }
 
     /**
@@ -128,23 +132,22 @@ contract DJUSDMinting is UUPSUpgradeable, IDJUSDMinting, Ownable2StepUpgradeable
     * @param order struct containing order details
     */
     function requestRedeem(Order calldata order) external override nonReentrant {
-        if (order.order_type != OrderType.REQUEST) revert InvalidOrder();
-        verifyOrder(order);
-        if (!_deduplicateOrder(order.account, order.nonce)) revert Duplicate();
+        verifyOrder(order);        
+        if (!_deduplicateOrder(msg.sender, order.nonce)) revert Duplicate();
 
         // burn DJUSD
-        djusd.burnFrom(order.account, order.collateral_amount);
+        djusd.burnFrom(msg.sender, order.collateral_amount);
 
         uint48 timepoint = uint48(clock());
         // update account
-        uint256 allTimeRequested = _accountRequestCheckpointsLookup(order.account, order.collateral_asset, timepoint, 0);
-        accountRequestCheckpoints[order.account][order.collateral_asset].push(timepoint, uint208(allTimeRequested + order.collateral_amount));
+        uint256 allTimeRequested = _accountRequestCheckpointsLookup(msg.sender, order.collateral_asset, timepoint, 0);
+        accountRequestCheckpoints[msg.sender][order.collateral_asset].push(timepoint, uint208(allTimeRequested + order.collateral_amount));
         // update total
         uint256 totalAllTimeRequestedForAsset = _totalRequestCheckpointsLookup(order.collateral_asset, timepoint, 0);
         totalRequestCheckpoints[order.collateral_asset].push(timepoint, uint208(totalAllTimeRequestedForAsset + order.collateral_amount));
 
         emit RedeemRequested(
-            order.account,
+            msg.sender,
             order.collateral_asset,
             order.collateral_amount
         );
@@ -155,22 +158,21 @@ contract DJUSDMinting is UUPSUpgradeable, IDJUSDMinting, Ownable2StepUpgradeable
     * @param order struct containing order details
     */
     function claim(Order calldata order) external nonReentrant {
-        if (order.order_type != OrderType.CLAIM) revert InvalidOrder();
         verifyOrder(order);
 
-        uint256 amountClaimable = getClaimableForAccount(order.account, order.collateral_asset);
+        uint256 amountClaimable = getClaimableForAccount(msg.sender, order.collateral_asset);
         if (amountClaimable == 0) revert NoAssetsClaimable();
         if (order.collateral_amount > amountClaimable) revert InvalidAmount();
 
-        _transferToBeneficiary(order.account, order.collateral_asset, order.collateral_amount);
+        _transferToBeneficiary(msg.sender, order.collateral_asset, order.collateral_amount);
 
         // Update claimed for msg.sender
-        claimed[order.account][order.collateral_asset] += order.collateral_amount;
+        claimed[msg.sender][order.collateral_asset] += order.collateral_amount;
         // Update total claimed
         totalClaimed[order.collateral_asset] += order.collateral_amount;
 
         emit AssetsClaimed(
-            order.account,
+            msg.sender,
             order.collateral_asset,
             order.collateral_amount
         );
@@ -194,13 +196,17 @@ contract DJUSDMinting is UUPSUpgradeable, IDJUSDMinting, Ownable2StepUpgradeable
     }
 
     /// @notice Adds an asset to the supported assets list.
-    function addSupportedAsset(address asset, bool isRebaseToken) external onlyOwner {
+    function addSupportedAsset(address asset) external onlyOwner {
         _addSupportedAsset(asset);
-        if (isRebaseToken) {
-            bytes memory data = abi.encodeWithSignature("disableRebase(address,bool)", address(this), true);
-            (bool success,) = asset.call(data);
-            if (!success) revert LowLevelCallFailed();
-        }
+    }
+
+    /// @notice Opts out of rebase of `asset`.
+    /// @dev Will only opt out of supported assets.
+    function optOutOfRebase(address asset, bool optOut) external onlyOwner {
+        if (!_supportedAssets.contains(asset)) revert InvalidAssetAddress();
+        bytes memory data = abi.encodeWithSignature("disableRebase(address,bool)", address(this), optOut);
+        (bool success,) = asset.call(data);
+        if (!success) revert LowLevelCallFailed();
     }
 
     /// @notice Removes an asset from the supported assets list
@@ -256,7 +262,10 @@ contract DJUSDMinting is UUPSUpgradeable, IDJUSDMinting, Ownable2StepUpgradeable
         }
     }
 
-    /* --------------- PUBLIC --------------- */
+    
+    // --------------
+    // Public Methods
+    // --------------
 
     /// @notice Returns all addresses within the `_supportedAssets` set.
     function getAllSupportedAssets() public view returns (address[] memory) {
@@ -271,7 +280,7 @@ contract DJUSDMinting is UUPSUpgradeable, IDJUSDMinting, Ownable2StepUpgradeable
     /// @notice Returns the total amount claimable for an account, given the asset being claimed.
     function getClaimableForAccount(address account, address asset) public view returns (uint256) {
         if (!_supportedAssets.contains(asset) || account == address(0)) return 0;
-        uint48 timepoint = uint48(clock());
+        uint48 timepoint = clock();
 
         uint256 claimable = _accountRequestCheckpointsLookup(account, asset, timepoint, claimDelay) - claimed[account][asset];
         return claimable;
@@ -280,7 +289,7 @@ contract DJUSDMinting is UUPSUpgradeable, IDJUSDMinting, Ownable2StepUpgradeable
     /// @notice Returns the total amount claimable, given the asset.
     function getTotalClaimableForAsset(address asset) public view returns (uint256) {
         if (!_supportedAssets.contains(asset)) return 0;
-        uint48 timepoint = uint48(clock());
+        uint48 timepoint = clock();
 
         uint256 totalClaimable = _totalRequestCheckpointsLookup(asset, timepoint, claimDelay) - totalClaimed[asset];
         return totalClaimable;
@@ -289,7 +298,7 @@ contract DJUSDMinting is UUPSUpgradeable, IDJUSDMinting, Ownable2StepUpgradeable
     /// @notice In the event this contract has multiple assets within `_supportedAssets`. This view
     /// nethod will be needed to fetch the total amount of stable assets that are claimable.
     function getTotalClaimable() public view returns (uint256 claimable) {
-        uint48 timepoint = uint48(clock());
+        uint48 timepoint = clock();
         address[] memory assets = getAllSupportedAssets();
         uint256 len = assets.length;
 
@@ -308,19 +317,13 @@ contract DJUSDMinting is UUPSUpgradeable, IDJUSDMinting, Ownable2StepUpgradeable
 
     /// @notice assert validity of signed order
     function verifyOrder(Order calldata order) public view override returns (bool) {
-        if (msg.sender != order.account) revert InvalidSignature();
-        if (order.account == address(0)) revert InvalidAddress();
         if (order.collateral_amount == 0) revert InvalidAmount();
         if (block.timestamp > order.expiry) revert SignatureExpired();
         return (true);
     }
 
     /// @notice assert validity of route object per type
-    function verifyRoute(Route calldata route, OrderType orderType) public view override returns (bool) {
-        // routes only used to mint
-        if (orderType == OrderType.REQUEST || orderType == OrderType.CLAIM) {
-            return true;
-        }
+    function verifyRoute(Route calldata route) public view override returns (bool) {
         uint256 totalRatio = 0;
         if (route.addresses.length != route.ratios.length) {
             return false;
@@ -370,7 +373,10 @@ contract DJUSDMinting is UUPSUpgradeable, IDJUSDMinting, Ownable2StepUpgradeable
         return "mode=timestamp";
     }
 
-    /* --------------- PRIVATE --------------- */
+
+    // ---------------
+    // Private Methods
+    // ---------------
 
     /// @notice deduplication of taker order
     function _deduplicateOrder(address sender, uint256 nonce) private returns (bool) {
@@ -380,7 +386,10 @@ contract DJUSDMinting is UUPSUpgradeable, IDJUSDMinting, Ownable2StepUpgradeable
         return valid;
     }
 
-    /* --------------- INTERNAL --------------- */
+    
+    // ----------------
+    // Internal Methods
+    // ----------------
 
     /// @notice Uses Checkpoints.upperLookup to fetch the last amount requested for redemption.
     /// @dev Does take into account a delay in the event we wanted to query claimable.

@@ -2,7 +2,7 @@
 pragma solidity ^0.8.19;
 
 // oz imports
-import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
+import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 // lz imports

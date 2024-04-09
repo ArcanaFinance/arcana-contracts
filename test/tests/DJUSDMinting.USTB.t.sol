@@ -7,13 +7,12 @@ pragma solidity ^0.8.19;
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 // local files
-import { MintingBaseSetup } from "../MintingBaseSetup.sol";
+import { BaseSetup } from "../BaseSetup.sol";
 import { DJUSDMinting } from "../../src/DJUSDMinting.sol";
 import { DJUSD } from "../../src/DJUSD.sol";
 import { DJUSDTaxManager } from "../../src/DJUSDTaxManager.sol";
 import { IDJUSDMinting } from "../../src/interfaces/IDJUSDMinting.sol";
 import { IDJUSDMintingEvents } from "../../src/interfaces/IDJUSDMintingEvents.sol";
-import { ISingleAdminAccessControl } from "../../src/interfaces/ISingleAdminAccessControl.sol";
 import { IDJUSDDefinitions } from "../../src/interfaces/IDJUSDDefinitions.sol";
 
 // helpers
@@ -23,7 +22,7 @@ import "../utils/Constants.sol";
  * @title DJUSDMintingUSTBIntegrationTest
  * @notice Unit Tests for DJUSDMinting contract interactions
  */
-contract DJUSDMintingUSTBIntegrationTest is MintingBaseSetup {
+contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
 
     string public UNREAL_RPC_URL = vm.envString("UNREAL_RPC_URL");
     IERC20 public unrealUSTB = IERC20(UNREAL_USTB);
@@ -39,7 +38,8 @@ contract DJUSDMintingUSTBIntegrationTest is MintingBaseSetup {
         djUsdMintingContract.removeSupportedAsset(address(USDCToken));
         djUsdMintingContract.removeSupportedAsset(address(USDTToken));
 
-        djUsdMintingContract.addSupportedAsset(address(unrealUSTB), true);
+        djUsdMintingContract.addSupportedAsset(address(unrealUSTB));
+        djUsdMintingContract.optOutOfRebase(address(unrealUSTB), true);
         vm.stopPrank();
     }
 
@@ -88,10 +88,8 @@ contract DJUSDMintingUSTBIntegrationTest is MintingBaseSetup {
         uint256 amount = unrealUSTB.balanceOf(bob);
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
-            order_type: IDJUSDMinting.OrderType.MINT,
             expiry: block.timestamp + 10 minutes,
             nonce: 14,
-            account: bob,
             collateral_asset: address(unrealUSTB),
             collateral_amount: amount
         });
@@ -149,10 +147,8 @@ contract DJUSDMintingUSTBIntegrationTest is MintingBaseSetup {
         uint256 amount = unrealUSTB.balanceOf(bob);
 
         IDJUSDMinting.Order memory mintOrder = IDJUSDMinting.Order({
-            order_type: IDJUSDMinting.OrderType.MINT,
             expiry: block.timestamp + 10 minutes,
             nonce: 15,
-            account: bob,
             collateral_asset: address(unrealUSTB),
             collateral_amount: amount
         });
@@ -191,10 +187,8 @@ contract DJUSDMintingUSTBIntegrationTest is MintingBaseSetup {
         uint256 amount = unrealUSTB.balanceOf(bob);
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
-            order_type: IDJUSDMinting.OrderType.MINT,
             expiry: block.timestamp + 10 minutes,
             nonce: 16,
-            account: bob,
             collateral_asset: address(unrealUSTB),
             collateral_amount: amount
         });
@@ -232,10 +226,8 @@ contract DJUSDMintingUSTBIntegrationTest is MintingBaseSetup {
         vm.stopPrank();
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
-            order_type: IDJUSDMinting.OrderType.MINT,
             expiry: block.timestamp + 10 minutes,
             nonce: 18,
-            account: bob,
             collateral_asset: address(unrealUSTB),
             collateral_amount: amount
         });
@@ -266,10 +258,8 @@ contract DJUSDMintingUSTBIntegrationTest is MintingBaseSetup {
         vm.stopPrank();
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
-            order_type: IDJUSDMinting.OrderType.MINT,
             expiry: block.timestamp + 10 minutes,
             nonce: 19,
-            account: bob,
             collateral_asset: NATIVE_TOKEN,
             collateral_amount: _amountToDeposit
         });
@@ -300,10 +290,8 @@ contract DJUSDMintingUSTBIntegrationTest is MintingBaseSetup {
         _deal(address(unrealUSTB), bob, amount);
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
-            order_type: IDJUSDMinting.OrderType.MINT,
             expiry: block.timestamp + 10 minutes,
             nonce: 18,
-            account: bob,
             collateral_asset: address(unrealUSTB),
             collateral_amount: amount
         });
@@ -334,10 +322,8 @@ contract DJUSDMintingUSTBIntegrationTest is MintingBaseSetup {
         _deal(address(unrealUSTB), bob, amount);
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
-            order_type: IDJUSDMinting.OrderType.MINT,
             expiry: block.timestamp + 10 minutes,
             nonce: 18,
-            account: bob,
             collateral_asset: address(unrealUSTB),
             collateral_amount: amount
         });
@@ -373,10 +359,8 @@ contract DJUSDMintingUSTBIntegrationTest is MintingBaseSetup {
         _deal(address(unrealUSTB), address(djUsdMintingContract), amount);
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
-            order_type: IDJUSDMinting.OrderType.REQUEST,
             expiry: block.timestamp + 10 minutes,
             nonce: 18,
-            account: alice,
             collateral_asset: address(unrealUSTB),
             collateral_amount: amount
         });
@@ -464,10 +448,8 @@ contract DJUSDMintingUSTBIntegrationTest is MintingBaseSetup {
         _deal(address(unrealUSTB), address(djUsdMintingContract), amount);
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
-            order_type: IDJUSDMinting.OrderType.REQUEST,
             expiry: block.timestamp + 10 minutes,
             nonce: 18,
-            account: alice,
             collateral_asset: address(unrealUSTB),
             collateral_amount: amount
         });
@@ -559,19 +541,15 @@ contract DJUSDMintingUSTBIntegrationTest is MintingBaseSetup {
         _deal(address(unrealUSTB), address(djUsdMintingContract), amountToMint);
 
         IDJUSDMinting.Order memory order1 = IDJUSDMinting.Order({
-            order_type: IDJUSDMinting.OrderType.REQUEST,
             expiry: block.timestamp + 10,
             nonce: 1,
-            account: alice,
             collateral_asset: address(unrealUSTB),
             collateral_amount: amount1
         });
 
         IDJUSDMinting.Order memory order2 = IDJUSDMinting.Order({
-            order_type: IDJUSDMinting.OrderType.REQUEST,
             expiry: block.timestamp + 10,
             nonce: 2,
-            account: alice,
             collateral_asset: address(unrealUSTB),
             collateral_amount: amount2
         });
@@ -688,10 +666,8 @@ contract DJUSDMintingUSTBIntegrationTest is MintingBaseSetup {
         _deal(address(unrealUSTB), address(djUsdMintingContract), amount);
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
-            order_type: IDJUSDMinting.OrderType.REQUEST,
             expiry: block.timestamp,
             nonce: 18,
-            account: alice,
             collateral_asset: address(unrealUSTB),
             collateral_amount: amount
         });
@@ -752,10 +728,8 @@ contract DJUSDMintingUSTBIntegrationTest is MintingBaseSetup {
         // ~ Alice claims ~
 
         order = IDJUSDMinting.Order({
-            order_type: IDJUSDMinting.OrderType.CLAIM,
             expiry: block.timestamp,
             nonce: 18,
-            account: alice,
             collateral_asset: address(unrealUSTB),
             collateral_amount: amount
         });
@@ -798,10 +772,8 @@ contract DJUSDMintingUSTBIntegrationTest is MintingBaseSetup {
         _deal(address(unrealUSTB), address(djUsdMintingContract), amount);
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
-            order_type: IDJUSDMinting.OrderType.REQUEST,
             expiry: block.timestamp,
             nonce: 18,
-            account: alice,
             collateral_asset: address(unrealUSTB),
             collateral_amount: amount
         });
@@ -862,10 +834,8 @@ contract DJUSDMintingUSTBIntegrationTest is MintingBaseSetup {
         // ~ Alice claims ~
 
         order = IDJUSDMinting.Order({
-            order_type: IDJUSDMinting.OrderType.CLAIM,
             expiry: block.timestamp,
             nonce: 18,
-            account: alice,
             collateral_asset: address(unrealUSTB),
             collateral_amount: amount
         });
@@ -885,10 +855,8 @@ contract DJUSDMintingUSTBIntegrationTest is MintingBaseSetup {
         _deal(address(unrealUSTB), address(djUsdMintingContract), amount);
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
-            order_type: IDJUSDMinting.OrderType.REQUEST,
             expiry: block.timestamp,
             nonce: 18,
-            account: alice,
             collateral_asset: address(unrealUSTB),
             collateral_amount: amount
         });
@@ -949,10 +917,8 @@ contract DJUSDMintingUSTBIntegrationTest is MintingBaseSetup {
         // ~ Alice claims ~
 
         order = IDJUSDMinting.Order({
-            order_type: IDJUSDMinting.OrderType.CLAIM,
             expiry: block.timestamp,
             nonce: 18,
-            account: alice,
             collateral_asset: address(unrealUSTB),
             collateral_amount: amount
         });
@@ -1003,10 +969,8 @@ contract DJUSDMintingUSTBIntegrationTest is MintingBaseSetup {
         _deal(address(unrealUSTB), alice, amount);
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
-            order_type: IDJUSDMinting.OrderType.MINT,
             expiry: block.timestamp + 10 minutes,
             nonce: 18,
-            account: alice,
             collateral_asset: address(unrealUSTB),
             collateral_amount: amount
         });
@@ -1040,10 +1004,8 @@ contract DJUSDMintingUSTBIntegrationTest is MintingBaseSetup {
         _deal(address(unrealUSTB), alice, amount);
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
-            order_type: IDJUSDMinting.OrderType.MINT,
             expiry: block.timestamp + 10 minutes,
             nonce: 1,
-            account: alice,
             collateral_asset: address(unrealUSTB),
             collateral_amount: amount
         });
@@ -1087,10 +1049,8 @@ contract DJUSDMintingUSTBIntegrationTest is MintingBaseSetup {
         // ~ Alice executes requestRedeem ~
 
         order = IDJUSDMinting.Order({
-            order_type: IDJUSDMinting.OrderType.REQUEST,
             expiry: block.timestamp + 10 minutes,
             nonce: 2,
-            account: alice,
             collateral_asset: address(unrealUSTB),
             collateral_amount: newBal
         });
@@ -1167,10 +1127,8 @@ contract DJUSDMintingUSTBIntegrationTest is MintingBaseSetup {
         _deal(address(unrealUSTB), alice, amount);
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
-            order_type: IDJUSDMinting.OrderType.MINT,
             expiry: block.timestamp + 10 minutes,
             nonce: 1,
-            account: alice,
             collateral_asset: address(unrealUSTB),
             collateral_amount: amount
         });
@@ -1211,10 +1169,8 @@ contract DJUSDMintingUSTBIntegrationTest is MintingBaseSetup {
 
         // redeem
         order = IDJUSDMinting.Order({
-            order_type: IDJUSDMinting.OrderType.REQUEST,
             expiry: block.timestamp + 10 minutes,
             nonce: 2,
-            account: alice,
             collateral_asset: address(unrealUSTB),
             collateral_amount: newBal
         });
@@ -1293,10 +1249,8 @@ contract DJUSDMintingUSTBIntegrationTest is MintingBaseSetup {
         _deal(address(unrealUSTB), alice, amount);
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
-            order_type: IDJUSDMinting.OrderType.MINT,
             expiry: block.timestamp + 10 minutes,
             nonce: 1,
-            account: alice,
             collateral_asset: address(unrealUSTB),
             collateral_amount: amount
         });
@@ -1340,10 +1294,8 @@ contract DJUSDMintingUSTBIntegrationTest is MintingBaseSetup {
         // ~ Alice executes requestRedeem ~
 
         order = IDJUSDMinting.Order({
-            order_type: IDJUSDMinting.OrderType.REQUEST,
             expiry: block.timestamp + 10 minutes,
             nonce: 2,
-            account: alice,
             collateral_asset: address(unrealUSTB),
             collateral_amount: newBal
         });
@@ -1396,10 +1348,8 @@ contract DJUSDMintingUSTBIntegrationTest is MintingBaseSetup {
         // ~ Alice claims ~
 
         order = IDJUSDMinting.Order({
-            order_type: IDJUSDMinting.OrderType.CLAIM,
             expiry: block.timestamp,
             nonce: 18,
-            account: alice,
             collateral_asset: address(unrealUSTB),
             collateral_amount: newBal
         });

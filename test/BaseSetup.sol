@@ -13,19 +13,20 @@ import { Vm } from "forge-std/Vm.sol";
 import { Utils } from "./utils/Utils.sol";
 
 import { DJUSDMinting } from "../src/DJUSDMinting.sol";
+import { DJUSDPointsBoostVault } from "../src/DJUSDPointsBoostingVault.sol";
 import { MockToken } from "../src/mock/MockToken.sol";
 import { DJUSD } from "../src/DJUSD.sol";
 import { DJUSDTaxManager } from "../src/DJUSDTaxManager.sol";
 import { IDJUSDMinting } from "../src/interfaces/IDJUSDMinting.sol";
 import { IDJUSD } from "../src/interfaces/IDJUSD.sol";
 import { IDJUSDMintingEvents } from "../src/interfaces/IDJUSDMintingEvents.sol";
-import { ISingleAdminAccessControl } from "../src/interfaces/ISingleAdminAccessControl.sol";
 import { IDJUSDDefinitions } from "../src/interfaces/IDJUSDDefinitions.sol";
 
-contract MintingBaseSetup is Test, IDJUSDMintingEvents, IDJUSDDefinitions {
+contract BaseSetup is Test, IDJUSDMintingEvents, IDJUSDDefinitions {
     Utils internal utils;
     DJUSD internal djUsdToken;
     DJUSDTaxManager internal taxManager;
+    DJUSDPointsBoostVault internal djUsdVault;
     MockToken internal USTB;
     MockToken internal cbETHToken;
     MockToken internal rETHToken;
@@ -89,7 +90,6 @@ contract MintingBaseSetup is Test, IDJUSDMintingEvents, IDJUSDDefinitions {
     bytes internal InvalidAffirmedAmount = abi.encodeWithSelector(IDJUSDMinting.InvalidAffirmedAmount.selector);
     bytes internal InvalidAmount = abi.encodeWithSelector(IDJUSDMinting.InvalidAmount.selector);
     bytes internal InvalidRoute = abi.encodeWithSelector(IDJUSDMinting.InvalidRoute.selector);
-    bytes internal InvalidAdminChange = abi.encodeWithSelector(ISingleAdminAccessControl.InvalidAdminChange.selector);
     bytes internal UnsupportedAsset = abi.encodeWithSelector(IDJUSDMinting.UnsupportedAsset.selector);
     bytes internal InvalidSignature = abi.encodeWithSelector(IDJUSDMinting.InvalidSignature.selector);
     bytes internal InvalidNonce = abi.encodeWithSelector(IDJUSDMinting.InvalidNonce.selector);
@@ -181,6 +181,8 @@ contract MintingBaseSetup is Test, IDJUSDMintingEvents, IDJUSDDefinitions {
         );
         djUsdMintingContract = DJUSDMinting(payable(address(djinnMintingProxy)));
 
+        djUsdVault = new DJUSDPointsBoostVault(address(djUsdToken));
+
         vm.startPrank(owner);
 
         // Add self as approved custodian
@@ -231,10 +233,8 @@ contract MintingBaseSetup is Test, IDJUSDMintingEvents, IDJUSDDefinitions {
         )
     {
         order = IDJUSDMinting.Order({
-            order_type: IDJUSDMinting.OrderType.MINT,
             expiry: block.timestamp + 10 minutes,
             nonce: nonce,
-            account: actor,
             collateral_asset: address(USTB),
             collateral_amount: collateralAmount
         });
@@ -273,10 +273,8 @@ contract MintingBaseSetup is Test, IDJUSDMintingEvents, IDJUSDDefinitions {
 
         //redeem
         redeemOrder = IDJUSDMinting.Order({
-            order_type: IDJUSDMinting.OrderType.REQUEST,
             expiry: block.timestamp + 10 minutes,
             nonce: nonce + 1,
-            account: actor,
             collateral_asset: address(USTB),
             collateral_amount: collateralAmount
         });
