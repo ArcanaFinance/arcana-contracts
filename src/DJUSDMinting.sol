@@ -555,18 +555,15 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
         returns (uint256 received)
     {
         uint256 required = requiredTokens(asset);
-        if (required == 0) {
-            uint256 balanceBefore = IERC20(asset).balanceOf(custodian_);
-            IERC20(asset).safeTransferFrom(user, custodian_, amount);
-            received = IERC20(asset).balanceOf(custodian_) - balanceBefore;
-        } else {
-            uint256 balanceBefore = IERC20(asset).balanceOf(address(this));
-            IERC20(asset).safeTransferFrom(user, address(this), amount);
-            received = IERC20(asset).balanceOf(address(this)) - balanceBefore;
-            if (required < received) {
-                unchecked {
-                    IERC20(asset).safeTransfer(custodian_, received - required);
-                }
+        address recipient = required == 0 ? custodian_ : address(this);
+
+        uint256 balanceBefore = IERC20(asset).balanceOf(recipient);
+        IERC20(asset).safeTransferFrom(user, recipient, amount);
+        received = IERC20(asset).balanceOf(recipient) - balanceBefore;
+
+        if (required != 0 && required < received) {
+            unchecked {
+                IERC20(asset).safeTransfer(custodian_, received - required);
             }
         }
     }
