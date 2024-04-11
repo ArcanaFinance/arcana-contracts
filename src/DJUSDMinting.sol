@@ -242,19 +242,23 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
     }
 
     /**
-     * @notice Mints DJUSD tokens in exchange for a specified amount of a supported asset.
-     * @dev This function allows a user to deposit a supported asset into the contract and receive DJUSD tokens in
-     * return. The function ensures that the asset is supported and applies non-reentrancy protection to prevent double
-     * spending.
-     * The amount of DJUSD minted is equal to the amount of the asset deposited, minus any applicable fees or
-     * adjustments defined elsewhere.
-     * @param asset The address of the supported asset to deposit.
-     * @param amountIn The amount of the asset to deposit in exchange for DJUSD. The actual amount of DJUSD minted may
-     * vary based on the contract's logic.
-     * @return amountOut The amount of DJUSD minted and credited to the user.
-     * @custom:error NotSupportedAsset The asset is not supported for minting.
-     * @custom:event Mint The address of the user who minted, the asset address, the amount deposited, and the amount
-     * of DJUSD minted.
+     * @notice Mints DJUSD tokens in exchange for a specified amount of a supported asset, which is directly transferred
+     * to the custodian.
+     * @dev This function facilitates a user to deposit a supported asset directly to the custodian and receive DJUSD
+     * tokens in return.
+     * The function ensures the asset is supported and employs non-reentrancy protection to prevent double spending.
+     * The actual amount of DJUSD minted equals the asset amount received by the custodian, which may vary due to
+     * transaction fees or adjustments.
+     * The asset is pulled from the user to the custodian directly, ensuring transparency and traceability of asset
+     * transfer.
+     * @param asset The address of the supported asset to be deposited.
+     * @param amountIn The amount of the asset to be transferred from the user to the custodian in exchange for DJUSD.
+     * @return amountOut The amount of DJUSD minted and credited to the user's account.
+     * @custom:error NotSupportedAsset Indicates the asset is not supported for minting.
+     * @custom:event Mint Logs the address of the user who minted, the asset address, the amount deposited, and the
+     * amount of DJUSD minted.
+     * @custom:event CustodyTransfer Logs the transfer of the asset to the custodian, detailing the amount and involved
+     * parties.
      */
     function mint(address asset, uint256 amountIn)
         external
@@ -262,10 +266,16 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
         validAsset(asset)
         returns (uint256 amountOut)
     {
+        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
         address user = msg.sender;
-        amountIn = _pullAssets(user, asset, amountIn);
+        address custodian_ = $.custodian;
+
+        amountIn = _pullAssets(user, custodian_, asset, amountIn);
+        emit CustodyTransfer(custodian_, asset, amountIn);
+
         uint256 balanceBefore = DJUSD.balanceOf(user);
         DJUSD.mint(user, amountIn);
+
         unchecked {
             amountOut = DJUSD.balanceOf(user) - balanceBefore;
         }
@@ -449,20 +459,6 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
     }
 
     /**
-     * @notice Transfers a specified amount of a supported asset to the custodian.
-     * @dev This internal function is used to transfer custody of assets to a designated custodian. It's part of
-     * managing the physical or digital custody of assets represented within the contract.
-     * @param asset The address of the asset to be transferred.
-     * @param amount The amount of the asset to transfer.
-     * @custom:event CustodyTransfer The address of the custodian, the asset address, and the amount transferred.
-     */
-    function _transferToCustody(address asset, uint256 amount) internal {
-        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
-        IERC20(asset).safeTransfer($.custodian, amount);
-        emit CustodyTransfer($.custodian, asset, amount);
-    }
-
-    /**
      * @dev Calculates the total amount of a supported asset that the specified user can claim based on their redemption
      * requests. This internal view function iterates over the user's redemption requests, summing the amounts of all
      * requests that are past their claimable timestamp.
@@ -534,23 +530,28 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
     }
 
     /**
-     * @dev Transfers a specified amount of a supported asset from a user's address to this contract. It's used during
-     * the minting process when a user wants to mint DJUSD by depositing a supported asset.
-     * This function calculates the received amount by comparing the contract's balance of the asset before and after
-     * the transfer, to handle cases where fees may apply or if additional tokens are sent to the contract by mistake.
-     * This mechanism ensures accurate accounting of the assets transferred to the contract and the corresponding
-     * minting of DJUSD tokens.
+     * @dev Transfers a specified amount of a supported asset directly from a user's address to a specified receiver,
+     * typically the custodian.
+     * This function is used during the minting process when a user wants to mint DJUSD by directly depositing a
+     * supported asset to the custodian.
+     * It calculates the received amount by comparing the receiver's (custodian's) balance of the asset before and after
+     * the transfer, accounting for scenarios where fees may apply or additional tokens are inadvertently sent.
+     * This ensures accurate accounting of the assets transferred and supports the corresponding minting of DJUSD
+     * tokens.
      * @param user The address from which the asset will be pulled.
-     * @param asset The address of the supported asset to be transferred to the contract.
-     * @param amount The amount of the asset to transfer from the user to the contract.
-     * @return received The actual amount of the asset received by the contract, which may differ from the requested
-     * `amount` due to fees or other factors.
+     * @param receiver The custodian address to which the asset will be transferred.
+     * @param asset The address of the supported asset to be transferred.
+     * @param amount The amount of the asset to transfer from the user directly to the receiver.
+     * @return received The actual amount of the asset received by the receiver, which may differ from the requested
+     * `amount` due to transaction fees or other transfer-related adjustments.
      */
-    function _pullAssets(address user, address asset, uint256 amount) internal returns (uint256 received) {
-        uint256 balanceBefore = IERC20(asset).balanceOf(address(this));
-        IERC20(asset).safeTransferFrom(user, address(this), amount);
-        received = IERC20(asset).balanceOf(address(this)) - balanceBefore;
-        _transferToCustody(asset, received);
+    function _pullAssets(address user, address receiver, address asset, uint256 amount)
+        internal
+        returns (uint256 received)
+    {
+        uint256 balanceBefore = IERC20(asset).balanceOf(receiver);
+        IERC20(asset).safeTransferFrom(user, receiver, amount);
+        received = IERC20(asset).balanceOf(receiver) - balanceBefore;
     }
 
     /**
