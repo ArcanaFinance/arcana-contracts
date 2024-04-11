@@ -8,10 +8,8 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
  * @title DJUSDTaxManager
  * @notice Tax Manager to DJUSD contract
  * @dev This contract manages the taxation of rebases on the DJUSD token. This contract facilitates the rebase of DJUSD
- * and
- *      during rebase, will calculate an amount of DJUSD to mint to the `feeCollector` and thus re-calculating the
- * rebaseIndex to result in
- *      the targeted post-rebase totalSupply with the new minted tokens in mind.
+ * and during rebase, will calculate an amount of DJUSD to mint to the `feeCollector` and thus re-calculating the
+ * rebaseIndex to result in the targeted post-rebase totalSupply with the new minted tokens in mind.
  */
 contract DJUSDTaxManager is Ownable {
     /// @dev Stores the contract reference to DJUSD.

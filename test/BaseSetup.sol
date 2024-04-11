@@ -5,27 +5,32 @@ pragma solidity ^0.8.19;
 /* solhint-disable func-name-mixedcase  */
 /* solhint-disable var-name-mixedcase  */
 
+// oz imports
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
-import {stdStorage, StdStorage, Test} from "forge-std/Test.sol";
-import {SigUtils} from "./utils/SigUtils.sol";
-import {Vm} from "forge-std/Vm.sol";
-import {Utils} from "./utils/Utils.sol";
-
+// contracts
 import {DJUSDMinting} from "../src/DJUSDMinting.sol";
 import {DJUSDPointsBoostVault} from "../src/DJUSDPointsBoostingVault.sol";
 import {MockToken} from "../src/mock/MockToken.sol";
 import {DJUSD} from "../src/DJUSD.sol";
 import {DJUSDTaxManager} from "../src/DJUSDTaxManager.sol";
-import {IDJUSDMinting} from "../src/interfaces/IDJUSDMinting.sol";
+import {DJUSDFeeCollector} from "../src/DJUSDFeeCollector.sol";
+
+// interfaces
 import {IDJUSD} from "../src/interfaces/IDJUSD.sol";
-import {IDJUSDMintingEvents} from "../src/interfaces/IDJUSDMintingEvents.sol";
 import {IDJUSDDefinitions} from "../src/interfaces/IDJUSDDefinitions.sol";
 
-contract BaseSetup is Test, IDJUSDMintingEvents, IDJUSDDefinitions {
+// helpers
+import {stdStorage, StdStorage, Test} from "forge-std/Test.sol";
+import {SigUtils} from "./utils/SigUtils.sol";
+import {Vm} from "forge-std/Vm.sol";
+import {Utils} from "./utils/Utils.sol";
+
+contract BaseSetup is Test, IDJUSDDefinitions {
     Utils internal utils;
     DJUSD internal djUsdToken;
     DJUSDTaxManager internal taxManager;
+    DJUSDFeeCollector internal feeCollector;
     DJUSDPointsBoostVault internal djUsdVault;
     MockToken internal USTB;
     MockToken internal cbETHToken;
@@ -92,7 +97,6 @@ contract BaseSetup is Test, IDJUSDMintingEvents, IDJUSDDefinitions {
 
     // Declared at contract level to avoid stack too deep
     SigUtils.Permit public permit;
-    IDJUSDMinting.Order public mint;
 
     /// @notice packs r, s, v into signature bytes
     function _packRsv(bytes32 r, bytes32 s, uint8 v) internal pure returns (bytes memory) {
@@ -127,6 +131,16 @@ contract BaseSetup is Test, IDJUSDMintingEvents, IDJUSDDefinitions {
         vm.label(custodian1, "custodian1");
         vm.label(randomer, "randomer");
 
+        address[] memory distributors = new address[](2);
+        distributors[0] = address(2);
+        distributors[1] = address(3);
+
+        uint256[] memory ratios = new uint256[](2);
+        ratios[0] = 1;
+        ratios[1] = 1;
+
+        // ~ Deploy Contracts ~
+
         djUsdToken = new DJUSD(1, layerZeroEndpoint);
         ERC1967Proxy djUsdTokenProxy = new ERC1967Proxy(
             address(djUsdToken),
@@ -137,7 +151,14 @@ contract BaseSetup is Test, IDJUSDMintingEvents, IDJUSDDefinitions {
         );
         djUsdToken = DJUSD(address(djUsdTokenProxy));
 
-        taxManager = new DJUSDTaxManager(owner, address(djUsdToken), address(999));
+        feeCollector = new DJUSDFeeCollector(
+            owner,
+            address(djUsdToken),
+            distributors,
+            ratios
+        );
+
+        taxManager = new DJUSDTaxManager(owner, address(djUsdToken), address(feeCollector));
 
         djUsdMintingContract = new DJUSDMinting(IDJUSD(address(djUsdToken)));
         ERC1967Proxy djinnMintingProxy = new ERC1967Proxy(
@@ -151,6 +172,8 @@ contract BaseSetup is Test, IDJUSDMintingEvents, IDJUSDDefinitions {
         djUsdMintingContract = DJUSDMinting(payable(address(djinnMintingProxy)));
 
         djUsdVault = new DJUSDPointsBoostVault(address(djUsdToken));
+
+        // ~ Config ~
 
         vm.startPrank(owner);
 

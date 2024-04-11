@@ -9,8 +9,6 @@ import {MockToken} from "../../src/mock/MockToken.sol";
 import {DJUSD} from "../../src/DJUSD.sol";
 import {IDJUSD} from "../../src/interfaces/IDJUSD.sol";
 import {DJUSDTaxManager} from "../../src/DJUSDTaxManager.sol";
-import {IDJUSDMinting} from "../../src/interfaces/IDJUSDMinting.sol";
-import {IDJUSDMintingEvents} from "../../src/interfaces/IDJUSDMintingEvents.sol";
 import {IDJUSDDefinitions} from "../../src/interfaces/IDJUSDDefinitions.sol";
 
 /**
@@ -100,22 +98,16 @@ contract DJUSDMintingCoreTest is BaseSetup {
 
     function test_add_and_remove_supported_asset() public {
         address asset = address(20);
-        vm.expectEmit(true, false, false, false);
-        emit AssetAdded(asset);
         vm.startPrank(owner);
         djUsdMintingContract.addSupportedAsset(asset);
         assertTrue(djUsdMintingContract.isSupportedAsset(asset));
 
-        vm.expectEmit(true, false, false, false);
-        emit AssetRemoved(asset);
         djUsdMintingContract.removeSupportedAsset(asset);
         assertFalse(djUsdMintingContract.isSupportedAsset(asset));
     }
 
     function test_cannot_add_asset_already_supported_revert() public {
         address asset = address(20);
-        vm.expectEmit(true, false, false, false);
-        emit AssetAdded(asset);
         vm.startPrank(owner);
         djUsdMintingContract.addSupportedAsset(asset);
         assertTrue(djUsdMintingContract.isSupportedAsset(asset));

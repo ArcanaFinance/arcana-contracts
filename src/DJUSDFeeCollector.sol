@@ -11,7 +11,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
  */
 contract DJUSDFeeCollector is Ownable {
     /// @dev Stores contract address of DJUSD token.
-    address public immutable djUsd;
+    address public immutable DJUSD;
     /// @dev Stores addresses where DJUSD rewards are distributed to.
     address[] public distributors;
     /// @dev Stores ratios of amount of DJUSD that's allocated to each address in `distributors`.
@@ -42,7 +42,7 @@ contract DJUSDFeeCollector is Ownable {
         uint256 len = _distributors.length;
         if (len != _ratios.length || len == 0) revert InvalidArraySize();
 
-        djUsd = _djusd;
+        DJUSD = _djusd;
         distributors = _distributors;
         ratios = _ratios;
     }
@@ -67,7 +67,7 @@ contract DJUSDFeeCollector is Ownable {
             address receiver = distributors[i];
             uint256 amountToTransfer = (contractBalance * ratios[i]) / totalRatio;
 
-            IERC20(djUsd).transfer(receiver, amountToTransfer);
+            IERC20(DJUSD).transfer(receiver, amountToTransfer);
             emit RewardsDistributed(receiver, amountToTransfer);
 
             unchecked {
@@ -109,6 +109,6 @@ contract DJUSDFeeCollector is Ownable {
      * @notice Returns the contract's balance of DJUSD token.
      */
     function getDjUsdBalance() public view returns (uint256) {
-        return IERC20(djUsd).balanceOf(address(this));
+        return IERC20(DJUSD).balanceOf(address(this));
     }
 }

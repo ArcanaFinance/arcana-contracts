@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.19;
 
+// oz imports
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IERC6372} from "@openzeppelin/contracts/interfaces/IERC6372.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
@@ -9,9 +10,11 @@ import {ReentrancyGuardUpgradeable} from "@openzeppelin/contracts-upgradeable/ut
 import {Time} from "@openzeppelin/contracts/utils/types/Time.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
+// interfaces
 import {IDJUSD} from "./interfaces/IDJUSD.sol";
 import {IRebaseToken} from "./interfaces/IRebaseToken.sol";
 
+// libs
 import {CommonErrors} from "./libraries/CommonErrors.sol";
 import {CommonValidations} from "./libraries/CommonValidations.sol";
 

@@ -5,10 +5,6 @@ pragma solidity ^0.8.19;
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
-// lz imports
-import {ILayerZeroUserApplicationConfig} from
-    "@layerzerolabs/contracts/lzApp/interfaces/ILayerZeroUserApplicationConfig.sol";
-
 // local interfaces
 import {ITaxManager} from "./interfaces/ITaxManager.sol";
 import {IDJUSDDefinitions} from "./interfaces/IDJUSDDefinitions.sol";

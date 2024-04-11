@@ -11,8 +11,6 @@ import {BaseSetup} from "../BaseSetup.sol";
 import {DJUSDMinting} from "../../src/DJUSDMinting.sol";
 import {DJUSD} from "../../src/DJUSD.sol";
 import {DJUSDTaxManager} from "../../src/DJUSDTaxManager.sol";
-import {IDJUSDMinting} from "../../src/interfaces/IDJUSDMinting.sol";
-import {IDJUSDMintingEvents} from "../../src/interfaces/IDJUSDMintingEvents.sol";
 import {IDJUSDDefinitions} from "../../src/interfaces/IDJUSDDefinitions.sol";
 
 // helpers

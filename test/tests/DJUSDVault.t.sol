@@ -12,7 +12,7 @@ import {DJUSDPointsBoostVault} from "../../src/DJUSDPointsBoostingVault.sol";
 
 /**
  * @title DJUSDVaultTest
- * @notice Unit Tests for DJUSDMinting contract interactions
+ * @notice Unit Tests for DJUSDPointsBoostVault contract interactions
  */
 contract DJUSDVaultTest is BaseSetup {
     function setUp() public override {
