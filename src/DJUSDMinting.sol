@@ -418,32 +418,10 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
     }
 
     /**
-     * @notice Retrieves the amount of a supported asset that is required to fulfill pending redemption requests.
-     * @dev This function calculates the total amount of the specified asset that is needed to fulfill all pending
-     * redemption requests. It considers the total amount of pending claims for the asset and subtracts the current
-     * balance of the asset held in the contract.
-     * If the total pending claims exceed the current balance, the function returns the difference as the required
-     * amount.
-     * @param asset The address of the supported asset to calculate the required amount for.
-     * @return amount The total amount of the specified asset required to fulfill pending redemption requests.
-     * @custom:error NotSupportedAsset The asset is not supported for redemption.
-     */
-    function requiredTokens(address asset) external view validAsset(asset) returns (uint256 amount) {
-        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
-        uint256 totalPendingClaims = $.pendingClaims[asset];
-        uint256 balance = IERC20(asset).balanceOf(address(this));
-        if (totalPendingClaims > balance) {
-            unchecked {
-                amount = totalPendingClaims - balance;
-            }
-        }
-    }
-
-    /**
      * @notice Returns the supportedAssets array.
      * @return supportedAssets All supported assets that are accepted as collateral.
      */
-    function getAllSupportedAssets() public view returns (address[] memory supportedAssets) {
+    function getAllSupportedAssets() external view returns (address[] memory supportedAssets) {
         DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
         return $.supportedAssets.values();
     }
@@ -456,6 +434,28 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
     function getPendingClaims(address asset) external view returns (uint256 amount) {
         DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
         return $.pendingClaims[asset];
+    }
+
+    /**
+     * @notice Retrieves the amount of a supported asset that is required to fulfill pending redemption requests.
+     * @dev This function calculates the total amount of the specified asset that is needed to fulfill all pending
+     * redemption requests. It considers the total amount of pending claims for the asset and subtracts the current
+     * balance of the asset held in the contract.
+     * If the total pending claims exceed the current balance, the function returns the difference as the required
+     * amount.
+     * @param asset The address of the supported asset to calculate the required amount for.
+     * @return amount The total amount of the specified asset required to fulfill pending redemption requests.
+     * @custom:error NotSupportedAsset The asset is not supported for redemption.
+     */
+    function requiredTokens(address asset) public view validAsset(asset) returns (uint256 amount) {
+        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        uint256 totalPendingClaims = $.pendingClaims[asset];
+        uint256 balance = IERC20(asset).balanceOf(address(this));
+        if (totalPendingClaims > balance) {
+            unchecked {
+                amount = totalPendingClaims - balance;
+            }
+        }
     }
 
     /**
@@ -530,28 +530,45 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
     }
 
     /**
-     * @dev Transfers a specified amount of a supported asset directly from a user's address to a specified receiver,
-     * typically the custodian.
-     * This function is used during the minting process when a user wants to mint DJUSD by directly depositing a
-     * supported asset to the custodian.
-     * It calculates the received amount by comparing the receiver's (custodian's) balance of the asset before and after
-     * the transfer, accounting for scenarios where fees may apply or additional tokens are inadvertently sent.
-     * This ensures accurate accounting of the assets transferred and supports the corresponding minting of DJUSD
-     * tokens.
+     * @dev Transfers a specified amount of a supported asset from a user's address directly to the custodian, adjusted
+     * based on the redemption requirements.
+     * This function is crucial during the minting process or when managing redemption requests. It assesses the total
+     * amount of the asset that is required to fulfill unclaimed redemption requests.
+     * If no additional tokens are needed for pending redemptions (i.e., required tokens are zero), the asset is
+     * directly transferred from the user to the custodian.
+     * If there are outstanding redemption obligations, the asset is initially transferred to this contract to ensure
+     * adequate availability for future claims. Excess tokens, beyond what is required for redemptions, are subsequently
+     * transferred to the custodian.
+     * This structured approach ensures that sufficient assets are always on hand to meet redemption claims while
+     * effectively managing incoming asset deposits for minting.
      * @param user The address from which the asset will be pulled.
-     * @param receiver The custodian address to which the asset will be transferred.
+     * @param custodian_ The custodian to whom the asset will be transferred, either directly or after fulfilling
+     * redemption requirements.
      * @param asset The address of the supported asset to be transferred.
-     * @param amount The amount of the asset to transfer from the user directly to the receiver.
-     * @return received The actual amount of the asset received by the receiver, which may differ from the requested
-     * `amount` due to transaction fees or other transfer-related adjustments.
+     * @param amount The intended amount of the asset to transfer from the user. The function calculates the actual
+     * transfer based on the asset’s pending redemption needs.
+     * @return received The actual amount of the asset received by the contract or the custodian, which may differ from
+     * the intended amount due to transaction fees or after considering the required redemption amount.
      */
-    function _pullAssets(address user, address receiver, address asset, uint256 amount)
+    function _pullAssets(address user, address custodian_, address asset, uint256 amount)
         internal
         returns (uint256 received)
     {
-        uint256 balanceBefore = IERC20(asset).balanceOf(receiver);
-        IERC20(asset).safeTransferFrom(user, receiver, amount);
-        received = IERC20(asset).balanceOf(receiver) - balanceBefore;
+        uint256 required = requiredTokens(asset);
+        if (required == 0) {
+            uint256 balanceBefore = IERC20(asset).balanceOf(custodian_);
+            IERC20(asset).safeTransferFrom(user, custodian_, amount);
+            received = IERC20(asset).balanceOf(custodian_) - balanceBefore;
+        } else {
+            uint256 balanceBefore = IERC20(asset).balanceOf(address(this));
+            IERC20(asset).safeTransferFrom(user, address(this), amount);
+            received = IERC20(asset).balanceOf(address(this)) - balanceBefore;
+            if (required < received) {
+                unchecked {
+                    IERC20(asset).safeTransfer(custodian_, received - required);
+                }
+            }
+        }
     }
 
     /**
