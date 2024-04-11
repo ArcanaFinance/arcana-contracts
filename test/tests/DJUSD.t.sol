@@ -50,7 +50,7 @@ contract DJUSDTest is Test, BaseSetup {
         );
         _djUsdToken = DJUSD(address(_djUsdTokenProxy));
 
-        _taxManager = new DJUSDTaxManager(address(_djUsdToken), _feeCollector);
+        _taxManager = new DJUSDTaxManager(owner, address(_djUsdToken), _feeCollector);
 
         vm.prank(owner);
         _djUsdToken.setMinter(_minter);

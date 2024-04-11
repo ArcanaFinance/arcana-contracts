@@ -16,12 +16,10 @@ interface IDJUSDMinting is IDJUSDMintingEvents {
 
     struct Order {
         uint256 expiry;
-        uint256 nonce;
         address collateral_asset;
         uint256 collateral_amount;
     }
 
-    error Duplicate();
     error InvalidAddress();
     error InvalidZeroAddress();
     error InvalidAssetAddress();
@@ -32,7 +30,6 @@ interface IDJUSDMinting is IDJUSDMintingEvents {
     error InvalidRoute();
     error UnsupportedAsset();
     error InvalidSignature();
-    error InvalidNonce();
     error SignatureExpired();
     error TransferFailed();
     error MaxMintPerBlockExceeded();
@@ -44,8 +41,6 @@ interface IDJUSDMinting is IDJUSDMintingEvents {
     function verifyOrder(Order calldata order) external view returns (bool);
 
     function verifyRoute(Route calldata route) external view returns (bool);
-
-    function verifyNonce(address sender, uint256 nonce) external view returns (bool, uint256, uint256, uint256);
 
     function mint(Order calldata order, Route calldata route) external;
 

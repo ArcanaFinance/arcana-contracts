@@ -66,16 +66,6 @@ contract DJUSDMintingCoreTest is BaseSetup {
         djUsdMintingContract.upgradeToAndCall(address(newImplementation), "");
     }
 
-    function test_requestRedeem_invalidNonce_revert() public {
-        IDJUSDMinting.Order memory redeemOrder = redeem_setup(_amountToDeposit, 1, false, bob);
-
-        vm.startPrank(bob);
-        djUsdMintingContract.requestRedeem(redeemOrder);
-
-        vm.expectRevert(InvalidNonce);
-        djUsdMintingContract.requestRedeem(redeemOrder);
-    }
-
     function test_fuzz_mint_noSlippage(uint256 expectedAmount) public {
         uint256 preBal = USTB.balanceOf(bob);
         vm.assume(expectedAmount > 0 && expectedAmount < preBal);
@@ -83,7 +73,7 @@ contract DJUSDMintingCoreTest is BaseSetup {
         (
             IDJUSDMinting.Order memory order,
             IDJUSDMinting.Route memory route
-        ) = mint_setup(expectedAmount, 1, false, bob);
+        ) = mint_setup(expectedAmount, false, bob);
 
         vm.recordLogs();
         vm.prank(bob);
@@ -98,7 +88,6 @@ contract DJUSDMintingCoreTest is BaseSetup {
     function test_multipleValid_custodyRatios_addresses() public {
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
             expiry: block.timestamp + 10 minutes,
-            nonce: 14,
             collateral_asset: address(USTB),
             collateral_amount: _amountToDeposit
         });
@@ -154,7 +143,6 @@ contract DJUSDMintingCoreTest is BaseSetup {
 
         IDJUSDMinting.Order memory mintOrder = IDJUSDMinting.Order({
             expiry: block.timestamp + 10 minutes,
-            nonce: 15,
             collateral_asset: address(USTB),
             collateral_amount: _amountToDeposit
         });
@@ -191,7 +179,6 @@ contract DJUSDMintingCoreTest is BaseSetup {
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
             expiry: block.timestamp + 10 minutes,
-            nonce: 16,
             collateral_asset: address(USTB),
             collateral_amount: _amountToDeposit
         });
@@ -229,7 +216,6 @@ contract DJUSDMintingCoreTest is BaseSetup {
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
             expiry: block.timestamp + 10 minutes,
-            nonce: 18,
             collateral_asset: address(USTB),
             collateral_amount: _amountToDeposit
         });
@@ -261,7 +247,6 @@ contract DJUSDMintingCoreTest is BaseSetup {
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
             expiry: block.timestamp + 10 minutes,
-            nonce: 19,
             collateral_asset: NATIVE_TOKEN,
             collateral_amount: _amountToDeposit
         });
@@ -290,7 +275,7 @@ contract DJUSDMintingCoreTest is BaseSetup {
         (
             IDJUSDMinting.Order memory order,
             IDJUSDMinting.Route memory route
-        ) = mint_setup(_amountToDeposit, 1, false, bob);
+        ) = mint_setup(_amountToDeposit, false, bob);
 
         vm.warp(block.timestamp + 11 minutes);
 
@@ -364,7 +349,6 @@ contract DJUSDMintingCoreTest is BaseSetup {
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
             expiry: block.timestamp + 10 minutes,
-            nonce: 18,
             collateral_asset: address(USTB),
             collateral_amount: amount
         });
@@ -394,7 +378,6 @@ contract DJUSDMintingCoreTest is BaseSetup {
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
             expiry: block.timestamp + 10 minutes,
-            nonce: 18,
             collateral_asset: address(USTB),
             collateral_amount: amount
         });
@@ -429,7 +412,6 @@ contract DJUSDMintingCoreTest is BaseSetup {
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
             expiry: block.timestamp + 10 minutes,
-            nonce: 18,
             collateral_asset: address(USTB),
             collateral_amount: amount
         });
@@ -518,7 +500,6 @@ contract DJUSDMintingCoreTest is BaseSetup {
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
             expiry: block.timestamp + 10 minutes,
-            nonce: 18,
             collateral_asset: address(USTB),
             collateral_amount: amount
         });
@@ -611,14 +592,12 @@ contract DJUSDMintingCoreTest is BaseSetup {
 
         IDJUSDMinting.Order memory order1 = IDJUSDMinting.Order({
             expiry: block.timestamp + 10,
-            nonce: 1,
             collateral_asset: address(USTB),
             collateral_amount: amount1
         });
 
         IDJUSDMinting.Order memory order2 = IDJUSDMinting.Order({
             expiry: block.timestamp + 10,
-            nonce: 2,
             collateral_asset: address(USTB),
             collateral_amount: amount2
         });
@@ -737,14 +716,12 @@ contract DJUSDMintingCoreTest is BaseSetup {
 
         IDJUSDMinting.Order memory order1 = IDJUSDMinting.Order({
             expiry: block.timestamp,
-            nonce: 18,
             collateral_asset: address(USTB),
             collateral_amount: amount
         });
 
         IDJUSDMinting.Order memory order2 = IDJUSDMinting.Order({
             expiry: block.timestamp,
-            nonce: 19,
             collateral_asset: address(USDCToken),
             collateral_amount: amount
         });
@@ -807,7 +784,6 @@ contract DJUSDMintingCoreTest is BaseSetup {
         // reuse order1 to build claim order
         order1 = IDJUSDMinting.Order({
             expiry: block.timestamp,
-            nonce: 18,
             collateral_asset: address(USTB),
             collateral_amount: amount
         });
@@ -841,7 +817,6 @@ contract DJUSDMintingCoreTest is BaseSetup {
         // reuse order1 to build claim order
         order1 = IDJUSDMinting.Order({
             expiry: block.timestamp,
-            nonce: 18,
             collateral_asset: address(USDCToken),
             collateral_amount: amount
         });
@@ -883,7 +858,6 @@ contract DJUSDMintingCoreTest is BaseSetup {
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
             expiry: block.timestamp,
-            nonce: 18,
             collateral_asset: address(USTB),
             collateral_amount: amount
         });
@@ -945,7 +919,6 @@ contract DJUSDMintingCoreTest is BaseSetup {
 
         order = IDJUSDMinting.Order({
             expiry: block.timestamp,
-            nonce: 18,
             collateral_asset: address(USTB),
             collateral_amount: amount
         });
@@ -987,7 +960,6 @@ contract DJUSDMintingCoreTest is BaseSetup {
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
             expiry: block.timestamp,
-            nonce: 18,
             collateral_asset: address(USTB),
             collateral_amount: amount
         });
@@ -1049,7 +1021,6 @@ contract DJUSDMintingCoreTest is BaseSetup {
 
         order = IDJUSDMinting.Order({
             expiry: block.timestamp,
-            nonce: 18,
             collateral_asset: address(USTB),
             collateral_amount: amount
         });
@@ -1070,7 +1041,6 @@ contract DJUSDMintingCoreTest is BaseSetup {
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
             expiry: block.timestamp,
-            nonce: 18,
             collateral_asset: address(USTB),
             collateral_amount: amount
         });
@@ -1132,7 +1102,6 @@ contract DJUSDMintingCoreTest is BaseSetup {
 
         order = IDJUSDMinting.Order({
             expiry: block.timestamp,
-            nonce: 18,
             collateral_asset: address(USTB),
             collateral_amount: amount
         });
@@ -1182,7 +1151,6 @@ contract DJUSDMintingCoreTest is BaseSetup {
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
             expiry: block.timestamp + 10 minutes,
-            nonce: 18,
             collateral_asset: address(USTB),
             collateral_amount: amount
         });
@@ -1215,7 +1183,6 @@ contract DJUSDMintingCoreTest is BaseSetup {
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
             expiry: block.timestamp + 10 minutes,
-            nonce: 1,
             collateral_asset: address(USTB),
             collateral_amount: amount
         });
@@ -1256,7 +1223,6 @@ contract DJUSDMintingCoreTest is BaseSetup {
 
         order = IDJUSDMinting.Order({
             expiry: block.timestamp + 10 minutes,
-            nonce: 2,
             collateral_asset: address(USTB),
             collateral_amount: newBal
         });
@@ -1335,7 +1301,6 @@ contract DJUSDMintingCoreTest is BaseSetup {
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
             expiry: block.timestamp + 10 minutes,
-            nonce: 1,
             collateral_asset: address(USTB),
             collateral_amount: amount
         });
@@ -1373,7 +1338,6 @@ contract DJUSDMintingCoreTest is BaseSetup {
         // redeem
         order = IDJUSDMinting.Order({
             expiry: block.timestamp + 10 minutes,
-            nonce: 2,
             collateral_asset: address(USTB),
             collateral_amount: newBal
         });
@@ -1454,7 +1418,6 @@ contract DJUSDMintingCoreTest is BaseSetup {
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
             expiry: block.timestamp + 10 minutes,
-            nonce: 1,
             collateral_asset: address(USTB),
             collateral_amount: amount
         });
@@ -1495,7 +1458,6 @@ contract DJUSDMintingCoreTest is BaseSetup {
 
         order = IDJUSDMinting.Order({
             expiry: block.timestamp + 10 minutes,
-            nonce: 2,
             collateral_asset: address(USTB),
             collateral_amount: newBal
         });
@@ -1568,7 +1530,6 @@ contract DJUSDMintingCoreTest is BaseSetup {
 
         order = IDJUSDMinting.Order({
             expiry: block.timestamp,
-            nonce: 18,
             collateral_asset: address(USTB),
             collateral_amount: newBal
         });
@@ -1604,7 +1565,7 @@ contract DJUSDMintingCoreTest is BaseSetup {
         (
             IDJUSDMinting.Order memory order,
             IDJUSDMinting.Route memory route
-        ) = mint_setup(_amountToDeposit, 1, false, bob);
+        ) = mint_setup(_amountToDeposit, false, bob);
 
         vm.prank(bob);
         vm.expectRevert(LimitExceeded);

@@ -83,7 +83,6 @@ contract BaseSetup is Test, IDJUSDMintingEvents, IDJUSDDefinitions {
     bytes32 internal redeemerRole = keccak256("REDEEMER_ROLE");
 
     // error encodings
-    bytes internal Duplicate = abi.encodeWithSelector(IDJUSDMinting.Duplicate.selector);
     bytes internal InvalidAddress = abi.encodeWithSelector(IDJUSDMinting.InvalidAddress.selector);
     bytes internal InvalidAssetAddress = abi.encodeWithSelector(IDJUSDMinting.InvalidAssetAddress.selector);
     bytes internal InvalidOrder = abi.encodeWithSelector(IDJUSDMinting.InvalidOrder.selector);
@@ -92,7 +91,6 @@ contract BaseSetup is Test, IDJUSDMintingEvents, IDJUSDDefinitions {
     bytes internal InvalidRoute = abi.encodeWithSelector(IDJUSDMinting.InvalidRoute.selector);
     bytes internal UnsupportedAsset = abi.encodeWithSelector(IDJUSDMinting.UnsupportedAsset.selector);
     bytes internal InvalidSignature = abi.encodeWithSelector(IDJUSDMinting.InvalidSignature.selector);
-    bytes internal InvalidNonce = abi.encodeWithSelector(IDJUSDMinting.InvalidNonce.selector);
     bytes internal SignatureExpired = abi.encodeWithSelector(IDJUSDMinting.SignatureExpired.selector);
     bytes internal MaxMintPerBlockExceeded = abi.encodeWithSelector(IDJUSDMinting.MaxMintPerBlockExceeded.selector);
     bytes internal MaxRedeemPerBlockExceeded = abi.encodeWithSelector(IDJUSDMinting.MaxRedeemPerBlockExceeded.selector);
@@ -167,7 +165,7 @@ contract BaseSetup is Test, IDJUSDMintingEvents, IDJUSDDefinitions {
         );
         djUsdToken = DJUSD(address(djUsdTokenProxy));
 
-        taxManager = new DJUSDTaxManager(address(djUsdToken), address(999));
+        taxManager = new DJUSDTaxManager(owner, address(djUsdToken), address(999));
 
         djUsdMintingContract = new DJUSDMinting();
         ERC1967Proxy djinnMintingProxy = new ERC1967Proxy(
@@ -225,7 +223,7 @@ contract BaseSetup is Test, IDJUSDMintingEvents, IDJUSDDefinitions {
     }
 
     // Generic mint setup reused in the tests to reduce lines of code
-    function mint_setup(uint256 collateralAmount, uint256 nonce, bool multipleMints, address actor)
+    function mint_setup(uint256 collateralAmount, bool multipleMints, address actor)
         public
         returns (
             IDJUSDMinting.Order memory order,
@@ -234,7 +232,6 @@ contract BaseSetup is Test, IDJUSDMintingEvents, IDJUSDDefinitions {
     {
         order = IDJUSDMinting.Order({
             expiry: block.timestamp + 10 minutes,
-            nonce: nonce,
             collateral_asset: address(USTB),
             collateral_amount: collateralAmount
         });
@@ -259,14 +256,14 @@ contract BaseSetup is Test, IDJUSDMintingEvents, IDJUSDDefinitions {
     }
 
     // Generic redeem setup reused in the tests to reduce lines of code
-    function redeem_setup(uint256 collateralAmount, uint256 nonce, bool multipleRedeem, address actor)
+    function redeem_setup(uint256 collateralAmount, bool multipleRedeem, address actor)
         public
         returns (IDJUSDMinting.Order memory redeemOrder)
     {
         (
             IDJUSDMinting.Order memory mintOrder,
             IDJUSDMinting.Route memory route
-        ) = mint_setup(collateralAmount, nonce, false, actor);
+        ) = mint_setup(collateralAmount, false, actor);
 
         vm.prank(actor);
         djUsdMintingContract.mint(mintOrder, route);
@@ -274,7 +271,6 @@ contract BaseSetup is Test, IDJUSDMintingEvents, IDJUSDDefinitions {
         //redeem
         redeemOrder = IDJUSDMinting.Order({
             expiry: block.timestamp + 10 minutes,
-            nonce: nonce + 1,
             collateral_asset: address(USTB),
             collateral_amount: collateralAmount
         });

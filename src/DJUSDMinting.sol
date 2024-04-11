@@ -30,25 +30,23 @@ contract DJUSDMinting is UUPSUpgradeable, IDJUSDMinting, Ownable2StepUpgradeable
     // State Variables
     // ---------------
 
-    /// @notice route type
+    /// @dev route type
     bytes32 private constant ROUTE_TYPE = keccak256("Route(address[] addresses,uint256[] ratios)");
-    /// @notice djusd stablecoin
+    /// @dev djusd stablecoin
     IDJUSD public djusd;
-    /// @notice Supported assets
+    /// @dev Supported assets
     EnumerableSet.AddressSet internal _supportedAssets;
-    /// @notice custodian addresses
+    /// @dev custodian addresses
     EnumerableSet.AddressSet internal _custodianAddresses;
-    /// @notice user deduplication
-    mapping(address => mapping(uint256 => uint256)) private _orderBitmaps;
-    /// @notice Stores the total amount of `asset` that has been requested using checkpoints.
+    /// @dev Stores the total amount of `asset` that has been requested using checkpoints.
     mapping(address asset => Checkpoints.Trace208) internal totalRequestCheckpoints;
-    /// @notice Returns the total amount of `asset` that has been claimed.
+    /// @dev Returns the total amount of `asset` that has been claimed.
     mapping(address asset => uint256) public totalClaimed;
-    /// @notice Tracks the total amount of an `asset` requested to claim by an `account`.
+    /// @dev Tracks the total amount of an `asset` requested to claim by an `account`.
     mapping(address account => mapping(address asset => Checkpoints.Trace208)) internal accountRequestCheckpoints;
-    /// @notice Tracks the total amount of an `asset` that has been claimed by an `account`.
+    /// @dev Tracks the total amount of an `asset` that has been claimed by an `account`.
     mapping(address account => mapping(address asset => uint256 amountClaimed)) public claimed;
-    /// @notice Stores the minimum amount of seconds between asset request and asset claim.
+    /// @dev Stores the minimum amount of seconds between asset request and asset claim.
     uint48 public claimDelay;
 
 
@@ -114,11 +112,9 @@ contract DJUSDMinting is UUPSUpgradeable, IDJUSDMinting, Ownable2StepUpgradeable
     */
     function mint(Order calldata order, Route calldata route) external override nonReentrant {
         verifyOrder(order);
-
         if (!verifyRoute(route)) revert InvalidRoute();
-        if (!_deduplicateOrder(msg.sender, order.nonce)) revert Duplicate();
-        // transfer asset from minter to this contract
 
+        // transfer asset from minter to this contract
         uint256 received = _transferCollateral(
             order.collateral_amount, order.collateral_asset, msg.sender, route.addresses, route.ratios
         );
@@ -133,7 +129,6 @@ contract DJUSDMinting is UUPSUpgradeable, IDJUSDMinting, Ownable2StepUpgradeable
     */
     function requestRedeem(Order calldata order) external override nonReentrant {
         verifyOrder(order);        
-        if (!_deduplicateOrder(msg.sender, order.nonce)) revert Duplicate();
 
         // burn DJUSD
         djusd.burnFrom(msg.sender, order.collateral_amount);
@@ -346,18 +341,6 @@ contract DJUSDMinting is UUPSUpgradeable, IDJUSDMinting, Ownable2StepUpgradeable
         return true;
     }
 
-    /// @notice verify validity of nonce by checking its presence
-    function verifyNonce(address sender, uint256 nonce) public view override returns (bool, uint256, uint256, uint256) {
-        if (nonce == 0) revert InvalidNonce();
-        uint256 invalidatorSlot = uint64(nonce) >> 8;
-        uint256 invalidatorBit = 1 << uint8(nonce);
-        mapping(uint256 => uint256) storage invalidatorStorage = _orderBitmaps[sender];
-        uint256 invalidator = invalidatorStorage[invalidatorSlot];
-        if (invalidator & invalidatorBit != 0) revert InvalidNonce();
-
-        return (true, invalidatorSlot, invalidator, invalidatorBit);
-    }
-
     /**
      * @notice Returns the current block.timestamp.
      */
@@ -371,19 +354,6 @@ contract DJUSDMinting is UUPSUpgradeable, IDJUSDMinting, Ownable2StepUpgradeable
     // solhint-disable-next-line func-name-mixedcase
     function CLOCK_MODE() public pure virtual returns (string memory) {
         return "mode=timestamp";
-    }
-
-
-    // ---------------
-    // Private Methods
-    // ---------------
-
-    /// @notice deduplication of taker order
-    function _deduplicateOrder(address sender, uint256 nonce) private returns (bool) {
-        (bool valid, uint256 invalidatorSlot, uint256 invalidator, uint256 invalidatorBit) = verifyNonce(sender, nonce);
-        mapping(uint256 => uint256) storage invalidatorStorage = _orderBitmaps[sender];
-        invalidatorStorage[invalidatorSlot] = invalidator | invalidatorBit;
-        return valid;
     }
 
     

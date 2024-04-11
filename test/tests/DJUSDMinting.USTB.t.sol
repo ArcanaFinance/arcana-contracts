@@ -89,7 +89,6 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
             expiry: block.timestamp + 10 minutes,
-            nonce: 14,
             collateral_asset: address(unrealUSTB),
             collateral_amount: amount
         });
@@ -148,7 +147,6 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
 
         IDJUSDMinting.Order memory mintOrder = IDJUSDMinting.Order({
             expiry: block.timestamp + 10 minutes,
-            nonce: 15,
             collateral_asset: address(unrealUSTB),
             collateral_amount: amount
         });
@@ -188,7 +186,6 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
             expiry: block.timestamp + 10 minutes,
-            nonce: 16,
             collateral_asset: address(unrealUSTB),
             collateral_amount: amount
         });
@@ -227,7 +224,6 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
             expiry: block.timestamp + 10 minutes,
-            nonce: 18,
             collateral_asset: address(unrealUSTB),
             collateral_amount: amount
         });
@@ -259,7 +255,6 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
             expiry: block.timestamp + 10 minutes,
-            nonce: 19,
             collateral_asset: NATIVE_TOKEN,
             collateral_amount: _amountToDeposit
         });
@@ -291,7 +286,6 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
             expiry: block.timestamp + 10 minutes,
-            nonce: 18,
             collateral_asset: address(unrealUSTB),
             collateral_amount: amount
         });
@@ -323,7 +317,6 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
             expiry: block.timestamp + 10 minutes,
-            nonce: 18,
             collateral_asset: address(unrealUSTB),
             collateral_amount: amount
         });
@@ -360,7 +353,6 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
             expiry: block.timestamp + 10 minutes,
-            nonce: 18,
             collateral_asset: address(unrealUSTB),
             collateral_amount: amount
         });
@@ -449,7 +441,6 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
             expiry: block.timestamp + 10 minutes,
-            nonce: 18,
             collateral_asset: address(unrealUSTB),
             collateral_amount: amount
         });
@@ -542,14 +533,12 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
 
         IDJUSDMinting.Order memory order1 = IDJUSDMinting.Order({
             expiry: block.timestamp + 10,
-            nonce: 1,
             collateral_asset: address(unrealUSTB),
             collateral_amount: amount1
         });
 
         IDJUSDMinting.Order memory order2 = IDJUSDMinting.Order({
             expiry: block.timestamp + 10,
-            nonce: 2,
             collateral_asset: address(unrealUSTB),
             collateral_amount: amount2
         });
@@ -667,7 +656,6 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
             expiry: block.timestamp,
-            nonce: 18,
             collateral_asset: address(unrealUSTB),
             collateral_amount: amount
         });
@@ -729,7 +717,6 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
 
         order = IDJUSDMinting.Order({
             expiry: block.timestamp,
-            nonce: 18,
             collateral_asset: address(unrealUSTB),
             collateral_amount: amount
         });
@@ -773,7 +760,6 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
             expiry: block.timestamp,
-            nonce: 18,
             collateral_asset: address(unrealUSTB),
             collateral_amount: amount
         });
@@ -835,7 +821,6 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
 
         order = IDJUSDMinting.Order({
             expiry: block.timestamp,
-            nonce: 18,
             collateral_asset: address(unrealUSTB),
             collateral_amount: amount
         });
@@ -856,7 +841,6 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
             expiry: block.timestamp,
-            nonce: 18,
             collateral_asset: address(unrealUSTB),
             collateral_amount: amount
         });
@@ -918,7 +902,6 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
 
         order = IDJUSDMinting.Order({
             expiry: block.timestamp,
-            nonce: 18,
             collateral_asset: address(unrealUSTB),
             collateral_amount: amount
         });
@@ -970,7 +953,6 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
             expiry: block.timestamp + 10 minutes,
-            nonce: 18,
             collateral_asset: address(unrealUSTB),
             collateral_amount: amount
         });
@@ -1005,7 +987,6 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
             expiry: block.timestamp + 10 minutes,
-            nonce: 1,
             collateral_asset: address(unrealUSTB),
             collateral_amount: amount
         });
@@ -1050,7 +1031,6 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
 
         order = IDJUSDMinting.Order({
             expiry: block.timestamp + 10 minutes,
-            nonce: 2,
             collateral_asset: address(unrealUSTB),
             collateral_amount: newBal
         });
@@ -1128,7 +1108,6 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
             expiry: block.timestamp + 10 minutes,
-            nonce: 1,
             collateral_asset: address(unrealUSTB),
             collateral_amount: amount
         });
@@ -1170,7 +1149,6 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
         // redeem
         order = IDJUSDMinting.Order({
             expiry: block.timestamp + 10 minutes,
-            nonce: 2,
             collateral_asset: address(unrealUSTB),
             collateral_amount: newBal
         });
@@ -1250,7 +1228,6 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
 
         IDJUSDMinting.Order memory order = IDJUSDMinting.Order({
             expiry: block.timestamp + 10 minutes,
-            nonce: 1,
             collateral_asset: address(unrealUSTB),
             collateral_amount: amount
         });
@@ -1295,7 +1272,6 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
 
         order = IDJUSDMinting.Order({
             expiry: block.timestamp + 10 minutes,
-            nonce: 2,
             collateral_asset: address(unrealUSTB),
             collateral_amount: newBal
         });
@@ -1317,7 +1293,6 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
         uint256 claimableForAlice = djUsdMintingContract.getClaimableForAccount(alice, address(unrealUSTB));
         uint256 totalClaimableForAsset = djUsdMintingContract.getTotalClaimableForAsset(address(unrealUSTB));
         uint256 totalClaimable = djUsdMintingContract.getTotalClaimable();
-
         assertEq(requested, newBal);
         assertEq(totalRequestedUSTB, newBal);
         assertEq(totalRequested, newBal);
@@ -1349,7 +1324,6 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
 
         order = IDJUSDMinting.Order({
             expiry: block.timestamp,
-            nonce: 18,
             collateral_asset: address(unrealUSTB),
             collateral_amount: newBal
         });
