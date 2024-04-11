@@ -1,20 +1,20 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
-import { Script } from "forge-std/Script.sol";
+import {Script} from "forge-std/Script.sol";
 
-import { Address } from "@openzeppelin/contracts/utils/Address.sol";
-import { ERC1967Utils, ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import {Address} from "@openzeppelin/contracts/utils/Address.sol";
+import {ERC1967Utils, ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 /**
  * @title DeployUtility
- * @notice This contract will act as a base contract for script deployments. It will include utility methods for assisting in
- * the reading/writing of JSON files stored locally to track latest deployment addresses. 
+ * @notice This contract will act as a base contract for script deployments. It will include utility methods for
+ * assisting in
+ * the reading/writing of JSON files stored locally to track latest deployment addresses.
  * @dev This contract was forked from SeaZarrgh's stack deployment base contracts.
  */
 abstract contract DeployUtility is Script {
-
     string private chainAlias;
 
     function _setUp(string memory _alias) internal {

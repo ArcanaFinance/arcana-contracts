@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.19;
 
-import {IERC20 ,ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {IERC20, ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {RebaseTokenMath} from "@tangible/contracts/libraries/RebaseTokenMath.sol";
 
 import {DJUSD as DJUSDToken} from "./DJUSD.sol";

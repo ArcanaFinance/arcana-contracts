@@ -2,7 +2,6 @@
 pragma solidity ^0.8.19;
 
 interface IDJUSDDefinitions {
-
     // ~ Events ~
 
     /// @notice This event is fired when the minter changes
@@ -13,7 +12,6 @@ interface IDJUSDDefinitions {
     event TaxManagerUpdated(address indexed newTaxManager);
     /// @notice This event is emitted when the supply limit is updated.
     event SupplyLimitUpdated(uint256 indexed newSupplyLimit);
-    
 
     // ~ Errors ~
 

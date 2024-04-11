@@ -2,17 +2,16 @@
 pragma solidity ^0.8.19;
 
 // oz imports
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
  * @title DJUSDFeeCollector
  * @notice This contract receives DJUSD from rebase fees and distributes them to the necessary addresses.
  */
 contract DJUSDFeeCollector is Ownable {
-
     /// @dev Stores contract address of DJUSD token.
-    address immutable public djUsd;
+    address public immutable djUsd;
     /// @dev Stores addresses where DJUSD rewards are distributed to.
     address[] public distributors;
     /// @dev Stores ratios of amount of DJUSD that's allocated to each address in `distributors`.
@@ -35,7 +34,9 @@ contract DJUSDFeeCollector is Ownable {
      * @param _distributors Address of RevenueDistributor contract.
      * @param _ratios Address where Djinn rewards are sent.
      */
-    constructor(address _admin, address _djusd, address[] memory _distributors, uint256[] memory _ratios) Ownable(_admin) {
+    constructor(address _admin, address _djusd, address[] memory _distributors, uint256[] memory _ratios)
+        Ownable(_admin)
+    {
         if (_djusd == address(0) || _admin == address(0)) revert ZeroAddressException();
 
         uint256 len = _distributors.length;
@@ -51,7 +52,6 @@ contract DJUSDFeeCollector is Ownable {
      * stored in the `distributors` array.
      */
     function distributeDJUSD() external {
-
         uint256 contractBalance = getDjUsdBalance();
         uint256 len = distributors.length;
         uint256 totalRatio;

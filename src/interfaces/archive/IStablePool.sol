@@ -2,5 +2,5 @@
 pragma solidity >=0.8.10;
 
 interface IStablePool {
-  function prepare(uint256 amount, bytes calldata data) external;
+    function prepare(uint256 amount, bytes calldata data) external;
 }

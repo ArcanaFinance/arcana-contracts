@@ -1,22 +1,23 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.19;
 
-import { DJUSD } from "./DJUSD.sol";
-import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+import {DJUSD} from "./DJUSD.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
  * @title DJUSDTaxManager
- * @notice Tax Manager to DJUSD contract 
- * @dev This contract manages the taxation of rebases on the DJUSD token. This contract facilitates the rebase of DJUSD and
- *      during rebase, will calculate an amount of DJUSD to mint to the `feeCollector` and thus re-calculating the rebaseIndex to result in
+ * @notice Tax Manager to DJUSD contract
+ * @dev This contract manages the taxation of rebases on the DJUSD token. This contract facilitates the rebase of DJUSD
+ * and
+ *      during rebase, will calculate an amount of DJUSD to mint to the `feeCollector` and thus re-calculating the
+ * rebaseIndex to result in
  *      the targeted post-rebase totalSupply with the new minted tokens in mind.
  */
 contract DJUSDTaxManager is Ownable {
-
     /// @dev Stores the contract reference to DJUSD.
-    DJUSD immutable public djUsd;
+    DJUSD public immutable djUsd;
     /// @dev Stores the % of each rebase that is taxed.
-    uint256 public taxRate = 0.10e18;
+    uint256 public taxRate = 0.1e18;
     /// @dev Stores the address in which newly minted tokens are sent to.
     address public feeCollector;
 
@@ -41,7 +42,8 @@ contract DJUSDTaxManager is Ownable {
     }
 
     /**
-     * @notice This method facilitates the taxed rebase of DJUSD. It calculates the new total supply, given `nextIndex`. It then takes a tax by
+     * @notice This method facilitates the taxed rebase of DJUSD. It calculates the new total supply, given `nextIndex`.
+     * It then takes a tax by
      * minting a percentage of the total supply delta and then calculating a new rebaseIndex.
      * @param currentIndex The current rebaseIndex of DJUSD.
      * @param nextIndex The new rebaseIndex used to calculate the new total supply.

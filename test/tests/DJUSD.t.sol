@@ -3,16 +3,16 @@ pragma solidity ^0.8.19;
 
 /* solhint-disable private-vars-leading-underscore  */
 
-import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import { ERC1967Utils } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 
 import {stdStorage, StdStorage, Test} from "forge-std/Test.sol";
 import {SigUtils} from "../utils/SigUtils.sol";
 import {Vm} from "forge-std/Vm.sol";
 
-import { DJUSD } from "../../src/DJUSD.sol";
-import { DJUSDTaxManager } from "../../src/DJUSDTaxManager.sol";
-import { BaseSetup } from "../BaseSetup.sol";
+import {DJUSD} from "../../src/DJUSD.sol";
+import {DJUSDTaxManager} from "../../src/DJUSDTaxManager.sol";
+import {BaseSetup} from "../BaseSetup.sol";
 
 contract DJUSDTest is Test, BaseSetup {
     DJUSD internal _djUsdToken;
@@ -60,8 +60,6 @@ contract DJUSDTest is Test, BaseSetup {
 
         vm.prank(owner);
         _djUsdToken.setTaxManager(address(_taxManager));
-
-        
     }
 
     function test_CorrectInitialConfig() public {
@@ -101,13 +99,15 @@ contract DJUSDTest is Test, BaseSetup {
     function test_djUsdToken_isUpgradeable() public {
         DJUSD newImplementation = new DJUSD(block.chainid, address(1));
 
-        bytes32 implementationSlot = vm.load(address(_djUsdToken), 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc);
+        bytes32 implementationSlot =
+            vm.load(address(_djUsdToken), 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc);
         assertNotEq(implementationSlot, bytes32(abi.encode(address(newImplementation))));
 
         vm.prank(owner);
         _djUsdToken.upgradeToAndCall(address(newImplementation), "");
 
-        implementationSlot = vm.load(address(_djUsdToken), 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc);
+        implementationSlot =
+            vm.load(address(_djUsdToken), 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc);
         assertEq(implementationSlot, bytes32(abi.encode(address(newImplementation))));
     }
 

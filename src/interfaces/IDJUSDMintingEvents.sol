@@ -6,25 +6,13 @@ interface IDJUSDMintingEvents {
     event Received(address, uint256);
 
     /// @notice Event emitted when DJUSD is minted
-    event Mint(
-        address indexed account,
-        address indexed collateral_asset,
-        uint256 indexed amount
-    );
+    event Mint(address indexed account, address indexed collateral_asset, uint256 indexed amount);
 
     /// @notice Event emitted when funds are requested for redeem
-    event RedeemRequested(
-        address indexed account,
-        address indexed collateral_asset,
-        uint256 indexed amount
-    );
+    event RedeemRequested(address indexed account, address indexed collateral_asset, uint256 indexed amount);
 
     /// @notice Event emitted when funds are claimed (aka claimed)
-    event AssetsClaimed(
-        address indexed account,
-        address indexed collateral_asset,
-        uint256 indexed amount
-    );
+    event AssetsClaimed(address indexed account, address indexed collateral_asset, uint256 indexed amount);
 
     /// @notice Event emitted when custody wallet is added
     event CustodyWalletAdded(address wallet);

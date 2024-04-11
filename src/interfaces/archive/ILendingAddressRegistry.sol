@@ -2,37 +2,37 @@
 pragma solidity ^0.8.19;
 
 interface ILendingAddressRegistry {
-  function getLendingMarket() external view returns (address);
+    function getLendingMarket() external view returns (address);
 
-  function setLendingMarket(address lendingMarket) external;
+    function setLendingMarket(address lendingMarket) external;
 
-  function getPriceOracleAggregator() external view returns (address);
+    function getPriceOracleAggregator() external view returns (address);
 
-  function setPriceOracleAggregator(address priceOracleAggregator) external;
+    function setPriceOracleAggregator(address priceOracleAggregator) external;
 
-  function getTreasury() external view returns (address);
+    function getTreasury() external view returns (address);
 
-  function setTreasury(address treasury) external;
+    function setTreasury(address treasury) external;
 
-  function getStaking() external view returns (address);
+    function getStaking() external view returns (address);
 
-  function setStaking(address staking) external;
+    function setStaking(address staking) external;
 
-  function getStablePool() external view returns (address);
+    function getStablePool() external view returns (address);
 
-  function setStablePool(address stablePool) external;
+    function setStablePool(address stablePool) external;
 
-  function getSwapper() external view returns (address);
+    function getSwapper() external view returns (address);
 
-  function setSwapper(address swapper) external;
+    function setSwapper(address swapper) external;
 
-  function getKeepers() external view returns (address[] memory);
+    function getKeepers() external view returns (address[] memory);
 
-  function addKeeper(address keeper) external;
+    function addKeeper(address keeper) external;
 
-  function removeKeeper(address keeper) external;
+    function removeKeeper(address keeper) external;
 
-  function isKeeper(address keeper) external view returns (bool);
+    function isKeeper(address keeper) external view returns (bool);
 
-  function getAddress(bytes32 id) external view returns (address);
+    function getAddress(bytes32 id) external view returns (address);
 }

@@ -4,18 +4,17 @@ pragma solidity ^0.8.19;
 /* solhint-disable func-name-mixedcase  */
 
 // oz imports
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 // local files
-import { BaseSetup } from "../BaseSetup.sol";
-import { DJUSDPointsBoostVault } from "../../src/DJUSDPointsBoostingVault.sol";
+import {BaseSetup} from "../BaseSetup.sol";
+import {DJUSDPointsBoostVault} from "../../src/DJUSDPointsBoostingVault.sol";
 
 /**
  * @title DJUSDVaultTest
  * @notice Unit Tests for DJUSDMinting contract interactions
  */
 contract DJUSDVaultTest is BaseSetup {
-
     function setUp() public override {
         super.setUp();
     }
@@ -25,7 +24,6 @@ contract DJUSDVaultTest is BaseSetup {
     }
 
     function test_vault_deposit() public {
-
         // ~ Config ~
 
         uint256 amount = 10 ether;
@@ -93,7 +91,6 @@ contract DJUSDVaultTest is BaseSetup {
     }
 
     function test_vault_redeem() public {
-
         // ~ Config ~
 
         uint256 amount = 10 ether;

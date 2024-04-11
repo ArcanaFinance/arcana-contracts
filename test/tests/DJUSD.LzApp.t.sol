@@ -3,15 +3,15 @@ pragma solidity ^0.8.19;
 
 /* solhint-disable private-vars-leading-underscore  */
 
-import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 import {stdStorage, StdStorage, Test} from "forge-std/Test.sol";
 import {SigUtils} from "../utils/SigUtils.sol";
 import {Vm} from "forge-std/Vm.sol";
 
-import { DJUSD } from "../../src/DJUSD.sol";
-import { BaseSetup } from "../BaseSetup.sol";
-import { LZEndpointMock } from "../mock/LZEndpointMock.sol";
+import {DJUSD} from "../../src/DJUSD.sol";
+import {BaseSetup} from "../BaseSetup.sol";
+import {LZEndpointMock} from "../mock/LZEndpointMock.sol";
 
 contract DJUSDLzAppTest is Test, BaseSetup {
     DJUSD internal _djUsdToken;
@@ -27,7 +27,6 @@ contract DJUSDLzAppTest is Test, BaseSetup {
     address internal constant _feeCollector = address(bytes20(bytes("feeCollector")));
 
     function setUp() public virtual override {
-
         vm.label(_minter, "minter");
         vm.label(_owner, "owner");
         vm.label(_rebaseManager, "rebaseManager");

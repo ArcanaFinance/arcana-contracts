@@ -1,32 +1,32 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import { console2 } from "forge-std/Script.sol";
-import { DeployUtility } from "../DeployUtility.sol";
+import {console2} from "forge-std/Script.sol";
+import {DeployUtility} from "../DeployUtility.sol";
 
 // oz imports
-import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 // local imports
-import { DJUSD } from "../../src/DJUSD.sol";
-import { IDJUSD } from "../../src/interfaces/IDJUSD.sol";
-import { DJUSDMinting } from "../../src/DJUSDMinting.sol";
-import { DJUSDTaxManager } from "../../src/DJUSDTaxManager.sol";
-import { DJUSDPointsBoostVault } from "../../src/DJUSDPointsBoostingVault.sol";
+import {DJUSD} from "../../src/DJUSD.sol";
+import {IDJUSD} from "../../src/interfaces/IDJUSD.sol";
+import {DJUSDMinting} from "../../src/DJUSDMinting.sol";
+import {DJUSDTaxManager} from "../../src/DJUSDTaxManager.sol";
+import {DJUSDPointsBoostVault} from "../../src/DJUSDPointsBoostingVault.sol";
 
 // helpers
 import "../../test/utils/Constants.sol";
 
-/** 
-    @dev To run: 
-    forge script script/deploy/DeployToUnreal.s.sol:DeployToUnreal --broadcast --legacy \
-    --gas-estimate-multiplier 200 \
-    --verify --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
-
-    @dev To verify manually: 
-    forge verify-contract <CONTRACT_ADDRESS> --chain-id 18233 --watch \ 
-    src/Contract.sol:Contract --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
-*/
+/**
+ * @dev To run: 
+ *     forge script script/deploy/DeployToUnreal.s.sol:DeployToUnreal --broadcast --legacy \
+ *     --gas-estimate-multiplier 200 \
+ *     --verify --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
+ * 
+ *     @dev To verify manually: 
+ *     forge verify-contract <CONTRACT_ADDRESS> --chain-id 18233 --watch \ 
+ *     src/Contract.sol:Contract --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
+ */
 
 /**
  * @title DeployToUnreal
@@ -34,7 +34,6 @@ import "../../test/utils/Constants.sol";
  * @notice This script deploys the RWA ecosystem to Unreal chain.
  */
 contract DeployToUnreal is DeployUtility {
-
     // ~ Variables ~
 
     uint256 public DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
@@ -82,14 +81,13 @@ contract DeployToUnreal is DeployUtility {
         );
 
         // Deploy DJUSDMinting contract.
-        DJUSDMinting djUsdMintingContract = new DJUSDMinting();
+        DJUSDMinting djUsdMintingContract = new DJUSDMinting(IDJUSD(address(djUsdToken)));
         ERC1967Proxy djinnMintingProxy = new ERC1967Proxy(
             address(djUsdMintingContract),
             abi.encodeWithSelector(DJUSDMinting.initialize.selector,
-                IDJUSD(address(djUsdToken)),
-                assets,
-                custodians,
-                adminAddress
+                adminAddress,
+                5 days,
+                UNREAL_CUSTODIAN
             )
         );
         djUsdMintingContract = DJUSDMinting(payable(address(djinnMintingProxy)));
@@ -97,20 +95,17 @@ contract DeployToUnreal is DeployUtility {
         // Deploy DJUSD Vault
         DJUSDPointsBoostVault djUsdVault = new DJUSDPointsBoostVault(address(djUsdToken));
 
-        // Add self as approved custodian
-        djUsdMintingContract.addCustodianAddress(address(djUsdMintingContract));
-
-
         // ------
         // Config
         // ------
+
+        // TODO: Add supported asset
 
         djUsdToken.setMinter(address(djUsdMintingContract));
 
         djUsdToken.setSupplyLimit(1_000 * 1e18);
 
         djUsdToken.setTaxManager(address(taxManager));
-
 
         // --------------
         // Save Addresses
@@ -120,7 +115,6 @@ contract DeployToUnreal is DeployUtility {
         _saveDeploymentAddress("DJUSDMinting", address(djUsdMintingContract));
         _saveDeploymentAddress("DJUSDTaxManager", address(taxManager));
         _saveDeploymentAddress("DJUSDPointsBoostVault", address(djUsdVault));
-
 
         vm.stopBroadcast();
     }

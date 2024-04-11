@@ -1,436 +1,574 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.19;
 
-// oz imports
-import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import { ECDSA } from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import { MessageHashUtils } from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
-import { EnumerableSet } from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
-import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
-import { Checkpoints } from "@openzeppelin/contracts/utils/structs/Checkpoints.sol";
-import { Time } from "@openzeppelin/contracts/utils/types/Time.sol";
+import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {IERC6372} from "@openzeppelin/contracts/interfaces/IERC6372.sol";
+import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {ReentrancyGuardUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+import {Time} from "@openzeppelin/contracts/utils/types/Time.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
-// local imports
-import { IDJUSD } from "./interfaces/IDJUSD.sol";
-import { IDJUSDMinting } from "./interfaces/IDJUSDMinting.sol";
+import {IDJUSD} from "./interfaces/IDJUSD.sol";
+import {IRebaseToken} from "./interfaces/IRebaseToken.sol";
+
+import {CommonErrors} from "./libraries/CommonErrors.sol";
+import {CommonValidations} from "./libraries/CommonValidations.sol";
 
 /**
- * @title Djinn Minting
- * @notice This contract mints and redeems DJUSD in a single, atomic, trustless transaction
+ * @title DJUSD Minter
+ * @author Caesar LaVey
+ *
+ * @notice DJUSDMinter facilitates the minting and redemption process of DJUSD tokens against various supported assets.
+ * It allows for adding and removing assets and custodians, minting DJUSD by depositing assets, and requesting
+ * redemption of DJUSD for assets. The contract uses a delay mechanism for redemptions to enhance security and manages
+ * custody transfers of assets to designated custodians.
+ *
+ * @dev The contract leverages OpenZeppelin's upgradeable contracts to ensure future improvements can be made without
+ * disrupting service. It employs a non-reentrant pattern for sensitive functions to prevent re-entrancy attacks. Uses a
+ * namespaced storage layout for upgradeability. Inherits from `OwnableUpgradeable`, `ReentrancyGuardUpgradeable`, and
+ * `UUPSUpgradeable` for ownership management, re-entrancy protection, and upgradeability respectively. Implements
+ * `IERC6372` for interoperability with other contract systems. The constructor is replaced by an initializer function
+ * to support proxy deployment.
  */
-contract DJUSDMinting is UUPSUpgradeable, IDJUSDMinting, Ownable2StepUpgradeable, ReentrancyGuardUpgradeable {
-    using SafeERC20 for IERC20;
+contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable, IERC6372 {
+    using CommonValidations for *;
     using EnumerableSet for EnumerableSet.AddressSet;
-    using Checkpoints for Checkpoints.Trace208;
+    using SafeERC20 for IERC20;
 
-    // ---------------
-    // State Variables
-    // ---------------
+    struct RedemptionRequest {
+        uint256 amount;
+        uint256 claimableAfter;
+        uint256 claimed;
+    }
 
-    /// @dev route type
-    bytes32 private constant ROUTE_TYPE = keccak256("Route(address[] addresses,uint256[] ratios)");
-    /// @dev djusd stablecoin
-    IDJUSD public djusd;
-    /// @dev Supported assets
-    EnumerableSet.AddressSet internal _supportedAssets;
-    /// @dev custodian addresses
-    EnumerableSet.AddressSet internal _custodianAddresses;
-    /// @dev Stores the total amount of `asset` that has been requested using checkpoints.
-    mapping(address asset => Checkpoints.Trace208) internal totalRequestCheckpoints;
-    /// @dev Returns the total amount of `asset` that has been claimed.
-    mapping(address asset => uint256) public totalClaimed;
-    /// @dev Tracks the total amount of an `asset` requested to claim by an `account`.
-    mapping(address account => mapping(address asset => Checkpoints.Trace208)) internal accountRequestCheckpoints;
-    /// @dev Tracks the total amount of an `asset` that has been claimed by an `account`.
-    mapping(address account => mapping(address asset => uint256 amountClaimed)) public claimed;
-    /// @dev Stores the minimum amount of seconds between asset request and asset claim.
-    uint48 public claimDelay;
+    /// @custom:storage-location erc7201:djinn.storage.DJUSDMinter
+    struct DJUSDMinterStorage {
+        EnumerableSet.AddressSet supportedAssets;
+        mapping(address asset => uint256) pendingClaims;
+        mapping(address user => mapping(address asset => uint256)) firstUnclaimedIndex;
+        mapping(address user => mapping(address asset => RedemptionRequest[])) redemptionRequests;
+        address custodian;
+        uint48 claimDelay;
+    }
 
+    IDJUSD public immutable DJUSD;
 
-    // -----------
-    // Constructor
-    // -----------
+    // keccak256(abi.encode(uint256(keccak256("djinn.storage.DJUSDMinter")) - 1)) & ~bytes32(uint256(0xff))
+    bytes32 private constant DJUSDMinterStorageLocation =
+        0x076ea32f4be917520eed196bef5b8986e4df8b1057872cb20bb9f7e8b6644f00;
 
-    constructor() {
+    function _getDJUSDMinterStorage() private pure returns (DJUSDMinterStorage storage $) {
+        // slither-disable-next-line assembly
+        assembly {
+            $.slot := DJUSDMinterStorageLocation
+        }
+    }
+
+    event AssetAdded(address indexed asset);
+    event AssetRemoved(address indexed asset);
+
+    event CustodianUpdated(address indexed custodian);
+
+    event CustodyTransfer(address indexed custodian, address indexed asset, uint256 amount);
+
+    event Mint(address indexed user, address indexed asset, uint256 amount, uint256 received);
+
+    event RebaseDisabled(address indexed asset);
+
+    event TokensRequested(address indexed user, address indexed asset, uint256 amount, uint256 claimableAfter);
+    event TokensClaimed(address indexed user, address indexed asset, uint256 amount);
+
+    error NotCustodian(address account);
+    error NotSupportedAsset(address asset);
+    error InvalidAddress(address asset);
+
+    /**
+     * @dev Ensures that the provided asset address corresponds to a supported asset within the contract. This modifier
+     * is used to validate asset addresses before executing functions that operate on assets, such as minting, claiming,
+     * and transferring to custody.
+     * Checks against the list of supported assets maintained in the contract's storage. If the asset is not found in
+     * this list, the function call is reverted with a `NotSupportedAsset` error.
+     * This enforcement guarantees that the contract interacts only with assets that have been verified and approved for
+     * use in minting and redemption operations.
+     * @param asset The address of the asset to validate.
+     */
+    modifier validAsset(address asset) {
+        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        if (!$.supportedAssets.contains(asset)) {
+            revert NotSupportedAsset(asset);
+        }
+        _;
+    }
+
+    /**
+     * @notice Initializes the DJUSDMinter contract with a reference to the DJUSD token contract.
+     * @dev This constructor sets the immutable DJUSD token contract address, ensuring that the DJUSDMinter contract
+     * always interacts with the correct instance of DJUSD.
+     * Since this is an upgradeable contract, the constructor does not perform any initialization logic that relies on
+     * storage variables. Such logic is handled in the `initialize` function.
+     * The constructor is only called once during the initial deployment before the contract is made upgradeable via a
+     * proxy.
+     * @param djusd The address of the DJUSD token contract. This address is immutable and specifies the DJUSD instance
+     * that the minter will interact with.
+     * @custom:oz-upgrades-unsafe-allow constructor
+     */
+    constructor(IDJUSD djusd) {
+        DJUSD = djusd;
         _disableInitializers();
     }
 
-
-    // -----------
-    // Initializer
-    // -----------
+    function _authorizeUpgrade(address) internal override onlyOwner {}
 
     /**
-     * @notice Initializes this contract
-     * @param _djusd DJUSD Contract address
-     * @param _assets Array of ERC20 stablecoins that will be used as collateral for DJUSD
-     * @param _custodians Array of addresses in which collateral is deposited
-     * @param _admin Initial owner of this contract
+     * @notice Initializes the DJUSDMinter contract post-deployment to set up initial state and configurations.
+     * @dev This function initializes the contract with the OpenZeppelin upgradeable pattern. It sets the initial owner
+     * of the contract and the initial claim delay for redemption requests.
+     * It must be called immediately after deploying the proxy to ensure the contract is in a valid state. This replaces
+     * the constructor logic for upgradeable contracts.
+     * @param initialOwner The address that will be granted ownership of the contract, capable of performing
+     * administrative actions.
+     * @param initialClaimDelay The initial delay time (in seconds) before which a redemption request becomes claimable.
+     * This is a security measure to prevent immediate claims post-request.
+     * @param initialCustodian The custodian of collateral that will be exchanged for DJUSD tokens.
      */
-    function initialize(
-        IDJUSD _djusd,
-        address[] memory _assets,
-        address[] memory _custodians,
-        address _admin
-    ) external initializer {
-        if (address(_djusd) == address(0)) revert InvalidZeroAddress();
-        if (_assets.length == 0) revert InvalidZeroAddress();
-        if (_admin == address(0)) revert InvalidZeroAddress();
+    function initialize(address initialOwner, uint48 initialClaimDelay, address initialCustodian) public initializer {
+        __Ownable_init(initialOwner);
+        __ReentrancyGuard_init();
+        __UUPSUpgradeable_init();
 
-        claimDelay = uint48(5 days);
-        djusd = _djusd;
-
-        __Ownable2Step_init();
-        __Ownable_init(_admin);
-
-        for (uint256 i; i < _assets.length;) {
-            _addSupportedAsset(_assets[i]);
-            unchecked {
-                ++i;
-            }
-        }
-
-        for (uint256 i; i < _custodians.length;) {
-            _addCustodianAddress(_custodians[i]);
-            unchecked {
-                ++i;
-            }
-        }
-    }
-
-
-    // ----------------
-    // External Methods
-    // ----------------
-
-    /**
-    * @notice Mint DJUSD from assets
-    * @param order struct containing order details
-    */
-    function mint(Order calldata order, Route calldata route) external override nonReentrant {
-        verifyOrder(order);
-        if (!verifyRoute(route)) revert InvalidRoute();
-
-        // transfer asset from minter to this contract
-        uint256 received = _transferCollateral(
-            order.collateral_amount, order.collateral_asset, msg.sender, route.addresses, route.ratios
-        );
-        
-        djusd.mint(msg.sender, received);
-        emit Mint(msg.sender, order.collateral_asset, received);
+        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        $.claimDelay = initialClaimDelay;
+        $.custodian = initialCustodian;
     }
 
     /**
-    * @notice Request to redeem stablecoins for assets
-    * @param order struct containing order details
-    */
-    function requestRedeem(Order calldata order) external override nonReentrant {
-        verifyOrder(order);        
-
-        // burn DJUSD
-        djusd.burnFrom(msg.sender, order.collateral_amount);
-
-        uint48 timepoint = uint48(clock());
-        // update account
-        uint256 allTimeRequested = _accountRequestCheckpointsLookup(msg.sender, order.collateral_asset, timepoint, 0);
-        accountRequestCheckpoints[msg.sender][order.collateral_asset].push(timepoint, uint208(allTimeRequested + order.collateral_amount));
-        // update total
-        uint256 totalAllTimeRequestedForAsset = _totalRequestCheckpointsLookup(order.collateral_asset, timepoint, 0);
-        totalRequestCheckpoints[order.collateral_asset].push(timepoint, uint208(totalAllTimeRequestedForAsset + order.collateral_amount));
-
-        emit RedeemRequested(
-            msg.sender,
-            order.collateral_asset,
-            order.collateral_amount
-        );
-    }
-
-    /**
-    * @notice Claim stablecoins that were requested previously
-    * @param order struct containing order details
-    */
-    function claim(Order calldata order) external nonReentrant {
-        verifyOrder(order);
-
-        uint256 amountClaimable = getClaimableForAccount(msg.sender, order.collateral_asset);
-        if (amountClaimable == 0) revert NoAssetsClaimable();
-        if (order.collateral_amount > amountClaimable) revert InvalidAmount();
-
-        _transferToBeneficiary(msg.sender, order.collateral_asset, order.collateral_amount);
-
-        // Update claimed for msg.sender
-        claimed[msg.sender][order.collateral_asset] += order.collateral_amount;
-        // Update total claimed
-        totalClaimed[order.collateral_asset] += order.collateral_amount;
-
-        emit AssetsClaimed(
-            msg.sender,
-            order.collateral_asset,
-            order.collateral_amount
-        );
-    }
-
-    function setClaimDelay(uint48 _delayInSeconds) external onlyOwner {
-        emit ClaimDelayUpdated(claimDelay, _delayInSeconds);
-        claimDelay = _delayInSeconds;
-    }
-
-    /// @notice transfers an asset to a custody wallet
-    function transferToCustody(address wallet, address asset, uint256 amount) external nonReentrant onlyOwner {
-        if (wallet == address(0) || !_custodianAddresses.contains(wallet)) revert InvalidAddress();
-        emit CustodyTransfer(wallet, asset, amount);
-        IERC20(asset).safeTransfer(wallet, amount);
-    }
-
-    /// @notice Checks if an asset is supported.
-    function isSupportedAsset(address asset) external view returns (bool) {
-        return _supportedAssets.contains(asset);
-    }
-
-    /// @notice Adds an asset to the supported assets list.
-    function addSupportedAsset(address asset) external onlyOwner {
-        _addSupportedAsset(asset);
-    }
-
-    /// @notice Opts out of rebase of `asset`.
-    /// @dev Will only opt out of supported assets.
-    function optOutOfRebase(address asset, bool optOut) external onlyOwner {
-        if (!_supportedAssets.contains(asset)) revert InvalidAssetAddress();
-        bytes memory data = abi.encodeWithSignature("disableRebase(address,bool)", address(this), optOut);
-        (bool success,) = asset.call(data);
-        if (!success) revert LowLevelCallFailed();
-    }
-
-    /// @notice Removes an asset from the supported assets list
-    function removeSupportedAsset(address asset) external onlyOwner {
-        if (!_supportedAssets.remove(asset)) revert InvalidAssetAddress();
-        emit AssetRemoved(asset);
-    }
-
-    /// @notice Checks if an address is a supported custodian.
-    function isCustodianAddress(address custodian) external view returns (bool) {
-        return _custodianAddresses.contains(custodian);
-    }
-
-    /// @notice Adds an custodian to the supported custodians list.
-    function addCustodianAddress(address custodian) external onlyOwner {
-        _addCustodianAddress(custodian);
-    }
-
-    /// @notice Removes an custodian from the custodian address list
-    function removeCustodianAddress(address custodian) external onlyOwner {
-        if (!_custodianAddresses.remove(custodian)) revert InvalidCustodianAddress();
-        emit CustodianAddressRemoved(custodian);
-    }
-
-    /// @notice This method allows for a manual upperLookup on the `accountRequestCheckpoints` mapped checkpoints array.
-    /// @dev This method does NOT return the amount that has been claimed. This method will only return the total amount the `account` has requested
-    ///      of `asset` at the specified `timepoint`.
-    function accountRequestCheckpointsManualLookup(address account, address asset, uint48 timepoint) external view returns (uint256 totalRequested) {
-        totalRequested = _accountRequestCheckpointsLookup(account, asset, timepoint, 0);
-    }
-
-    /// @notice This method allows for a manual upperLookup on the `totalRequestCheckpoints` mapped checkpoints array.
-    /// @dev This method does NOT return the amount that has been claimed. This method will only return the total amount requested
-    ///      of `asset` at the specified `timepoint`.
-    function totalRequestCheckpointsForAssetManualLookup(address asset, uint48 timepoint) external view returns (uint256 totalRequested) {
-        totalRequested = _totalRequestCheckpointsLookup(asset, timepoint, 0);
-    }
-
-    /// @notice This method allows for a manual upperLookup on the `totalRequestCheckpoints` mapped checkpoints array for every asset
-    ///         this contract supports. If there are 3 assets, it will do a lookup on all 3 assets and return the total amount requested as of
-    ///         the specified `timepoint`.
-    /// @dev This method does NOT return the amount that has been claimed. This method will only return the total amount requested
-    ///      of `asset` at the specified `timepoint`.
-    function totalRequestCheckpointsManualLookup(uint48 timepoint) external view returns (uint256 totalRequested) {
-        address[] memory assets = getAllSupportedAssets();
-        uint256 len = assets.length;
-
-        for (uint256 i; i < len;) {
-            totalRequested += _totalRequestCheckpointsLookup(assets[i], timepoint, 0);
-            unchecked {
-                ++i;
-            }
-        }
-    }
-
-    
-    // --------------
-    // Public Methods
-    // --------------
-
-    /// @notice Returns all addresses within the `_supportedAssets` set.
-    function getAllSupportedAssets() public view returns (address[] memory) {
-        return _supportedAssets.values();
-    }
-
-    /// @notice Returns all addresses within the `_custodianAddresses` set.
-    function getAllCustodians() public view returns (address[] memory) {
-        return _custodianAddresses.values();
-    }
-
-    /// @notice Returns the total amount claimable for an account, given the asset being claimed.
-    function getClaimableForAccount(address account, address asset) public view returns (uint256) {
-        if (!_supportedAssets.contains(asset) || account == address(0)) return 0;
-        uint48 timepoint = clock();
-
-        uint256 claimable = _accountRequestCheckpointsLookup(account, asset, timepoint, claimDelay) - claimed[account][asset];
-        return claimable;
-    }
-
-    /// @notice Returns the total amount claimable, given the asset.
-    function getTotalClaimableForAsset(address asset) public view returns (uint256) {
-        if (!_supportedAssets.contains(asset)) return 0;
-        uint48 timepoint = clock();
-
-        uint256 totalClaimable = _totalRequestCheckpointsLookup(asset, timepoint, claimDelay) - totalClaimed[asset];
-        return totalClaimable;
-    }
-
-    /// @notice In the event this contract has multiple assets within `_supportedAssets`. This view
-    /// nethod will be needed to fetch the total amount of stable assets that are claimable.
-    function getTotalClaimable() public view returns (uint256 claimable) {
-        uint48 timepoint = clock();
-        address[] memory assets = getAllSupportedAssets();
-        uint256 len = assets.length;
-
-        for (uint256 i; i < len;) {
-            claimable += (_totalRequestCheckpointsLookup(assets[i], timepoint, claimDelay) - totalClaimed[assets[i]]);
-            unchecked {
-                ++i;
-            }
-        }
-    }
-
-    /// @notice Encodes the route provided and returns it as a bytes array.
-    function encodeRoute(Route calldata route) public pure returns (bytes memory) {
-        return abi.encode(ROUTE_TYPE, route.addresses, route.ratios);
-    }
-
-    /// @notice assert validity of signed order
-    function verifyOrder(Order calldata order) public view override returns (bool) {
-        if (order.collateral_amount == 0) revert InvalidAmount();
-        if (block.timestamp > order.expiry) revert SignatureExpired();
-        return (true);
-    }
-
-    /// @notice assert validity of route object per type
-    function verifyRoute(Route calldata route) public view override returns (bool) {
-        uint256 totalRatio = 0;
-        if (route.addresses.length != route.ratios.length) {
-            return false;
-        }
-        if (route.addresses.length == 0) {
-            return false;
-        }
-        for (uint256 i; i < route.addresses.length;) {
-            if (!_custodianAddresses.contains(route.addresses[i]) || route.addresses[i] == address(0) || route.ratios[i] == 0) {
-                return false;
-            }
-            totalRatio += route.ratios[i];
-            unchecked {
-                ++i;
-            }
-        }
-        if (totalRatio != 10_000) {
-            return false;
-        }
-        return true;
-    }
-
-    /**
-     * @notice Returns the current block.timestamp.
+     * @inheritdoc IERC6372
      */
-    function clock() public view virtual returns (uint48) {
+    function clock() public view returns (uint48) {
         return Time.timestamp();
     }
 
     /**
-     * @dev Machine-readable description of the clock as specified in EIP-6372.
+     * @inheritdoc IERC6372
      */
     // solhint-disable-next-line func-name-mixedcase
-    function CLOCK_MODE() public pure virtual returns (string memory) {
+    function CLOCK_MODE() external pure returns (string memory) {
         return "mode=timestamp";
     }
 
-    
-    // ----------------
-    // Internal Methods
-    // ----------------
-
-    /// @notice Uses Checkpoints.upperLookup to fetch the last amount requested for redemption.
-    /// @dev Does take into account a delay in the event we wanted to query claimable.
-    function _accountRequestCheckpointsLookup(address account, address asset, uint48 timepoint, uint48 delay) internal view returns (uint256) {
-        return uint256(accountRequestCheckpoints[account][asset].upperLookup(timepoint - delay));
+    /**
+     * @notice Retrieves the current claim delay for redemption requests.
+     * @dev This function returns the duration in seconds that must pass before a redemption request becomes claimable.
+     * This is a security feature to prevent immediate withdrawals after requesting redemptions, providing a window for
+     * administrative checks.
+     * @return The current claim delay in seconds.
+     */
+    function claimDelay() external view returns (uint48) {
+        return _getDJUSDMinterStorage().claimDelay;
     }
 
-    /// @notice Uses Checkpoints.upperLookup to fetch the last amount requested for redemption.
-    /// @dev Does take into account a delay in the event we wanted to query claimable.
-    function _totalRequestCheckpointsLookup(address asset, uint48 timepoint, uint48 delay) internal view returns (uint256) {
-        return uint256(totalRequestCheckpoints[asset].upperLookup(timepoint - delay));
+    /**
+     * @notice Sets a new claim delay for the redemption requests.
+     * @dev This function allows the contract owner to adjust the claim delay, affecting all future redemption requests.
+     * Can be used to respond to changing security requirements or operational needs.
+     * Emits a `ValueUnchanged` error if the new delay is the same as the current delay, ensuring that changes are
+     * meaningful.
+     * @param delay The new claim delay in seconds. Must be different from the current delay to be set successfully.
+     */
+    function setClaimDelay(uint48 delay) external onlyOwner {
+        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        $.claimDelay.requireDifferentUint48(delay);
+        $.claimDelay = delay;
     }
 
-    /// @notice Adds an asset to the supported assets list.
-    function _addSupportedAsset(address asset) internal {
-        if (asset == address(0) || asset == address(djusd) || !_supportedAssets.add(asset)) {
-            revert InvalidAssetAddress();
+    /**
+     * @notice Adds a new asset to the list of supported assets for minting DJUSD.
+     * @dev This function marks an asset as supported and disables rebasing for it if applicable. Only callable by the
+     * contract owner. It's essential for expanding the range of assets that can be used to mint DJUSD.
+     * Attempts to disable rebasing for the asset by calling `disableInitializers` on the asset contract. This is a
+     * safety measure for assets that implement a rebase mechanism.
+     * @param asset The address of the asset to add. Must be a contract address implementing the IERC20 interface.
+     * @custom:error ValueUnchanged The asset is already supported.
+     * @custom:event AssetAdded The address of the asset that was added.
+     * @custom:event RebaseDisabled The address of the asset for which rebasing was disabled.
+     */
+    function addSupportedAsset(address asset) external onlyOwner {
+        if (asset == address(DJUSD)) revert InvalidAddress(address(DJUSD));
+        asset.requireNonZeroAddress();
+        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        $.supportedAssets.requireAbsentAddress(asset);
+        $.supportedAssets.add(asset);
+        // errors in the following low-level call can be ignored
+        (bool success,) = asset.call(abi.encodeCall(IRebaseToken.disableRebase, (address(this), true)));
+        if (success) {
+            emit RebaseDisabled(asset);
         }
         emit AssetAdded(asset);
     }
 
-    /// @notice Adds an custodian to the supported custodians list.
-    function _addCustodianAddress(address custodian) internal {
-        if (custodian == address(0) || custodian == address(djusd) || !_custodianAddresses.add(custodian)) {
-            revert InvalidCustodianAddress();
+    /**
+     * @notice Removes an asset from the list of supported assets for minting DJUSD.
+     * @dev This function allows the contract owner to remove an asset from the list of supported assets. It's crucial
+     * for maintaining the integrity and relevance of the asset pool.
+     * @param asset The address of the asset to remove. Must currently be a supported asset.
+     * @custom:error NotSupportedAsset The asset is not supported.
+     * @custom:event AssetRemoved The address of the asset that was removed.
+     */
+    function removeSupportedAsset(address asset) external onlyOwner validAsset(asset) {
+        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        $.supportedAssets.remove(asset);
+        emit AssetRemoved(asset);
+    }
+
+    /**
+     * @notice Updates the custodian state variable.
+     * @dev This function allows the contract owner to designate a new custodian, capable of receiving custody transfers
+     * of assets. The custodian is a trusted entities that manages the physical or digital custody of assets outside the
+     * contract.
+     * @param newCustodian The address of the new custodian to be added. Must not already be a custodian.
+     * @custom:error InvalidZeroAddress The custodian address is the zero address.
+     * @custom:event CustodianUpdated The address of the custodian that was added.
+     */
+    function updateCustodian(address newCustodian) external onlyOwner {
+        newCustodian.requireNonZeroAddress();
+        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        if ($.custodian == newCustodian) revert InvalidAddress(newCustodian);
+        $.custodian = newCustodian;
+        emit CustodianUpdated(newCustodian);
+    }
+
+    /**
+     * @notice Mints DJUSD tokens in exchange for a specified amount of a supported asset.
+     * @dev This function allows a user to deposit a supported asset into the contract and receive DJUSD tokens in
+     * return. The function ensures that the asset is supported and applies non-reentrancy protection to prevent double
+     * spending.
+     * The amount of DJUSD minted is equal to the amount of the asset deposited, minus any applicable fees or
+     * adjustments defined elsewhere.
+     * @param asset The address of the supported asset to deposit.
+     * @param amountIn The amount of the asset to deposit in exchange for DJUSD. The actual amount of DJUSD minted may
+     * vary based on the contract's logic.
+     * @return amountOut The amount of DJUSD minted and credited to the user.
+     * @custom:error NotSupportedAsset The asset is not supported for minting.
+     * @custom:event Mint The address of the user who minted, the asset address, the amount deposited, and the amount
+     * of DJUSD minted.
+     */
+    function mint(address asset, uint256 amountIn)
+        external
+        nonReentrant
+        validAsset(asset)
+        returns (uint256 amountOut)
+    {
+        address user = msg.sender;
+        amountIn = _pullAssets(user, asset, amountIn);
+        uint256 balanceBefore = DJUSD.balanceOf(user);
+        DJUSD.mint(user, amountIn);
+        unchecked {
+            amountOut = DJUSD.balanceOf(user) - balanceBefore;
         }
-        emit CustodianAddressAdded(custodian);
+        emit Mint(user, asset, amountIn, amountOut);
     }
 
-    /// @notice transfer supported asset to beneficiary address
-    function _transferToBeneficiary(address beneficiary, address asset, uint256 amount) internal {
-        if (!_supportedAssets.contains(asset)) revert UnsupportedAsset();
-        IERC20(asset).safeTransfer(beneficiary, amount);
+    /**
+     * @notice Requests the redemption of DJUSD tokens for a specified amount of a supported asset.
+     * @dev Allows users to burn DJUSD tokens in exchange for a claim on a specified amount of a supported asset, after
+     * a delay defined by `claimDelay`. The request is recorded and can be claimed after the delay period.
+     * This function employs non-reentrancy protection and checks that the asset is supported. It burns the requested
+     * amount of DJUSD from the user's balance immediately.
+     * @param asset The address of the supported asset the user wishes to claim.
+     * @param amount The amount of DJUSD the user wishes to redeem for the asset.
+     * @custom:error NotSupportedAsset The asset is not supported for redemption.
+     * @custom:event TokensRequested The address of the user who requested, the asset address, the amount requested, and
+     * the timestamp after which the claim can be made.
+     */
+    function requestTokens(address asset, uint256 amount) external nonReentrant validAsset(asset) {
+        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        address user = msg.sender;
+        DJUSD.burnFrom(user, amount);
+        $.pendingClaims[asset] += amount;
+        uint256 claimableAfter = clock() + $.claimDelay;
+        $.redemptionRequests[user][asset].push(
+            RedemptionRequest({amount: amount, claimableAfter: claimableAfter, claimed: 0})
+        );
+        emit TokensRequested(user, asset, amount, claimableAfter);
     }
 
-    /// @notice transfer supported asset to array of custody addresses per defined ratio
-    function _transferCollateral(
-        uint256 amount,
-        address asset,
-        address account,
-        address[] calldata addresses,
-        uint256[] calldata ratios
-    ) internal returns (uint256 received) {
-        // cannot mint using unsupported asset or native ETH even if it is supported for redemptions
-        if (!_supportedAssets.contains(asset)) revert UnsupportedAsset();
-        IERC20 token = IERC20(asset);
+    /**
+     * @notice Calculates the amount of a supported asset that a user can currently claim from their redemption
+     * requests.
+     * @dev Returns the total amount of the specified asset that the user is eligible to claim, based on their
+     * outstanding redemption requests and the claim delay. This function takes into account only claims that are past
+     * the claimable after timestamp.
+     * Can return a value less than the total requested if there are insufficient funds in the contract to fulfill the
+     * claim.
+     * @param user The address of the user for whom to calculate claimable assets.
+     * @param asset The address of the supported asset to calculate claimable amounts for.
+     * @return amount The total amount of the specified asset that the user can currently claim.
+     */
+    function claimableTokens(address user, address asset) public view validAsset(asset) returns (uint256 amount) {
+        uint256 claimable = _calculateClaimableTokens(user, asset);
+        uint256 available = IERC20(asset).balanceOf(address(this));
+        return available < claimable ? available : claimable;
+    }
 
-        uint256 preBal = token.balanceOf(address(this));
-        token.transferFrom(account, address(this), amount);
-        received = token.balanceOf(address(this)) - preBal;
+    /**
+     * @notice Claims the requested supported assets in exchange for previously burned DJUSD tokens, if the claim delay
+     * has passed.
+     * @dev This function allows users to claim supported assets for which they have previously made redemption requests
+     * and the claim delay has elapsed.
+     * It checks the amount of assets claimable by the user, ensures the request is valid, and transfers the claimed
+     * assets to the user.
+     * @param asset The address of the supported asset to be claimed.
+     * @param amount The amount of the asset the user wishes to claim.
+     * @custom:error InsufficientFunds The requested amount exceeds the claimable amount.
+     * @custom:event TokensClaimed The address of the user who claimed, the asset address, and the amount claimed.
+     */
+    function claimTokens(address asset, uint256 amount) external validAsset(asset) {
+        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        address user = msg.sender;
+        uint256 remainingToClaim = amount;
 
-        if (received == 0) revert InvalidAmountReceived();
+        amount.requireSufficientFunds(IERC20(asset).balanceOf(address(this)));
 
-        uint256 totalTransferred = 0;
-        for (uint256 i; i < addresses.length;) { // TODO: Test
-            uint256 amountToTransfer = (received * ratios[i]) / 10_000;
-            token.transfer(addresses[i], amountToTransfer);
-            totalTransferred += amountToTransfer;
+        RedemptionRequest[] storage userRequests = $.redemptionRequests[user][asset];
+        mapping(address asset => uint256) storage firstUnclaimedIndex = $.firstUnclaimedIndex[user];
+
+        uint256 numRequests = userRequests.length;
+        uint256 i = firstUnclaimedIndex[asset];
+
+        while (i < numRequests) {
+            RedemptionRequest storage request = _unsafeRedemptionRequestAccess(userRequests, i);
+            if (clock() >= request.claimableAfter) {
+                uint256 remainingClaimable;
+                (remainingToClaim, remainingClaimable) = _updateClaim(request, remainingToClaim);
+                if (remainingToClaim == 0) {
+                    unchecked {
+                        firstUnclaimedIndex[asset] = remainingClaimable == 0 ? i + 1 : i;
+                    }
+                    break;
+                }
+            } else {
+                break;
+            }
             unchecked {
                 ++i;
             }
         }
-        uint256 remainingBalance = received - totalTransferred;
-        if (remainingBalance != 0) {
-            token.transfer(addresses[addresses.length - 1], remainingBalance);
+
+        if (remainingToClaim != 0) {
+            unchecked {
+                revert CommonErrors.InsufficientFunds(amount, amount - remainingToClaim);
+            }
+        }
+
+        IERC20(asset).safeTransfer(user, amount);
+
+        $.pendingClaims[asset] -= amount;
+
+        emit TokensClaimed(user, asset, amount);
+    }
+
+    /**
+     * @notice Checks if the specified asset is a supported asset that's acceptable collateral.
+     * @param asset The ERC-20 token in question.
+     * @return isSupported If true, the specified asset is a supported asset and therefore able to be used to mint
+     * DJUSD tokens 1:1.
+     */
+    function isSupportedAsset(address asset) external view returns (bool isSupported) {
+        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        return $.supportedAssets.contains(asset);
+    }
+
+    /**
+     * @notice Returns the custodian address stored in this contract
+     * @dev The custodian is the address where all collateral from supported assets are transferred during a mint.
+     */
+    function custodian() external view returns (address) {
+        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        return $.custodian;
+    }
+
+    /**
+     * @notice Returns all redemption requests for a specified account and asset.
+     * @param user Account address.
+     * @param asset ERC-20 asset.
+     * @return requests An array of type RedemptionRequest of all redemption requests made by the specified user
+     * for the specified asset.
+     */
+    function getRedemptionRequests(address user, address asset)
+        external
+        view
+        returns (RedemptionRequest[] memory requests)
+    {
+        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        return $.redemptionRequests[user][asset];
+    }
+
+    /**
+     * @notice Retrieves the amount of a supported asset that is required to fulfill pending redemption requests.
+     * @dev This function calculates the total amount of the specified asset that is needed to fulfill all pending
+     * redemption requests. It considers the total amount of pending claims for the asset and subtracts the current
+     * balance of the asset held in the contract.
+     * If the total pending claims exceed the current balance, the function returns the difference as the required
+     * amount.
+     * @param asset The address of the supported asset to calculate the required amount for.
+     * @return amount The total amount of the specified asset required to fulfill pending redemption requests.
+     * @custom:error NotSupportedAsset The asset is not supported for redemption.
+     */
+    function requiredTokens(address asset) external view validAsset(asset) returns (uint256 amount) {
+        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        uint256 totalPendingClaims = $.pendingClaims[asset];
+        uint256 balance = IERC20(asset).balanceOf(address(this));
+        if (totalPendingClaims > balance) {
+            unchecked {
+                amount = totalPendingClaims - balance;
+            }
         }
     }
 
     /**
-     * @notice Overriden from UUPSUpgradeable
-     * @dev Restricts ability to upgrade contract to `DEFAULT_ADMIN_ROLE`
+     * @notice Returns the supportedAssets array.
+     * @return supportedAssets All supported assets that are accepted as collateral.
      */
-    function _authorizeUpgrade(address) internal override onlyOwner {}
+    function getAllSupportedAssets() public view returns (address[] memory supportedAssets) {
+        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        return $.supportedAssets.values();
+    }
+
+    /**
+     * @notice Returns the pending claim amount for a specified asset.
+     * @param asset ERC-20 collateral that's pending claim
+     * @return amount Amount of asset that is pending claim in totality.
+     */
+    function getPendingClaims(address asset) external view returns (uint256 amount) {
+        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        return $.pendingClaims[asset];
+    }
+
+    /**
+     * @notice Transfers a specified amount of a supported asset to the custodian.
+     * @dev This internal function is used to transfer custody of assets to a designated custodian. It's part of
+     * managing the physical or digital custody of assets represented within the contract.
+     * @param asset The address of the asset to be transferred.
+     * @param amount The amount of the asset to transfer.
+     * @custom:event CustodyTransfer The address of the custodian, the asset address, and the amount transferred.
+     */
+    function _transferToCustody(address asset, uint256 amount) internal {
+        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        IERC20(asset).safeTransfer($.custodian, amount);
+        emit CustodyTransfer($.custodian, asset, amount);
+    }
+
+    /**
+     * @dev Calculates the total amount of a supported asset that the specified user can claim based on their redemption
+     * requests. This internal view function iterates over the user's redemption requests, summing the amounts of all
+     * requests that are past their claimable timestamp.
+     * Only considers redemption requests that have not yet been fully claimed and are past the delay period set by
+     * `claimDelay`.
+     * This function is utilized to determine the amount a user can claim via `claimTokens` and to compute the total
+     * claimable amount in `claimableTokens`.
+     * @param user The address of the user for whom to calculate the total claimable amount.
+     * @param asset The address of the supported asset to calculate claimable amounts for.
+     * @return amount The total amount of the supported asset that the user can claim, based on their redemption
+     * requests.
+     */
+    function _calculateClaimableTokens(address user, address asset) internal view returns (uint256 amount) {
+        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        RedemptionRequest[] storage userRequests = $.redemptionRequests[user][asset];
+        uint256 numRequests = userRequests.length;
+        uint256 i = $.firstUnclaimedIndex[user][asset];
+
+        while (i < numRequests) {
+            RedemptionRequest storage request = _unsafeRedemptionRequestAccess(userRequests, i);
+            if (clock() >= request.claimableAfter) {
+                uint256 remainingAmount;
+                unchecked {
+                    remainingAmount = request.amount - request.claimed;
+                }
+                amount += remainingAmount;
+            } else {
+                // Once we hit a request that's not yet claimable, we can break out of the loop early
+                break;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    /**
+     * @dev Updates the state of a redemption request by claiming a specified amount of the request. This internal
+     * function is used to update the state of a redemption request during the claiming process.
+     * It calculates the remaining claimable amount and the amount left to claim after the current claim operation.
+     * The function returns the remaining amount to claim and the remaining claimable amount after the claim.
+     * @param request The storage pointer to the redemption request to update.
+     * @param amount The amount to claim from the request.
+     * @return remainingToClaim The remaining amount to claim after the current operation.
+     * @return remainingClaimable The remaining claimable amount after the current operation.
+     */
+    function _updateClaim(RedemptionRequest storage request, uint256 amount) internal returns (uint256, uint256) {
+        uint256 requested = request.amount;
+        uint256 remainingClaimable;
+        unchecked {
+            remainingClaimable = requested - request.claimed;
+        }
+        if (remainingClaimable < amount) {
+            request.claimed = requested;
+            unchecked {
+                amount -= remainingClaimable;
+                remainingClaimable = 0;
+            }
+        } else {
+            uint256 claimed;
+            unchecked {
+                claimed = request.claimed + amount;
+                remainingClaimable = requested - claimed;
+            }
+            request.claimed = claimed;
+            amount = 0;
+        }
+        return (amount, remainingClaimable);
+    }
+
+    /**
+     * @dev Transfers a specified amount of a supported asset from a user's address to this contract. It's used during
+     * the minting process when a user wants to mint DJUSD by depositing a supported asset.
+     * This function calculates the received amount by comparing the contract's balance of the asset before and after
+     * the transfer, to handle cases where fees may apply or if additional tokens are sent to the contract by mistake.
+     * This mechanism ensures accurate accounting of the assets transferred to the contract and the corresponding
+     * minting of DJUSD tokens.
+     * @param user The address from which the asset will be pulled.
+     * @param asset The address of the supported asset to be transferred to the contract.
+     * @param amount The amount of the asset to transfer from the user to the contract.
+     * @return received The actual amount of the asset received by the contract, which may differ from the requested
+     * `amount` due to fees or other factors.
+     */
+    function _pullAssets(address user, address asset, uint256 amount) internal returns (uint256 received) {
+        uint256 balanceBefore = IERC20(asset).balanceOf(address(this));
+        IERC20(asset).safeTransferFrom(user, address(this), amount);
+        received = IERC20(asset).balanceOf(address(this)) - balanceBefore;
+        _transferToCustody(asset, received);
+    }
+
+    /**
+     * @dev Provides low-level, unchecked access to a specific redemption request within the user's array of requests.
+     * This function is a critical component for manipulating redemption requests efficiently in storage.
+     * It utilizes assembly to directly compute the storage slot of the requested index, bypassing Solidity's safety
+     * checks. This method is used internally to update the state of redemption requests during the claiming process.
+     * Care must be taken when using this function due to the lack of bounds checking; incorrect usage could lead to
+     * undefined behavior or contract vulnerabilities.
+     * @param arr The storage array containing the user's redemption requests.
+     * @param pos The index of the redemption request within the array to access.
+     * @return request A storage pointer to the `RedemptionRequest` at the specified index in the array.
+     */
+    function _unsafeRedemptionRequestAccess(RedemptionRequest[] storage arr, uint256 pos)
+        internal
+        pure
+        returns (RedemptionRequest storage request)
+    {
+        assembly {
+            mstore(0, arr.slot)
+            request.slot := add(keccak256(0, 0x20), mul(pos, 3))
+        }
+    }
 }

@@ -2,29 +2,30 @@
 pragma solidity ^0.8.19;
 
 // oz imports
-import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
-import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 // lz imports
-import { ILayerZeroUserApplicationConfig } from "@layerzerolabs/contracts/lzApp/interfaces/ILayerZeroUserApplicationConfig.sol";
+import {ILayerZeroUserApplicationConfig} from
+    "@layerzerolabs/contracts/lzApp/interfaces/ILayerZeroUserApplicationConfig.sol";
 
 // local interfaces
-import { ITaxManager } from "./interfaces/ITaxManager.sol";
-import { IDJUSDDefinitions } from "./interfaces/IDJUSDDefinitions.sol";
+import {ITaxManager} from "./interfaces/ITaxManager.sol";
+import {IDJUSDDefinitions} from "./interfaces/IDJUSDDefinitions.sol";
 
 // local imports
-import { LayerZeroRebaseTokenUpgradeable } from "@tangible/contracts/tokens/LayerZeroRebaseTokenUpgradeable.sol";
-import { CrossChainToken } from "@tangible/contracts/tokens/CrossChainToken.sol";
+import {LayerZeroRebaseTokenUpgradeable} from "@tangible/contracts/tokens/LayerZeroRebaseTokenUpgradeable.sol";
+import {CrossChainToken} from "@tangible/contracts/tokens/CrossChainToken.sol";
 
 /**
  * @title DJUSD
  * @notice DJUSD Stable Coin Contract
- * @dev This contract extends the functionality of `LayerZeroRebaseTokenUpgradeable` to support rebasing and cross-chain bridging of this token.
+ * @dev This contract extends the functionality of `LayerZeroRebaseTokenUpgradeable` to support rebasing and cross-chain
+ * bridging of this token.
  */
 contract DJUSD is LayerZeroRebaseTokenUpgradeable, UUPSUpgradeable, IDJUSDDefinitions {
-
     // ~ Variables ~
-    
+
     /// @dev Stores the address of the `DJUSDMinting` contract.
     address public minter;
     /// @dev Stores the address of the Rebase Manager which calls `setRebaseIndex`.
@@ -33,7 +34,6 @@ contract DJUSD is LayerZeroRebaseTokenUpgradeable, UUPSUpgradeable, IDJUSDDefini
     uint256 public supplyLimit;
     /// @dev Stores DJUSDTaxManager contract address.
     address public taxManager;
-
 
     // ~ Constructor ~
 
@@ -47,7 +47,6 @@ contract DJUSD is LayerZeroRebaseTokenUpgradeable, UUPSUpgradeable, IDJUSDDefini
     {
         _disableInitializers();
     }
-
 
     // ~ Initializer ~
 
@@ -64,7 +63,6 @@ contract DJUSD is LayerZeroRebaseTokenUpgradeable, UUPSUpgradeable, IDJUSDDefini
         _setRebaseIndex(1 ether, 1);
         rebaseManager = _rebaseManager;
     }
-
 
     // ~ External Methods ~
 
@@ -103,7 +101,7 @@ contract DJUSD is LayerZeroRebaseTokenUpgradeable, UUPSUpgradeable, IDJUSDDefini
      * @notice Allows owner to set the new taxManager.
      */
     function setTaxManager(address newTaxManager) external onlyOwner {
-    if (newTaxManager == address(0)) revert ZeroAddressException();
+        if (newTaxManager == address(0)) revert ZeroAddressException();
         emit TaxManagerUpdated(newTaxManager);
         taxManager = newTaxManager;
     }
@@ -155,7 +153,6 @@ contract DJUSD is LayerZeroRebaseTokenUpgradeable, UUPSUpgradeable, IDJUSDDefini
         revert CantRenounceOwnership();
     }
 
-    
     // ~ Internal Methods ~
 
     function _update(address from, address to, uint256 amount) internal override {

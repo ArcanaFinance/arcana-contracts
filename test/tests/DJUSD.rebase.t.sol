@@ -3,16 +3,16 @@ pragma solidity ^0.8.19;
 
 /* solhint-disable private-vars-leading-underscore  */
 
-import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 import {stdStorage, StdStorage, Test} from "forge-std/Test.sol";
 import {SigUtils} from "../utils/SigUtils.sol";
 import {Vm} from "forge-std/Vm.sol";
 
-import { DJUSD } from "../../src/DJUSD.sol";
-import { DJUSDTaxManager } from "../../src/DJUSDTaxManager.sol";
-import { BaseSetup } from "../BaseSetup.sol";
-import { LZEndpointMock } from "../mock/LZEndpointMock.sol";
+import {DJUSD} from "../../src/DJUSD.sol";
+import {DJUSDTaxManager} from "../../src/DJUSDTaxManager.sol";
+import {BaseSetup} from "../BaseSetup.sol";
+import {LZEndpointMock} from "../mock/LZEndpointMock.sol";
 
 contract DJUSDRebaseTest is Test, BaseSetup {
     DJUSD internal _djUsdToken;
@@ -29,7 +29,6 @@ contract DJUSDRebaseTest is Test, BaseSetup {
     address internal constant _feeCollector = address(bytes20(bytes("feeCollector")));
 
     function setUp() public virtual override {
-
         vm.label(_minter, "minter");
         vm.label(_owner, "owner");
         vm.label(_rebaseManager, "rebaseManager");
@@ -103,7 +102,7 @@ contract DJUSDRebaseTest is Test, BaseSetup {
         vm.startPrank(_rebaseManager);
         _djUsdToken.setRebaseIndex(index1, 1);
         assertGt(_djUsdToken.rebaseIndex(), 1 ether); // 1.18
-        
+
         assertApproxEqAbs(_djUsdToken.totalSupply(), foreshadowTS1, 1000);
         assertGt(_djUsdToken.balanceOf(_feeCollector), feeCollectorPreBal);
 
@@ -118,13 +117,12 @@ contract DJUSDRebaseTest is Test, BaseSetup {
         vm.startPrank(_rebaseManager);
         _djUsdToken.setRebaseIndex(index2, 1);
         assertGt(_djUsdToken.rebaseIndex(), preIndex); // 1.378
-        
+
         assertApproxEqAbs(_djUsdToken.totalSupply(), foreshadowTS2, 1000);
         assertGt(_djUsdToken.balanceOf(_feeCollector), feeCollectorPreBal);
     }
 
     function test_rebase_disableRebase() public {
-
         // ~ Config ~
 
         uint256 amount = 1 ether;
@@ -151,6 +149,4 @@ contract DJUSDRebaseTest is Test, BaseSetup {
         assertEq(_djUsdToken.balanceOf(_bob), amount);
         assertGt(_djUsdToken.balanceOf(_alice), amount);
     }
-
-    
 }
