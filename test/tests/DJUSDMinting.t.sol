@@ -1096,7 +1096,7 @@ contract DJUSDMintingCoreTest is BaseSetup {
         djUsdMintingContract.mint(address(USTB), amount);
         vm.stopPrank();
 
-        // ~ Post-state check ~
+        // ~ Post-state check 2 ~
 
         assertEq(USTB.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(custodian1), amount);
