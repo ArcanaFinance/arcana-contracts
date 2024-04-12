@@ -2,7 +2,7 @@
 pragma solidity ^0.8.19;
 
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
-import {CommonErrors} from "./CommonErrors.sol";
+import {CommonErrors} from "../interfaces/CommonErrors.sol";
 
 /**
  * @title Common Validation Functions

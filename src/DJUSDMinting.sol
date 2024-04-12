@@ -15,7 +15,7 @@ import {IDJUSD} from "./interfaces/IDJUSD.sol";
 import {IRebaseToken} from "./interfaces/IRebaseToken.sol";
 
 // libs
-import {CommonErrors} from "./libraries/CommonErrors.sol";
+import {CommonErrors} from "./interfaces/CommonErrors.sol";
 import {CommonValidations} from "./libraries/CommonValidations.sol";
 
 /**
@@ -34,7 +34,7 @@ import {CommonValidations} from "./libraries/CommonValidations.sol";
  * `IERC6372` for interoperability with other contract systems. The constructor is replaced by an initializer function
  * to support proxy deployment.
  */
-contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable, IERC6372 {
+contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable, CommonErrors, IERC6372 {
     using CommonValidations for *;
     using EnumerableSet for EnumerableSet.AddressSet;
     using SafeERC20 for IERC20;
@@ -367,7 +367,7 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
 
         if (remainingToClaim != 0) {
             unchecked {
-                revert CommonErrors.InsufficientFunds(amount, amount - remainingToClaim);
+                revert InsufficientFunds(amount, amount - remainingToClaim);
             }
         }
 
