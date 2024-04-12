@@ -562,8 +562,9 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
 
         if (required != 0 && required < received) {
             unchecked {
-                IERC20(asset).safeTransfer(custodian_, received - required);
-                emit CustodyTransfer(custodian_, asset, amountIn);
+                uint256 toSend = received - required;
+                IERC20(asset).safeTransfer(custodian_, toSend);
+                emit CustodyTransfer(custodian_, asset, toSend);
             }
         }
     }
