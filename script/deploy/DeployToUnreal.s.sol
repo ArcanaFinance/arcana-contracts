@@ -12,20 +12,21 @@ import {DJUSD} from "../../src/DJUSD.sol";
 import {IDJUSD} from "../../src/interfaces/IDJUSD.sol";
 import {DJUSDMinting} from "../../src/DJUSDMinting.sol";
 import {DJUSDTaxManager} from "../../src/DJUSDTaxManager.sol";
+import {DJUSDFeeCollector} from "../../src/DJUSDFeeCollector.sol";
 import {DJUSDPointsBoostVault} from "../../src/DJUSDPointsBoostingVault.sol";
 
 // helpers
 import "../../test/utils/Constants.sol";
 
 /**
- * @dev To run: 
- *     forge script script/deploy/DeployToUnreal.s.sol:DeployToUnreal --broadcast --legacy \
- *     --gas-estimate-multiplier 200 \
- *     --verify --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
- * 
- *     @dev To verify manually: 
- *     forge verify-contract <CONTRACT_ADDRESS> --chain-id 18233 --watch \ 
- *     src/Contract.sol:Contract --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
+    @dev To run: 
+        forge script script/deploy/DeployToUnreal.s.sol:DeployToUnreal --broadcast --legacy \
+        --gas-estimate-multiplier 200 \
+        --verify --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
+    
+    @dev To verify manually: 
+        forge verify-contract <CONTRACT_ADDRESS> --chain-id 18233 --watch \ 
+        src/Contract.sol:Contract --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
  */
 
 /**
@@ -56,11 +57,13 @@ contract DeployToUnreal is DeployUtility {
         // Deploy Contracts
         // ----------------
 
-        address[] memory assets = new address[](1);
-        assets[0] = UNREAL_USTB;
+        address[] memory distributors = new address[](2);
+        distributors[0] = UNREAL_REVENUE_DISTRIBUTOR;
+        distributors[1] = adminAddress; // TODO: Djinn Escrow
 
-        address[] memory custodians = new address[](1);
-        custodians[0] = UNREAL_CUSTODIAN;
+        uint256[] memory ratios = new uint256[](2);
+        ratios[0] = 1;
+        ratios[1] = 1;
 
         // Deploy DJUSD token
         DJUSD djUsdToken = new DJUSD(UNREAL_CHAINID, UNREAL_LZ_ENDPOINT_V2);
@@ -68,16 +71,24 @@ contract DeployToUnreal is DeployUtility {
             address(djUsdToken),
             abi.encodeWithSelector(DJUSD.initialize.selector,
                 adminAddress,
-                adminAddress
+                adminAddress // TODO: RebaseManager
             )
         );
         djUsdToken = DJUSD(address(djUsdTokenProxy));
+
+        // Deploy FeeCollector
+        DJUSDFeeCollector feeCollector = new DJUSDFeeCollector(
+            adminAddress,
+            address(djUsdToken),
+            distributors,
+            ratios
+        );
 
         // Deploy taxManager
         DJUSDTaxManager taxManager = new DJUSDTaxManager(
             adminAddress,
             address(djUsdToken),
-            address(999) // TODO: Tax collector
+            address(feeCollector)
         );
 
         // Deploy DJUSDMinting contract.
@@ -99,7 +110,7 @@ contract DeployToUnreal is DeployUtility {
         // Config
         // ------
 
-        // TODO: Add supported asset
+        djUsdMintingContract.addSupportedAsset(UNREAL_USTB);
 
         djUsdToken.setMinter(address(djUsdMintingContract));
 
@@ -114,6 +125,7 @@ contract DeployToUnreal is DeployUtility {
         _saveDeploymentAddress("DJUSD", address(djUsdToken));
         _saveDeploymentAddress("DJUSDMinting", address(djUsdMintingContract));
         _saveDeploymentAddress("DJUSDTaxManager", address(taxManager));
+        _saveDeploymentAddress("DJUSDFeeCollector", address(feeCollector));
         _saveDeploymentAddress("DJUSDPointsBoostVault", address(djUsdVault));
 
         vm.stopBroadcast();

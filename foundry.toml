@@ -4,6 +4,7 @@ out = "out"
 libs = ["lib"]
 solc = "0.8.20"
 evm_version = "shanghai"
+fs_permissions = [{ access = "read-write", path = "./deployments/"}]
 
 [fmt]
 wrap_comments = true

@@ -8,7 +8,9 @@ pragma solidity ^0.8.19;
 // addresses
 address constant UNREAL_USTB = 0x83feDBc0B85c6e29B589aA6BdefB1Cc581935ECD;
 
-address constant UNREAL_CUSTODIAN = 0x6EC858f9D87b9F7fd09f7e213ee292217E8D3B67;
+address constant UNREAL_REVENUE_DISTRIBUTOR = 0x48027bfdc9923642F44aa5c199C7eF9f07B3d5D2;
+
+address constant UNREAL_CUSTODIAN = 0x6EC858f9D87b9F7fd09f7e213ee292217E8D3B67; // Jaron's EOA
 
 // chain info
 uint256 constant UNREAL_CHAINID = 18233;
