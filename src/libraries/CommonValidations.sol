@@ -49,6 +49,17 @@ library CommonValidations {
     }
 
     /**
+     * @dev Ensures two boolean values are not the same. If they are, it reverts with a `ValueUnchanged` error.
+     * @param self The first boolean value for comparison.
+     * @param other The second boolean value to compare against the first.
+     */
+    function requireDifferentBoolean(bool self, bool other) internal pure {
+        if (self == other) {
+            revert CommonErrors.ValueUnchanged();
+        }
+    }
+
+    /**
      * @dev Ensures two addresses are not the same. Used in contexts where addresses must be distinct. Reverts with a
      * `ValueUnchanged` error if they match.
      * @param self The first address for comparison.

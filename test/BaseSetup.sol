@@ -11,6 +11,7 @@ import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.s
 // contracts
 import {DJUSDMinting} from "../src/DJUSDMinting.sol";
 import {DJUSDPointsBoostVault} from "../src/DJUSDPointsBoostingVault.sol";
+import {MockOracle} from "../src/mock/MockOracle.sol";
 import {MockToken} from "../src/mock/MockToken.sol";
 import {DJUSD} from "../src/DJUSD.sol";
 import {DJUSDTaxManager} from "../src/DJUSDTaxManager.sol";
@@ -33,6 +34,7 @@ contract BaseSetup is Test, IDJUSDDefinitions {
     DJUSDFeeCollector internal feeCollector;
     DJUSDPointsBoostVault internal djUsdVault;
     MockToken internal USTB;
+    MockOracle internal USTBOracle;
     MockToken internal cbETHToken;
     MockToken internal rETHToken;
     MockToken internal USDCToken;
@@ -112,9 +114,10 @@ contract BaseSetup is Test, IDJUSDDefinitions {
     function setUp() public virtual {
         utils = new Utils();
 
-        USTB = new MockToken('US T-Bill', 'USTB', 18, msg.sender);
-        USDCToken = new MockToken('United States Dollar Coin', 'USDC', 6, msg.sender);
-        USDTToken = new MockToken('United States Dollar Token', 'USDT', 18, msg.sender);
+        USTB = new MockToken("US T-Bill", "USTB", 18, msg.sender);
+        USTBOracle = new MockOracle(address(USTB), 1e18, 18);
+        USDCToken = new MockToken("United States Dollar Coin", "USDC", 6, msg.sender);
+        USDTToken = new MockToken("United States Dollar Token", "USDT", 18, msg.sender);
 
         _createAddresses();
 
@@ -143,31 +146,18 @@ contract BaseSetup is Test, IDJUSDDefinitions {
 
         djUsdToken = new DJUSD(1, layerZeroEndpoint);
         ERC1967Proxy djUsdTokenProxy = new ERC1967Proxy(
-            address(djUsdToken),
-            abi.encodeWithSelector(DJUSD.initialize.selector,
-                address(this),
-                rebaseManager
-            )
+            address(djUsdToken), abi.encodeWithSelector(DJUSD.initialize.selector, address(this), rebaseManager)
         );
         djUsdToken = DJUSD(address(djUsdTokenProxy));
 
-        feeCollector = new DJUSDFeeCollector(
-            owner,
-            address(djUsdToken),
-            distributors,
-            ratios
-        );
+        feeCollector = new DJUSDFeeCollector(owner, address(djUsdToken), distributors, ratios);
 
         taxManager = new DJUSDTaxManager(owner, address(djUsdToken), address(feeCollector));
 
         djUsdMintingContract = new DJUSDMinting(IDJUSD(address(djUsdToken)));
         ERC1967Proxy djinnMintingProxy = new ERC1967Proxy(
             address(djUsdMintingContract),
-            abi.encodeWithSelector(DJUSDMinting.initialize.selector,
-                owner,
-                5 days,
-                custodian1
-            )
+            abi.encodeWithSelector(DJUSDMinting.initialize.selector, owner, 5 days, custodian1)
         );
         djUsdMintingContract = DJUSDMinting(payable(address(djinnMintingProxy)));
 
@@ -178,9 +168,9 @@ contract BaseSetup is Test, IDJUSDDefinitions {
         vm.startPrank(owner);
 
         // Add self as approved custodian
-        djUsdMintingContract.addSupportedAsset(address(USTB));
-        djUsdMintingContract.addSupportedAsset(address(USDCToken));
-        djUsdMintingContract.addSupportedAsset(address(USDTToken));
+        djUsdMintingContract.addSupportedAsset(address(USTB), address(USTBOracle));
+        djUsdMintingContract.addSupportedAsset(address(USDCToken), address(USTBOracle));
+        djUsdMintingContract.addSupportedAsset(address(USDTToken), address(USTBOracle));
 
         // Mint stEth to the actor in order to test
         USTB.mint(_amountToDeposit, bob);

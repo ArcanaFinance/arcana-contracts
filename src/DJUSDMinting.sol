@@ -5,17 +5,19 @@ pragma solidity ^0.8.19;
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IERC6372} from "@openzeppelin/contracts/interfaces/IERC6372.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {ReentrancyGuardUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import {Time} from "@openzeppelin/contracts/utils/types/Time.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 // interfaces
+import {CommonErrors} from "./interfaces/CommonErrors.sol";
 import {IDJUSD} from "./interfaces/IDJUSD.sol";
+import {IOracle} from "./interfaces/IOracle.sol";
 import {IRebaseToken} from "./interfaces/IRebaseToken.sol";
 
 // libs
-import {CommonErrors} from "./interfaces/CommonErrors.sol";
 import {CommonValidations} from "./libraries/CommonValidations.sol";
 
 /**
@@ -39,20 +41,29 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
     using EnumerableSet for EnumerableSet.AddressSet;
     using SafeERC20 for IERC20;
 
+    struct AssetInfo {
+        address oracle;
+        bool removed;
+    }
+
     struct RedemptionRequest {
         uint256 amount;
         uint256 claimableAfter;
         uint256 claimed;
+        uint256 referenceIndex;
     }
 
     /// @custom:storage-location erc7201:djinn.storage.DJUSDMinter
     struct DJUSDMinterStorage {
-        EnumerableSet.AddressSet supportedAssets;
+        uint8 activeAssetsLength;
+        uint48 claimDelay;
+        address custodian;
+        EnumerableSet.AddressSet assets;
+        mapping(address asset => AssetInfo) assetInfos;
         mapping(address asset => uint256) pendingClaims;
         mapping(address user => mapping(address asset => uint256)) firstUnclaimedIndex;
         mapping(address user => mapping(address asset => RedemptionRequest[])) redemptionRequests;
-        address custodian;
-        uint48 claimDelay;
+        mapping(address user => RedemptionRequest[]) allRedemptionRequests;
     }
 
     IDJUSD public immutable DJUSD;
@@ -68,8 +79,9 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
         }
     }
 
-    event AssetAdded(address indexed asset);
+    event AssetAdded(address indexed asset, address oracle);
     event AssetRemoved(address indexed asset);
+    event AssetRestored(address indexed asset);
 
     event CustodianUpdated(address indexed custodian);
 
@@ -82,6 +94,7 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
     event TokensRequested(address indexed user, address indexed asset, uint256 amount, uint256 claimableAfter);
     event TokensClaimed(address indexed user, address indexed asset, uint256 amount);
 
+    error InsufficientOutputAmount(uint256 expected, uint256 actual);
     error NotCustodian(address account);
     error NotSupportedAsset(address asset);
 
@@ -94,10 +107,11 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
      * This enforcement guarantees that the contract interacts only with assets that have been verified and approved for
      * use in minting and redemption operations.
      * @param asset The address of the asset to validate.
+     * @param includeRemoved If true, the modifier allows the asset to be marked as removed in the list of assets.
      */
-    modifier validAsset(address asset) {
+    modifier validAsset(address asset, bool includeRemoved) {
         DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
-        if (!$.supportedAssets.contains(asset)) {
+        if (!$.assets.contains(asset) || (!includeRemoved && $.assetInfos[asset].removed)) {
             revert NotSupportedAsset(asset);
         }
         _;
@@ -191,24 +205,28 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
      * Attempts to disable rebasing for the asset by calling `disableInitializers` on the asset contract. This is a
      * safety measure for assets that implement a rebase mechanism.
      * @param asset The address of the asset to add. Must be a contract address implementing the IERC20 interface.
+     * @param oracle The address of the oracle contract that provides the asset's price feed.
      * @custom:error InvalidZeroAddress The asset address is the zero address.
      * @custom:error InvalidAddress The asset address is the same as the DJUSD address.
      * @custom:error ValueUnchanged The asset is already supported.
      * @custom:event AssetAdded The address of the asset that was added.
      * @custom:event RebaseDisabled The address of the asset for which rebasing was disabled.
      */
-    function addSupportedAsset(address asset) external onlyOwner {
+    function addSupportedAsset(address asset, address oracle) external onlyOwner {
         asset.requireNonZeroAddress();
         asset.requireNotEqual(address(DJUSD));
+        oracle.requireNonZeroAddress();
         DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
-        $.supportedAssets.requireAbsentAddress(asset);
-        $.supportedAssets.add(asset);
+        $.assets.requireAbsentAddress(asset);
+        $.assets.add(asset);
+        $.assetInfos[asset] = AssetInfo({oracle: oracle, removed: false});
+        $.activeAssetsLength++;
         // errors in the following low-level call can be ignored
         (bool success,) = asset.call(abi.encodeCall(IRebaseToken.disableRebase, (address(this), true)));
         if (success) {
             emit RebaseDisabled(asset);
         }
-        emit AssetAdded(asset);
+        emit AssetAdded(asset, oracle);
     }
 
     /**
@@ -219,10 +237,20 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
      * @custom:error NotSupportedAsset The asset is not supported.
      * @custom:event AssetRemoved The address of the asset that was removed.
      */
-    function removeSupportedAsset(address asset) external onlyOwner validAsset(asset) {
+    function removeSupportedAsset(address asset) external onlyOwner validAsset(asset, false) {
         DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
-        $.supportedAssets.remove(asset);
+        $.assetInfos[asset].removed = true;
+        $.activeAssetsLength--;
         emit AssetRemoved(asset);
+    }
+
+    function restoreAsset(address asset) external onlyOwner validAsset(asset, true) {
+        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        AssetInfo storage assetInfo = $.assetInfos[asset];
+        assetInfo.removed.requireDifferentBoolean(false);
+        assetInfo.removed = false;
+        $.activeAssetsLength++;
+        emit AssetRestored(asset);
     }
 
     /**
@@ -260,10 +288,10 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
      * @custom:event Mint Logs the address of the user who minted, the asset address, the amount deposited, and the
      * amount of DJUSD minted.
      */
-    function mint(address asset, uint256 amountIn)
+    function mint(address asset, uint256 amountIn, uint256 minAmountOut)
         external
         nonReentrant
-        validAsset(asset)
+        validAsset(asset, false)
         returns (uint256 amountOut)
     {
         DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
@@ -273,11 +301,16 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
         amountIn = _pullAssets(user, custodian_, asset, amountIn);
 
         uint256 balanceBefore = DJUSD.balanceOf(user);
-        DJUSD.mint(user, amountIn);
+        DJUSD.mint(user, IOracle($.assetInfos[asset].oracle).valueOf(amountIn, Math.Rounding.Floor));
 
         unchecked {
             amountOut = DJUSD.balanceOf(user) - balanceBefore;
         }
+
+        if (amountOut < minAmountOut) {
+            revert InsufficientOutputAmount(minAmountOut, amountOut);
+        }
+
         emit Mint(user, asset, amountIn, amountOut);
     }
 
@@ -293,14 +326,29 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
      * @custom:event TokensRequested The address of the user who requested, the asset address, the amount requested, and
      * the timestamp after which the claim can be made.
      */
-    function requestTokens(address asset, uint256 amount) external nonReentrant validAsset(asset) {
+    function requestTokens(address asset, uint256 amount) external nonReentrant validAsset(asset, false) {
         DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
         address user = msg.sender;
         DJUSD.burnFrom(user, amount);
         $.pendingClaims[asset] += amount;
         uint256 claimableAfter = clock() + $.claimDelay;
-        $.redemptionRequests[user][asset].push(
-            RedemptionRequest({amount: amount, claimableAfter: claimableAfter, claimed: 0})
+        RedemptionRequest[] storage allRequests = $.allRedemptionRequests[user];
+        RedemptionRequest[] storage assetRequests = $.redemptionRequests[user][asset];
+        allRequests.push(
+            RedemptionRequest({
+                amount: amount,
+                claimableAfter: claimableAfter,
+                claimed: 0,
+                referenceIndex: assetRequests.length
+            })
+        );
+        assetRequests.push(
+            RedemptionRequest({
+                amount: amount,
+                claimableAfter: claimableAfter,
+                claimed: 0,
+                referenceIndex: allRequests.length - 1
+            })
         );
         emit TokensRequested(user, asset, amount, claimableAfter);
     }
@@ -317,7 +365,12 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
      * @param asset The address of the supported asset to calculate claimable amounts for.
      * @return amount The total amount of the specified asset that the user can currently claim.
      */
-    function claimableTokens(address user, address asset) public view validAsset(asset) returns (uint256 amount) {
+    function claimableTokens(address user, address asset)
+        public
+        view
+        validAsset(asset, true)
+        returns (uint256 amount)
+    {
         uint256 claimable = _calculateClaimableTokens(user, asset);
         uint256 available = IERC20(asset).balanceOf(address(this));
         return available < claimable ? available : claimable;
@@ -335,37 +388,17 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
      * @custom:error InsufficientFunds The requested amount exceeds the claimable amount.
      * @custom:event TokensClaimed The address of the user who claimed, the asset address, and the amount claimed.
      */
-    function claimTokens(address asset, uint256 amount) external validAsset(asset) {
+    function claimTokens(address asset, uint256 amount) external validAsset(asset, true) {
         DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
         address user = msg.sender;
-        uint256 remainingToClaim = amount;
 
         amount.requireSufficientFunds(IERC20(asset).balanceOf(address(this)));
 
-        RedemptionRequest[] storage userRequests = $.redemptionRequests[user][asset];
+        RedemptionRequest[] storage userRequests = $.allRedemptionRequests[user];
+        RedemptionRequest[] storage assetRequests = $.redemptionRequests[user][asset];
         mapping(address asset => uint256) storage firstUnclaimedIndex = $.firstUnclaimedIndex[user];
 
-        uint256 numRequests = userRequests.length;
-        uint256 i = firstUnclaimedIndex[asset];
-
-        while (i < numRequests) {
-            RedemptionRequest storage request = _unsafeRedemptionRequestAccess(userRequests, i);
-            if (clock() >= request.claimableAfter) {
-                uint256 remainingClaimable;
-                (remainingToClaim, remainingClaimable) = _updateClaim(request, remainingToClaim);
-                if (remainingToClaim == 0) {
-                    unchecked {
-                        firstUnclaimedIndex[asset] = remainingClaimable == 0 ? i + 1 : i;
-                    }
-                    break;
-                }
-            } else {
-                break;
-            }
-            unchecked {
-                ++i;
-            }
-        }
+        uint256 remainingToClaim = _claimTokens(asset, amount, userRequests, assetRequests, firstUnclaimedIndex);
 
         if (remainingToClaim != 0) {
             unchecked {
@@ -380,6 +413,40 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
         emit TokensClaimed(user, asset, amount);
     }
 
+    function _claimTokens(
+        address asset,
+        uint256 remainingToClaim,
+        RedemptionRequest[] storage userRequests,
+        RedemptionRequest[] storage assetRequests,
+        mapping(address asset => uint256) storage firstUnclaimedIndex
+    ) internal returns (uint256) {
+        uint256 numRequests = assetRequests.length;
+        uint256 i = firstUnclaimedIndex[asset];
+
+        while (i < numRequests) {
+            RedemptionRequest storage assetRequest = _unsafeRedemptionRequestAccess(assetRequests, i);
+            RedemptionRequest storage userRequest =
+                _unsafeRedemptionRequestAccess(userRequests, assetRequest.referenceIndex);
+            if (clock() >= assetRequest.claimableAfter) {
+                uint256 remainingClaimable;
+                (remainingToClaim, remainingClaimable) = _updateClaim(userRequest, assetRequest, remainingToClaim);
+                if (remainingToClaim == 0) {
+                    unchecked {
+                        firstUnclaimedIndex[asset] = remainingClaimable == 0 ? i + 1 : i;
+                    }
+                    break;
+                }
+            } else {
+                break;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+
+        return remainingToClaim;
+    }
+
     /**
      * @notice Checks if the specified asset is a supported asset that's acceptable collateral.
      * @param asset The ERC-20 token in question.
@@ -388,7 +455,7 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
      */
     function isSupportedAsset(address asset) external view returns (bool isSupported) {
         DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
-        return $.supportedAssets.contains(asset);
+        isSupported = $.assets.contains(asset) && !$.assetInfos[asset].removed;
     }
 
     /**
@@ -396,33 +463,90 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
      * @dev The custodian is the address where all collateral from supported assets are transferred during a mint.
      */
     function custodian() external view returns (address) {
-        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
-        return $.custodian;
+        return _getDJUSDMinterStorage().custodian;
     }
 
-    /**
-     * @notice Returns all redemption requests for a specified account and asset.
-     * @param user Account address.
-     * @param asset ERC-20 asset.
-     * @return requests An array of type RedemptionRequest of all redemption requests made by the specified user
-     * for the specified asset.
-     */
-    function getRedemptionRequests(address user, address asset)
+    function getRedemptionRequests(address user, uint256 from, uint256 limit)
         external
         view
         returns (RedemptionRequest[] memory requests)
     {
         DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
-        return $.redemptionRequests[user][asset];
+        RedemptionRequest[] storage allRequests = $.allRedemptionRequests[user];
+        uint256 numRequests = allRequests.length;
+        if (from >= numRequests) {
+            requests = new RedemptionRequest[](0);
+        } else {
+            uint256 to = from + limit;
+            if (to > numRequests) {
+                to = numRequests;
+            }
+            unchecked {
+                requests = new RedemptionRequest[](to - from);
+            }
+            for (uint256 i; from != to;) {
+                requests[i] = _unsafeRedemptionRequestAccess(allRequests, from);
+                unchecked {
+                    ++i;
+                    ++from;
+                }
+            }
+        }
     }
 
-    /**
-     * @notice Returns the supportedAssets array.
-     * @return supportedAssets All supported assets that are accepted as collateral.
-     */
-    function getAllSupportedAssets() external view returns (address[] memory supportedAssets) {
+    function getRedemptionRequests(address user, address asset, uint256 from, uint256 limit)
+        external
+        view
+        returns (RedemptionRequest[] memory requests)
+    {
         DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
-        return $.supportedAssets.values();
+        RedemptionRequest[] storage allRequests = $.redemptionRequests[user][asset];
+        uint256 numRequests = allRequests.length;
+        if (from >= numRequests) {
+            requests = new RedemptionRequest[](0);
+        } else {
+            uint256 to = from + limit;
+            if (to > numRequests) {
+                to = numRequests;
+            }
+            unchecked {
+                requests = new RedemptionRequest[](to - from);
+            }
+            for (uint256 i; from != to;) {
+                requests[i] = _unsafeRedemptionRequestAccess(allRequests, from);
+                unchecked {
+                    ++i;
+                    ++from;
+                }
+            }
+        }
+    }
+
+    function getAllAssets() external view returns (address[] memory assets) {
+        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        assets = $.assets.values();
+    }
+
+    function getAllActiveAssets() external view returns (address[] memory assets) {
+        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+
+        uint256 numAssets = $.assets.length();
+        uint256 numActiveAssets = $.activeAssetsLength;
+
+        assets = new address[](numActiveAssets);
+
+        while (numActiveAssets != 0) {
+            unchecked {
+                --numAssets;
+            }
+            address asset = $.assets.at(numAssets);
+            if (!$.assetInfos[asset].removed) {
+                unchecked {
+                    --numActiveAssets;
+                }
+                assets[numActiveAssets] = asset;
+            }
+        }
     }
 
     /**
@@ -446,7 +570,7 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
      * @return amount The total amount of the specified asset required to fulfill pending redemption requests.
      * @custom:error NotSupportedAsset The asset is not supported for redemption.
      */
-    function requiredTokens(address asset) public view validAsset(asset) returns (uint256 amount) {
+    function requiredTokens(address asset) public view returns (uint256 amount) {
         DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
         uint256 totalPendingClaims = $.pendingClaims[asset];
         uint256 balance = IERC20(asset).balanceOf(address(this));
@@ -499,19 +623,24 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
      * function is used to update the state of a redemption request during the claiming process.
      * It calculates the remaining claimable amount and the amount left to claim after the current claim operation.
      * The function returns the remaining amount to claim and the remaining claimable amount after the claim.
-     * @param request The storage pointer to the redemption request to update.
+     * @param userRequest The storage pointer to the user's redemption request.
+     * @param assetRequest The storage pointer to the user's asset-specific redemption request.
      * @param amount The amount to claim from the request.
      * @return remainingToClaim The remaining amount to claim after the current operation.
      * @return remainingClaimable The remaining claimable amount after the current operation.
      */
-    function _updateClaim(RedemptionRequest storage request, uint256 amount) internal returns (uint256, uint256) {
-        uint256 requested = request.amount;
+    function _updateClaim(RedemptionRequest storage userRequest, RedemptionRequest storage assetRequest, uint256 amount)
+        internal
+        returns (uint256, uint256)
+    {
+        uint256 requested = userRequest.amount;
         uint256 remainingClaimable;
         unchecked {
-            remainingClaimable = requested - request.claimed;
+            remainingClaimable = requested - userRequest.claimed;
         }
         if (remainingClaimable < amount) {
-            request.claimed = requested;
+            userRequest.claimed = requested;
+            assetRequest.claimed = requested;
             unchecked {
                 amount -= remainingClaimable;
                 remainingClaimable = 0;
@@ -519,10 +648,11 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
         } else {
             uint256 claimed;
             unchecked {
-                claimed = request.claimed + amount;
+                claimed = userRequest.claimed + amount;
                 remainingClaimable = requested - claimed;
             }
-            request.claimed = claimed;
+            userRequest.claimed = claimed;
+            assetRequest.claimed = claimed;
             amount = 0;
         }
         return (amount, remainingClaimable);
@@ -589,7 +719,7 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
     {
         assembly {
             mstore(0, arr.slot)
-            request.slot := add(keccak256(0, 0x20), mul(pos, 3))
+            request.slot := add(keccak256(0, 0x20), mul(pos, 4))
         }
     }
 }

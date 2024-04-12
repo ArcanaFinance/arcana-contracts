@@ -40,11 +40,7 @@ contract DJUSDRebaseTest is Test, BaseSetup {
 
         _djUsdToken = new DJUSD(31337, address(_lzEndpoint));
         ERC1967Proxy _djUsdTokenProxy = new ERC1967Proxy(
-            address(_djUsdToken),
-            abi.encodeWithSelector(DJUSD.initialize.selector,
-                _owner,
-                _rebaseManager
-            )
+            address(_djUsdToken), abi.encodeWithSelector(DJUSD.initialize.selector, _owner, _rebaseManager)
         );
         _djUsdToken = DJUSD(address(_djUsdTokenProxy));
 

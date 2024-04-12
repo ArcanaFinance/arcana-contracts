@@ -15,7 +15,6 @@ import {DJUSDFeeCollector} from "../../src/DJUSDFeeCollector.sol";
  * @notice Unit Tests for DJUSDFeeCollector contract interactions
  */
 contract DJUSDFeeCollectorTest is BaseSetup {
-
     address public constant REVENUE_DISTRIBUTOR = address(bytes20(bytes("REVENUE_DISTRIBUTOR")));
     address public constant DJINN_ESCROW = address(bytes20(bytes("DJINN_ESCROW")));
 
@@ -60,8 +59,8 @@ contract DJUSDFeeCollectorTest is BaseSetup {
         // ~ Pre-State check ~
 
         assertEq(djUsdToken.balanceOf(address(feeCollector)), 0);
-        assertEq(djUsdToken.balanceOf(REVENUE_DISTRIBUTOR), amount/2);
-        assertEq(djUsdToken.balanceOf(DJINN_ESCROW), amount/2);
+        assertEq(djUsdToken.balanceOf(REVENUE_DISTRIBUTOR), amount / 2);
+        assertEq(djUsdToken.balanceOf(DJINN_ESCROW), amount / 2);
     }
 
     function test_feeCollector_distributeDJUSD_fuzzing(uint256 amount) public {
@@ -85,7 +84,7 @@ contract DJUSDFeeCollectorTest is BaseSetup {
         // ~ Pre-State check ~
 
         assertApproxEqAbs(djUsdToken.balanceOf(address(feeCollector)), 0, 1);
-        assertEq(djUsdToken.balanceOf(REVENUE_DISTRIBUTOR), amount/2);
-        assertEq(djUsdToken.balanceOf(DJINN_ESCROW), amount/2);
+        assertEq(djUsdToken.balanceOf(REVENUE_DISTRIBUTOR), amount / 2);
+        assertEq(djUsdToken.balanceOf(DJINN_ESCROW), amount / 2);
     }
 }
