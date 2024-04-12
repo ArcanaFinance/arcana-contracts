@@ -10,12 +10,13 @@ import {DJUSD} from "../../src/DJUSD.sol";
 import {IDJUSD} from "../../src/interfaces/IDJUSD.sol";
 import {DJUSDTaxManager} from "../../src/DJUSDTaxManager.sol";
 import {IDJUSDDefinitions} from "../../src/interfaces/IDJUSDDefinitions.sol";
+import {CommonErrors} from "../../src/interfaces/CommonErrors.sol";
 
 /**
  * @title DJUSDMintingCoreTest
  * @notice Unit Tests for DJUSDMinting contract interactions
  */
-contract DJUSDMintingCoreTest is BaseSetup {
+contract DJUSDMintingCoreTest is BaseSetup, CommonErrors {
     string public UNREAL_RPC_URL = vm.envString("UNREAL_RPC_URL");
 
     function setUp() public override {
@@ -112,7 +113,7 @@ contract DJUSDMintingCoreTest is BaseSetup {
         djUsdMintingContract.addSupportedAsset(asset);
         assertTrue(djUsdMintingContract.isSupportedAsset(asset));
 
-        vm.expectRevert();
+        vm.expectRevert(abi.encodeWithSelector(AlreadyExists.selector, asset));
         djUsdMintingContract.addSupportedAsset(asset);
     }
 
@@ -121,13 +122,13 @@ contract DJUSDMintingCoreTest is BaseSetup {
         assertFalse(djUsdMintingContract.isSupportedAsset(asset));
 
         vm.prank(owner);
-        vm.expectRevert();
+        vm.expectRevert(abi.encodeWithSelector(DJUSDMinting.NotSupportedAsset.selector, asset));
         djUsdMintingContract.removeSupportedAsset(asset);
     }
 
     function test_cannotAdd_addressZero_revert() public {
         vm.prank(owner);
-        vm.expectRevert();
+        vm.expectRevert(InvalidZeroAddress.selector);
         djUsdMintingContract.addSupportedAsset(address(0));
     }
 

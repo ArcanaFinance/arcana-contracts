@@ -84,7 +84,6 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
 
     error NotCustodian(address account);
     error NotSupportedAsset(address asset);
-    error InvalidAddress(address asset);
 
     /**
      * @dev Ensures that the provided asset address corresponds to a supported asset within the contract. This modifier
@@ -192,13 +191,15 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
      * Attempts to disable rebasing for the asset by calling `disableInitializers` on the asset contract. This is a
      * safety measure for assets that implement a rebase mechanism.
      * @param asset The address of the asset to add. Must be a contract address implementing the IERC20 interface.
+     * @custom:error InvalidZeroAddress The asset address is the zero address.
+     * @custom:error InvalidAddress The asset address is the same as the DJUSD address.
      * @custom:error ValueUnchanged The asset is already supported.
      * @custom:event AssetAdded The address of the asset that was added.
      * @custom:event RebaseDisabled The address of the asset for which rebasing was disabled.
      */
     function addSupportedAsset(address asset) external onlyOwner {
-        if (asset == address(DJUSD)) revert InvalidAddress(address(DJUSD));
         asset.requireNonZeroAddress();
+        asset.requireNotEqual(address(DJUSD));
         DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
         $.supportedAssets.requireAbsentAddress(asset);
         $.supportedAssets.add(asset);
@@ -231,12 +232,13 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
      * contract.
      * @param newCustodian The address of the new custodian to be added. Must not already be a custodian.
      * @custom:error InvalidZeroAddress The custodian address is the zero address.
+     * @custom:error ValueUnchanged The custodian is already set to the new address.
      * @custom:event CustodianUpdated The address of the custodian that was added.
      */
     function updateCustodian(address newCustodian) external onlyOwner {
         newCustodian.requireNonZeroAddress();
         DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
-        if ($.custodian == newCustodian) revert InvalidAddress(newCustodian);
+        $.custodian.requireDifferentAddress(newCustodian);
         $.custodian = newCustodian;
         emit CustodianUpdated(newCustodian);
     }
