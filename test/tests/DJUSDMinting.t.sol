@@ -1056,4 +1056,52 @@ contract DJUSDMintingCoreTest is BaseSetup {
         djUsdMintingContract.mint(address(USTB), _amountToDeposit);
         vm.stopPrank();
     }
+
+    function test_mint_when_required() public {
+        // ~ Config ~
+
+        uint256 amount = 10 ether;
+        deal(address(USTB), bob, amount);
+        deal(address(USTB), alice, amount);
+
+        vm.startPrank(bob);
+        USTB.approve(address(djUsdMintingContract), amount);
+        djUsdMintingContract.mint(address(USTB), amount);
+        vm.stopPrank();
+
+        // ~ Pre-state check ~
+
+        assertEq(USTB.balanceOf(bob), 0);
+        // USTB went to custodian
+        assertEq(USTB.balanceOf(custodian1), amount);
+        assertEq(USTB.balanceOf(address(djUsdMintingContract)), 0);
+        assertEq(djUsdToken.balanceOf(bob), amount);
+
+        // ~ bob requests tokens ~
+
+        vm.startPrank(bob);
+        djUsdToken.approve(address(djUsdMintingContract), amount);
+        djUsdMintingContract.requestTokens(address(USTB), amount);
+        vm.stopPrank();
+
+        // ~ Post-state check 1 ~
+
+        uint256 requested = djUsdMintingContract.getPendingClaims(address(USTB));
+        assertEq(requested, amount);
+
+        // ~ alice mints DJUSD ~
+
+        vm.startPrank(alice);
+        USTB.approve(address(djUsdMintingContract), amount);
+        djUsdMintingContract.mint(address(USTB), amount);
+        vm.stopPrank();
+
+        // ~ Post-state check ~
+
+        assertEq(USTB.balanceOf(alice), 0);
+        assertEq(USTB.balanceOf(custodian1), amount);
+        // USTB stay in contract
+        assertEq(USTB.balanceOf(address(djUsdMintingContract)), amount);
+        assertEq(djUsdToken.balanceOf(alice), amount);
+    }
 }

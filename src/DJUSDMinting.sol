@@ -257,8 +257,6 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
      * @custom:error NotSupportedAsset Indicates the asset is not supported for minting.
      * @custom:event Mint Logs the address of the user who minted, the asset address, the amount deposited, and the
      * amount of DJUSD minted.
-     * @custom:event CustodyTransfer Logs the transfer of the asset to the custodian, detailing the amount and involved
-     * parties.
      */
     function mint(address asset, uint256 amountIn)
         external
@@ -271,7 +269,6 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
         address custodian_ = $.custodian;
 
         amountIn = _pullAssets(user, custodian_, asset, amountIn);
-        emit CustodyTransfer(custodian_, asset, amountIn);
 
         uint256 balanceBefore = DJUSD.balanceOf(user);
         DJUSD.mint(user, amountIn);
@@ -549,6 +546,8 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
      * transfer based on the asset’s pending redemption needs.
      * @return received The actual amount of the asset received by the contract or the custodian, which may differ from
      * the intended amount due to transaction fees or after considering the required redemption amount.
+     * @custom:event CustodyTransfer Logs the transfer of the asset to the custodian, detailing the amount and involved
+     * parties.
      */
     function _pullAssets(address user, address custodian_, address asset, uint256 amount)
         internal
@@ -564,6 +563,7 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
         if (required != 0 && required < received) {
             unchecked {
                 IERC20(asset).safeTransfer(custodian_, received - required);
+                emit CustodyTransfer(custodian_, asset, amountIn);
             }
         }
     }
