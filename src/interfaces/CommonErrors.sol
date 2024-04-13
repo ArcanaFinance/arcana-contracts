@@ -33,6 +33,11 @@ interface CommonErrors {
     error InvalidAddress(address address_);
 
     /**
+     * @dev Emitted when an operation involves a value that is too high, where a lower value is required.
+     */
+    error ValueTooHigh(uint256 value, uint256 limit);
+
+    /**
      * @dev Emitted when an operation results in no change to the value or state, where a change was expected.
      */
     error ValueUnchanged();

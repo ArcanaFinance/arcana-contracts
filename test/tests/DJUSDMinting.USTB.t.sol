@@ -67,7 +67,7 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
     function test_USTB_init_state() public {
         assertNotEq(djUsdToken.taxManager(), address(0));
 
-        address[] memory assets = djUsdMintingContract.getAllActiveAssets();
+        address[] memory assets = djUsdMintingContract.getActiveAssets();
         assertEq(assets.length, 1);
         assertEq(assets[0], address(unrealUSTB));
 
@@ -83,7 +83,7 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
         // taker
         vm.startPrank(bob);
         unrealUSTB.approve(address(djUsdMintingContract), amount);
-        djUsdMintingContract.mint(address(unrealUSTB), amount, amount-1);
+        djUsdMintingContract.mint(address(unrealUSTB), amount, amount - 1);
         vm.stopPrank();
 
         assertEq(unrealUSTB.balanceOf(bob), preBal - amount);
@@ -101,7 +101,7 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
         // taker
         vm.startPrank(bob);
         unrealUSTB.approve(address(djUsdMintingContract), amount);
-        djUsdMintingContract.mint(address(unrealUSTB), amount, amount-deviation);
+        djUsdMintingContract.mint(address(unrealUSTB), amount, amount - deviation);
         vm.stopPrank();
 
         assertApproxEqAbs(unrealUSTB.balanceOf(bob), preBal - amount, 2);
@@ -538,7 +538,7 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
 
         vm.startPrank(alice);
         unrealUSTB.approve(address(djUsdMintingContract), amount);
-        djUsdMintingContract.mint(address(unrealUSTB), amount, amount-1);
+        djUsdMintingContract.mint(address(unrealUSTB), amount, amount - 1);
         vm.stopPrank();
 
         assertEq(unrealUSTB.balanceOf(alice), preBal - amount);
@@ -619,7 +619,7 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
         // mint
         vm.startPrank(alice);
         unrealUSTB.approve(address(djUsdMintingContract), amount);
-        djUsdMintingContract.mint(address(unrealUSTB), amount, amount-1);
+        djUsdMintingContract.mint(address(unrealUSTB), amount, amount - 1);
         vm.stopPrank();
 
         assertEq(unrealUSTB.balanceOf(alice), preBal - amount);
@@ -697,7 +697,7 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
 
         vm.startPrank(alice);
         unrealUSTB.approve(address(djUsdMintingContract), amount);
-        djUsdMintingContract.mint(address(unrealUSTB), amount, amount-1);
+        djUsdMintingContract.mint(address(unrealUSTB), amount, amount - 1);
         vm.stopPrank();
 
         _deal(address(unrealUSTB), alice, 0);

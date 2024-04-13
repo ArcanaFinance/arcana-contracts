@@ -27,7 +27,7 @@ contract DJUSDMintingCoreTest is BaseSetup, CommonErrors {
     function test_init_state() public {
         assertNotEq(djUsdToken.taxManager(), address(0));
 
-        address[] memory assets = djUsdMintingContract.getAllActiveAssets();
+        address[] memory assets = djUsdMintingContract.getActiveAssets();
         assertEq(assets.length, 3);
         assertEq(assets[0], address(USTB));
         assertEq(assets[1], address(USDCToken));

@@ -96,6 +96,18 @@ library CommonValidations {
     }
 
     /**
+     * @dev Ensures that the first uint48 value is less than the second. If not, it reverts with a `ValueUnchanged`
+     * error.
+     * @param self The first uint48 value for comparison.
+     * @param other The second uint48 value to compare against the first.
+     */
+    function requireLessThanUint48(uint48 self, uint48 other) internal pure {
+        if (self >= other) {
+            revert CommonErrors.ValueTooHigh(self, other);
+        }
+    }
+
+    /**
      * @dev Validates that the available funds or resources are sufficient to meet a requested amount. If not, it
      * reverts with an `InsufficientFunds` error.
      * @param requested The amount requested or required for an operation.

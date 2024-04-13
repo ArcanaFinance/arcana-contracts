@@ -8,6 +8,7 @@ import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {ReentrancyGuardUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {Time} from "@openzeppelin/contracts/utils/types/Time.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
@@ -39,6 +40,7 @@ import {CommonValidations} from "./libraries/CommonValidations.sol";
 contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable, CommonErrors, IERC6372 {
     using CommonValidations for *;
     using EnumerableSet for EnumerableSet.AddressSet;
+    using SafeCast for *;
     using SafeERC20 for IERC20;
 
     struct AssetInfo {
@@ -48,9 +50,9 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
 
     struct RedemptionRequest {
         uint256 amount;
-        uint256 claimableAfter;
         uint256 claimed;
-        uint256 referenceIndex;
+        uint48 claimableAfter;
+        uint32 referenceIndex;
     }
 
     /// @custom:storage-location erc7201:djinn.storage.DJUSDMinter
@@ -83,6 +85,8 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
     event AssetRemoved(address indexed asset);
     event AssetRestored(address indexed asset);
 
+    event ClaimDelayUpdated(uint48 claimDelay);
+
     event CustodianUpdated(address indexed custodian);
 
     event CustodyTransfer(address indexed custodian, address indexed asset, uint256 amount);
@@ -92,11 +96,31 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
     event RebaseDisabled(address indexed asset);
 
     event TokensRequested(address indexed user, address indexed asset, uint256 amount, uint256 claimableAfter);
+    event TokenRequestUpdated(
+        address indexed user,
+        address indexed asset,
+        uint256 amount,
+        uint256 oldClaimableAfter,
+        uint256 newClaimableAfter
+    );
     event TokensClaimed(address indexed user, address indexed asset, uint256 amount);
 
     error InsufficientOutputAmount(uint256 expected, uint256 actual);
     error NotCustodian(address account);
     error NotSupportedAsset(address asset);
+
+    /**
+     * @dev Ensures that the function can only be called by the contract's designated custodian. This modifier enforces
+     * role-based access control for sensitive functions that manage or alter asset states or user claims.
+     * @custom:error NotCustodian Thrown if the caller is not the current custodian of the contract.
+     */
+    modifier onlyCustodian() {
+        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        if (msg.sender != $.custodian) {
+            revert NotCustodian(msg.sender);
+        }
+        _;
+    }
 
     /**
      * @dev Ensures that the provided asset address corresponds to a supported asset within the contract. This modifier
@@ -196,6 +220,7 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
         DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
         $.claimDelay.requireDifferentUint48(delay);
         $.claimDelay = delay;
+        emit ClaimDelayUpdated(delay);
     }
 
     /**
@@ -230,12 +255,14 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
     }
 
     /**
-     * @notice Removes an asset from the list of supported assets for minting DJUSD.
-     * @dev This function allows the contract owner to remove an asset from the list of supported assets. It's crucial
-     * for maintaining the integrity and relevance of the asset pool.
-     * @param asset The address of the asset to remove. Must currently be a supported asset.
-     * @custom:error NotSupportedAsset The asset is not supported.
-     * @custom:event AssetRemoved The address of the asset that was removed.
+     * @notice Removes an asset from the list of supported assets for minting DJUSD, making it ineligible for future
+     * operations until restored.
+     * @dev This function allows the contract owner to temporarily remove an asset from the list of supported assets.
+     * Removed assets can be restored using the `restoreAsset` function. It is crucial for managing the lifecycle and
+     * integrity of the asset pool.
+     * @param asset The address of the asset to remove. Must currently be a supported and not previously removed asset.
+     * @custom:error NotSupportedAsset Thrown if the asset is not currently supported or has already been removed.
+     * @custom:event AssetRemoved Logs the removal of the asset.
      */
     function removeSupportedAsset(address asset) external onlyOwner validAsset(asset, false) {
         DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
@@ -244,6 +271,18 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
         emit AssetRemoved(asset);
     }
 
+    /**
+     * @notice Restores a previously removed asset, making it eligible for minting and redemption processes again.
+     * @dev This function allows the contract owner to reactivate a previously removed asset. It is crucial for managing
+     * the lifecycle of assets, especially in cases where an asset needs to be temporarily disabled and later
+     * reintroduced.
+     * The asset must currently be marked as removed to be eligible for restoration.
+     * @param asset The address of the asset to restore.
+     * @custom:error NotSupportedAsset Thrown if the asset is not found in the list of assets or is not currently marked
+     * as removed.
+     * @custom:error ValueUnchanged Thrown if the asset is already active.
+     * @custom:event AssetRestored Logs the restoration of the asset, making it active again.
+     */
     function restoreAsset(address asset) external onlyOwner validAsset(asset, true) {
         DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
         AssetInfo storage assetInfo = $.assetInfos[asset];
@@ -251,6 +290,14 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
         assetInfo.removed = false;
         $.activeAssetsLength++;
         emit AssetRestored(asset);
+    }
+
+    /**
+     * @notice Returns the custodian address stored in this contract
+     * @dev The custodian is the address where all collateral from supported assets are transferred during a mint.
+     */
+    function custodian() external view returns (address) {
+        return _getDJUSDMinterStorage().custodian;
     }
 
     /**
@@ -269,6 +316,17 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
         $.custodian.requireDifferentAddress(newCustodian);
         $.custodian = newCustodian;
         emit CustodianUpdated(newCustodian);
+    }
+
+    /**
+     * @notice Checks if the specified asset is a supported asset that's acceptable collateral.
+     * @param asset The ERC-20 token in question.
+     * @return isSupported If true, the specified asset is a supported asset and therefore able to be used to mint
+     * DJUSD tokens 1:1.
+     */
+    function isSupportedAsset(address asset) external view returns (bool isSupported) {
+        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        isSupported = $.assets.contains(asset) && !$.assetInfos[asset].removed;
     }
 
     /**
@@ -331,26 +389,52 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
         address user = msg.sender;
         DJUSD.burnFrom(user, amount);
         $.pendingClaims[asset] += amount;
-        uint256 claimableAfter = clock() + $.claimDelay;
+        uint48 claimableAfter = clock() + $.claimDelay;
         RedemptionRequest[] storage allRequests = $.allRedemptionRequests[user];
         RedemptionRequest[] storage assetRequests = $.redemptionRequests[user][asset];
+        uint32 index = assetRequests.length.toUint32();
         allRequests.push(
-            RedemptionRequest({
-                amount: amount,
-                claimableAfter: claimableAfter,
-                claimed: 0,
-                referenceIndex: assetRequests.length
-            })
+            RedemptionRequest({amount: amount, claimableAfter: claimableAfter, claimed: 0, referenceIndex: index})
         );
+        unchecked {
+            index = (allRequests.length - 1).toUint32();
+        }
         assetRequests.push(
-            RedemptionRequest({
-                amount: amount,
-                claimableAfter: claimableAfter,
-                claimed: 0,
-                referenceIndex: allRequests.length - 1
-            })
+            RedemptionRequest({amount: amount, claimableAfter: claimableAfter, claimed: 0, referenceIndex: index})
         );
         emit TokensRequested(user, asset, amount, claimableAfter);
+    }
+
+    /**
+     * @notice Extends the claimable after timestamp for a specific redemption request.
+     * @dev Allows the custodian to delay the claimability of assets for a particular redemption request. This can be
+     * used in scenarios where additional time is needed before the assets can be released or in response to changing
+     * conditions affecting the asset or market stability.
+     * This action updates both the general and asset-specific redemption request entries to ensure consistency across
+     * the contract's tracking mechanisms.
+     * @param user The address of the user whose redemption request is being modified.
+     * @param asset The asset for which the redemption request was made.
+     * @param index The index of the redemption request in the user's general array of requests.
+     * @param newClaimableAfter The new timestamp after which the redemption request can be claimed. Must be later than
+     * the current claimable after timestamp.
+     * @custom:error NotCustodian Thrown if the caller is not the designated custodian.
+     * @custom:error ValueBelowMinimum Thrown if the new claimable after timestamp is not later than the existing one.
+     * @custom:event TokenRequestUpdated Logs the update of the claimable after timestamp, providing the old and new
+     * timestamps.
+     */
+    function extendClaimTimestamp(address user, address asset, uint256 index, uint48 newClaimableAfter)
+        external
+        onlyCustodian
+    {
+        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        RedemptionRequest storage request = $.allRedemptionRequests[user][index];
+        uint48 claimableAfter = request.claimableAfter;
+        claimableAfter.requireLessThanUint48(newClaimableAfter);
+        request.claimableAfter = newClaimableAfter;
+        index = request.referenceIndex;
+        request = _unsafeRedemptionRequestAccess($.redemptionRequests[user][asset], index);
+        request.claimableAfter = newClaimableAfter;
+        emit TokenRequestUpdated(user, asset, request.amount, claimableAfter, newClaimableAfter);
     }
 
     /**
@@ -413,59 +497,18 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
         emit TokensClaimed(user, asset, amount);
     }
 
-    function _claimTokens(
-        address asset,
-        uint256 remainingToClaim,
-        RedemptionRequest[] storage userRequests,
-        RedemptionRequest[] storage assetRequests,
-        mapping(address asset => uint256) storage firstUnclaimedIndex
-    ) internal returns (uint256) {
-        uint256 numRequests = assetRequests.length;
-        uint256 i = firstUnclaimedIndex[asset];
-
-        while (i < numRequests) {
-            RedemptionRequest storage assetRequest = _unsafeRedemptionRequestAccess(assetRequests, i);
-            RedemptionRequest storage userRequest =
-                _unsafeRedemptionRequestAccess(userRequests, assetRequest.referenceIndex);
-            if (clock() >= assetRequest.claimableAfter) {
-                uint256 remainingClaimable;
-                (remainingToClaim, remainingClaimable) = _updateClaim(userRequest, assetRequest, remainingToClaim);
-                if (remainingToClaim == 0) {
-                    unchecked {
-                        firstUnclaimedIndex[asset] = remainingClaimable == 0 ? i + 1 : i;
-                    }
-                    break;
-                }
-            } else {
-                break;
-            }
-            unchecked {
-                ++i;
-            }
-        }
-
-        return remainingToClaim;
-    }
-
     /**
-     * @notice Checks if the specified asset is a supported asset that's acceptable collateral.
-     * @param asset The ERC-20 token in question.
-     * @return isSupported If true, the specified asset is a supported asset and therefore able to be used to mint
-     * DJUSD tokens 1:1.
+     * @notice Retrieves a list of all redemption requests for a specified user within a range.
+     * @dev This function returns an array of redemption requests made by the specified user across all assets, limited
+     * by a specified range.
+     * It is useful for user interfaces and auditing purposes to track all redemption activities by a user.
+     * @param user The address of the user whose redemption requests are being queried.
+     * @param from The starting index in the list of redemption requests to begin retrieval from.
+     * @param limit The maximum number of redemption requests to return. This function will return fewer if the total
+     * number of requests is less than the limit.
+     * @return requests An array of redemption requests from the specified start index up to the limit, or fewer if not
+     * enough requests exist.
      */
-    function isSupportedAsset(address asset) external view returns (bool isSupported) {
-        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
-        isSupported = $.assets.contains(asset) && !$.assetInfos[asset].removed;
-    }
-
-    /**
-     * @notice Returns the custodian address stored in this contract
-     * @dev The custodian is the address where all collateral from supported assets are transferred during a mint.
-     */
-    function custodian() external view returns (address) {
-        return _getDJUSDMinterStorage().custodian;
-    }
-
     function getRedemptionRequests(address user, uint256 from, uint256 limit)
         external
         view
@@ -494,6 +537,20 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
         }
     }
 
+    /**
+     * @notice Retrieves a list of redemption requests for a specified user and asset within a range.
+     * @dev This function returns an array of redemption requests made by the specified user for a particular asset,
+     * limited by a specified range.
+     * It allows for detailed tracking and management of redemption requests related to a specific asset, facilitating
+     * better asset-specific transaction oversight.
+     * @param user The address of the user whose redemption requests for a specific asset are being queried.
+     * @param asset The ERC-20 token for which redemption requests are being queried.
+     * @param from The starting index in the list of redemption requests to begin retrieval from.
+     * @param limit The maximum number of redemption requests to return. This function will return fewer if the total
+     * number of requests is less than the limit.
+     * @return requests An array of redemption requests specific to the asset from the specified start index up to the
+     * limit, or fewer if not enough requests exist.
+     */
     function getRedemptionRequests(address user, address asset, uint256 from, uint256 limit)
         external
         view
@@ -522,12 +579,29 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
         }
     }
 
+    /**
+     * @notice Retrieves a list of all assets registered in the contract, regardless of their active or removed status.
+     * @dev This function returns an array of all asset addresses that have been added to the contract over time. It
+     * includes both currently active and previously removed assets, providing a comprehensive view of the contract's
+     * historical asset management.
+     * Useful for audit purposes or for administrative overview to see the full range of assets ever involved with the
+     * contract.
+     * @return assets An array of addresses representing all assets that have been registered in the contract.
+     */
     function getAllAssets() external view returns (address[] memory assets) {
         DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
         assets = $.assets.values();
     }
 
-    function getAllActiveAssets() external view returns (address[] memory assets) {
+    /**
+     * @notice Retrieves a list of all currently active assets that are eligible for minting and redemption.
+     * @dev This function returns an array of asset addresses that are currently active, i.e., not marked as removed. It
+     * filters out the assets that have been deactivated or removed from active operations.
+     * This is particularly useful for users or interfaces interacting with the contract, needing to know which assets
+     * are currently operational for minting and redemption processes.
+     * @return assets An array of addresses representing all active assets in the contract.
+     */
+    function getActiveAssets() external view returns (address[] memory assets) {
         DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
 
         uint256 numAssets = $.assets.length();
@@ -556,7 +630,7 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
      */
     function getPendingClaims(address asset) external view returns (uint256 amount) {
         DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
-        return $.pendingClaims[asset];
+        amount = $.pendingClaims[asset];
     }
 
     /**
@@ -619,11 +693,57 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
     }
 
     /**
-     * @dev Updates the state of a redemption request by claiming a specified amount of the request. This internal
-     * function is used to update the state of a redemption request during the claiming process.
-     * It calculates the remaining claimable amount and the amount left to claim after the current claim operation.
-     * The function returns the remaining amount to claim and the remaining claimable amount after the claim.
-     * @param userRequest The storage pointer to the user's redemption request.
+     * @dev Internal function to handle the claiming of assets based on redemption requests. It processes multiple
+     * redemption requests and manages the state of each request during the claim process.
+     * This function is called during the public `claimTokens` function execution and ensures that claims are processed
+     * in accordance with the set claimable timestamps and available amounts.
+     * @param asset The address of the asset being claimed.
+     * @param remainingToClaim The total amount the user is attempting to claim.
+     * @param userRequests Array of all redemption requests made by the user.
+     * @param assetRequests Array of redemption requests for the specific asset.
+     * @param firstUnclaimedIndex Mapping of the first unclaimed index for quick access during claims.
+     * @return remainingToClaim The remaining amount to be claimed if not all requests could be fully satisfied.
+     */
+    function _claimTokens(
+        address asset,
+        uint256 remainingToClaim,
+        RedemptionRequest[] storage userRequests,
+        RedemptionRequest[] storage assetRequests,
+        mapping(address asset => uint256) storage firstUnclaimedIndex
+    ) internal returns (uint256) {
+        uint256 numRequests = assetRequests.length;
+        uint256 i = firstUnclaimedIndex[asset];
+
+        while (i < numRequests) {
+            RedemptionRequest storage assetRequest = _unsafeRedemptionRequestAccess(assetRequests, i);
+            RedemptionRequest storage userRequest =
+                _unsafeRedemptionRequestAccess(userRequests, assetRequest.referenceIndex);
+            if (clock() >= assetRequest.claimableAfter) {
+                uint256 remainingClaimable;
+                (remainingToClaim, remainingClaimable) = _updateClaim(userRequest, assetRequest, remainingToClaim);
+                if (remainingToClaim == 0) {
+                    unchecked {
+                        firstUnclaimedIndex[asset] = remainingClaimable == 0 ? i + 1 : i;
+                    }
+                    break;
+                }
+            } else {
+                break;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+
+        return remainingToClaim;
+    }
+
+    /**
+     * @dev Updates the state of redemption requests for a user during the claiming process. This function is called by
+     * `_claimTokens` to adjust the amount claimed on each redemption request.
+     * It ensures that each request is updated correctly and provides the remaining claimable amount for further
+     * processing.
+     * @param userRequest The storage pointer to the user's general redemption request.
      * @param assetRequest The storage pointer to the user's asset-specific redemption request.
      * @param amount The amount to claim from the request.
      * @return remainingToClaim The remaining amount to claim after the current operation.
@@ -719,7 +839,7 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
     {
         assembly {
             mstore(0, arr.slot)
-            request.slot := add(keccak256(0, 0x20), mul(pos, 4))
+            request.slot := add(keccak256(0, 0x20), mul(pos, 3))
         }
     }
 }
