@@ -62,6 +62,10 @@ contract DJUSD is LayerZeroRebaseTokenUpgradeable, UUPSUpgradeable, IDJUSDDefini
 
     // ~ External Methods ~
 
+    /**
+     * @notice This method allows the rebaseManager to set the rebaseIndex.
+     * @param newIndex The new rebaseIndex.
+     */
     function setRebaseIndex(uint256 newIndex, uint256 nonce) external {
         if (msg.sender != rebaseManager && msg.sender != taxManager) revert NotAuthorized(msg.sender);
         uint256 currentIndex = rebaseIndex();
