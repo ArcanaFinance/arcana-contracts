@@ -2,6 +2,7 @@
 pragma solidity ^0.8.19;
 
 // oz imports
+import {Arrays, StorageSlot} from "@openzeppelin/contracts/utils/Arrays.sol";
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IERC6372} from "@openzeppelin/contracts/interfaces/IERC6372.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
@@ -38,6 +39,7 @@ import {CommonValidations} from "./libraries/CommonValidations.sol";
  * to support proxy deployment.
  */
 contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable, CommonErrors, IERC6372 {
+    using Arrays for uint256[];
     using CommonValidations for *;
     using EnumerableSet for EnumerableSet.AddressSet;
     using SafeCast for *;
@@ -51,8 +53,8 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
     struct RedemptionRequest {
         uint256 amount;
         uint256 claimed;
+        address asset;
         uint48 claimableAfter;
-        uint32 referenceIndex;
     }
 
     /// @custom:storage-location erc7201:djinn.storage.DJUSDMinter
@@ -64,8 +66,8 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
         mapping(address asset => AssetInfo) assetInfos;
         mapping(address asset => uint256) pendingClaims;
         mapping(address user => mapping(address asset => uint256)) firstUnclaimedIndex;
-        mapping(address user => mapping(address asset => RedemptionRequest[])) redemptionRequests;
-        mapping(address user => RedemptionRequest[]) allRedemptionRequests;
+        mapping(address user => mapping(address asset => uint256[])) redemptionRequestsByAsset;
+        mapping(address user => RedemptionRequest[]) redemptionRequests;
     }
 
     IDJUSD public immutable DJUSD;
@@ -95,10 +97,13 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
 
     event RebaseDisabled(address indexed asset);
 
-    event TokensRequested(address indexed user, address indexed asset, uint256 amount, uint256 claimableAfter);
+    event TokensRequested(
+        address indexed user, address indexed asset, uint256 indexed index, uint256 amount, uint256 claimableAfter
+    );
     event TokenRequestUpdated(
         address indexed user,
         address indexed asset,
+        uint256 indexed index,
         uint256 amount,
         uint256 oldClaimableAfter,
         uint256 newClaimableAfter
@@ -390,19 +395,15 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
         DJUSD.burnFrom(user, amount);
         $.pendingClaims[asset] += amount;
         uint48 claimableAfter = clock() + $.claimDelay;
-        RedemptionRequest[] storage allRequests = $.allRedemptionRequests[user];
-        RedemptionRequest[] storage assetRequests = $.redemptionRequests[user][asset];
-        uint32 index = assetRequests.length.toUint32();
-        allRequests.push(
-            RedemptionRequest({amount: amount, claimableAfter: claimableAfter, claimed: 0, referenceIndex: index})
-        );
+        RedemptionRequest[] storage userRequests = $.redemptionRequests[user];
+        uint256[] storage userRequestsByAsset = $.redemptionRequestsByAsset[user][asset];
+        userRequests.push(RedemptionRequest({asset: asset, amount: amount, claimableAfter: claimableAfter, claimed: 0}));
+        uint256 index;
         unchecked {
-            index = (allRequests.length - 1).toUint32();
+            index = (userRequests.length - 1).toUint32();
         }
-        assetRequests.push(
-            RedemptionRequest({amount: amount, claimableAfter: claimableAfter, claimed: 0, referenceIndex: index})
-        );
-        emit TokensRequested(user, asset, amount, claimableAfter);
+        userRequestsByAsset.push(index);
+        emit TokensRequested(user, asset, index, amount, claimableAfter);
     }
 
     /**
@@ -427,14 +428,11 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
         onlyCustodian
     {
         DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
-        RedemptionRequest storage request = $.allRedemptionRequests[user][index];
+        RedemptionRequest storage request = $.redemptionRequests[user][index];
         uint48 claimableAfter = request.claimableAfter;
         claimableAfter.requireLessThanUint48(newClaimableAfter);
         request.claimableAfter = newClaimableAfter;
-        index = request.referenceIndex;
-        request = _unsafeRedemptionRequestAccess($.redemptionRequests[user][asset], index);
-        request.claimableAfter = newClaimableAfter;
-        emit TokenRequestUpdated(user, asset, request.amount, claimableAfter, newClaimableAfter);
+        emit TokenRequestUpdated(user, asset, index, request.amount, claimableAfter, newClaimableAfter);
     }
 
     /**
@@ -465,8 +463,9 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
      * has passed.
      * @dev This function allows users to claim supported assets for which they have previously made redemption requests
      * and the claim delay has elapsed.
-     * It checks the amount of assets claimable by the user, ensures the request is valid, and transfers the claimed
-     * assets to the user.
+     * Uses `_unsafeRedemptionRequestByAssetAccess` to access redemption requests directly in storage, optimizing gas
+     * usage.
+     * It is vital that callers ensure the accuracy and appropriateness of the indices used to prevent errors.
      * @param asset The address of the supported asset to be claimed.
      * @param amount The amount of the asset the user wishes to claim.
      * @custom:error InsufficientFunds The requested amount exceeds the claimable amount.
@@ -478,11 +477,11 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
 
         amount.requireSufficientFunds(IERC20(asset).balanceOf(address(this)));
 
-        RedemptionRequest[] storage userRequests = $.allRedemptionRequests[user];
-        RedemptionRequest[] storage assetRequests = $.redemptionRequests[user][asset];
+        RedemptionRequest[] storage userRequests = $.redemptionRequests[user];
+        uint256[] storage userRequestsByAsset = $.redemptionRequestsByAsset[user][asset];
         mapping(address asset => uint256) storage firstUnclaimedIndex = $.firstUnclaimedIndex[user];
 
-        uint256 remainingToClaim = _claimTokens(asset, amount, userRequests, assetRequests, firstUnclaimedIndex);
+        uint256 remainingToClaim = _claimTokens(asset, amount, userRequests, userRequestsByAsset, firstUnclaimedIndex);
 
         if (remainingToClaim != 0) {
             unchecked {
@@ -501,13 +500,12 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
      * @notice Retrieves a list of all redemption requests for a specified user within a range.
      * @dev This function returns an array of redemption requests made by the specified user across all assets, limited
      * by a specified range.
-     * It is useful for user interfaces and auditing purposes to track all redemption activities by a user.
+     * Utilizes the `_unsafeRedemptionRequestAccess` to efficiently access storage without bounds checking.
+     * It is crucial to ensure that input ranges are validated externally to prevent out-of-bounds access.
      * @param user The address of the user whose redemption requests are being queried.
      * @param from The starting index in the list of redemption requests to begin retrieval from.
-     * @param limit The maximum number of redemption requests to return. This function will return fewer if the total
-     * number of requests is less than the limit.
-     * @return requests An array of redemption requests from the specified start index up to the limit, or fewer if not
-     * enough requests exist.
+     * @param limit The maximum number of redemption requests to return.
+     * @return requests An array of redemption requests from the specified start index up to the limit.
      */
     function getRedemptionRequests(address user, uint256 from, uint256 limit)
         external
@@ -515,8 +513,8 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
         returns (RedemptionRequest[] memory requests)
     {
         DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
-        RedemptionRequest[] storage allRequests = $.allRedemptionRequests[user];
-        uint256 numRequests = allRequests.length;
+        RedemptionRequest[] storage userRequests = $.redemptionRequests[user];
+        uint256 numRequests = userRequests.length;
         if (from >= numRequests) {
             requests = new RedemptionRequest[](0);
         } else {
@@ -528,7 +526,7 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
                 requests = new RedemptionRequest[](to - from);
             }
             for (uint256 i; from != to;) {
-                requests[i] = _unsafeRedemptionRequestAccess(allRequests, from);
+                requests[i] = _unsafeRedemptionRequestAccess(userRequests, from);
                 unchecked {
                     ++i;
                     ++from;
@@ -541,15 +539,16 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
      * @notice Retrieves a list of redemption requests for a specified user and asset within a range.
      * @dev This function returns an array of redemption requests made by the specified user for a particular asset,
      * limited by a specified range.
-     * It allows for detailed tracking and management of redemption requests related to a specific asset, facilitating
-     * better asset-specific transaction oversight.
+     * It makes use of `_unsafeRedemptionRequestByAssetAccess` for direct storage access with given indices, avoiding
+     * the gas cost of bounds checking.
+     * The integrity of indices and their range should be maintained and verified elsewhere in the contract logic to
+     * prevent errors.
      * @param user The address of the user whose redemption requests for a specific asset are being queried.
      * @param asset The ERC-20 token for which redemption requests are being queried.
      * @param from The starting index in the list of redemption requests to begin retrieval from.
-     * @param limit The maximum number of redemption requests to return. This function will return fewer if the total
-     * number of requests is less than the limit.
+     * @param limit The maximum number of redemption requests to return.
      * @return requests An array of redemption requests specific to the asset from the specified start index up to the
-     * limit, or fewer if not enough requests exist.
+     * limit.
      */
     function getRedemptionRequests(address user, address asset, uint256 from, uint256 limit)
         external
@@ -557,8 +556,9 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
         returns (RedemptionRequest[] memory requests)
     {
         DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
-        RedemptionRequest[] storage allRequests = $.redemptionRequests[user][asset];
-        uint256 numRequests = allRequests.length;
+        RedemptionRequest[] storage userRequests = $.redemptionRequests[user];
+        uint256[] storage userRequestsByAsset = $.redemptionRequestsByAsset[user][asset];
+        uint256 numRequests = userRequestsByAsset.length;
         if (from >= numRequests) {
             requests = new RedemptionRequest[](0);
         } else {
@@ -570,7 +570,7 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
                 requests = new RedemptionRequest[](to - from);
             }
             for (uint256 i; from != to;) {
-                requests[i] = _unsafeRedemptionRequestAccess(allRequests, from);
+                requests[i] = _unsafeRedemptionRequestByAssetAccess(userRequestsByAsset, userRequests, from);
                 unchecked {
                     ++i;
                     ++from;
@@ -670,12 +670,14 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
      */
     function _calculateClaimableTokens(address user, address asset) internal view returns (uint256 amount) {
         DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
-        RedemptionRequest[] storage userRequests = $.redemptionRequests[user][asset];
-        uint256 numRequests = userRequests.length;
+        uint256[] storage userRequestsByAsset = $.redemptionRequestsByAsset[user][asset];
+        RedemptionRequest[] storage userRequests = $.redemptionRequests[user];
+        uint256 numRequests = userRequestsByAsset.length;
         uint256 i = $.firstUnclaimedIndex[user][asset];
 
         while (i < numRequests) {
-            RedemptionRequest storage request = _unsafeRedemptionRequestAccess(userRequests, i);
+            RedemptionRequest storage request =
+                _unsafeRedemptionRequestByAssetAccess(userRequestsByAsset, userRequests, i);
             if (clock() >= request.claimableAfter) {
                 uint256 remainingAmount;
                 unchecked {
@@ -700,7 +702,7 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
      * @param asset The address of the asset being claimed.
      * @param remainingToClaim The total amount the user is attempting to claim.
      * @param userRequests Array of all redemption requests made by the user.
-     * @param assetRequests Array of redemption requests for the specific asset.
+     * @param userRequestsByAsset Array of redemption requests made by the user for the specific asset.
      * @param firstUnclaimedIndex Mapping of the first unclaimed index for quick access during claims.
      * @return remainingToClaim The remaining amount to be claimed if not all requests could be fully satisfied.
      */
@@ -708,19 +710,18 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
         address asset,
         uint256 remainingToClaim,
         RedemptionRequest[] storage userRequests,
-        RedemptionRequest[] storage assetRequests,
+        uint256[] storage userRequestsByAsset,
         mapping(address asset => uint256) storage firstUnclaimedIndex
     ) internal returns (uint256) {
-        uint256 numRequests = assetRequests.length;
+        uint256 numRequests = userRequestsByAsset.length;
         uint256 i = firstUnclaimedIndex[asset];
 
         while (i < numRequests) {
-            RedemptionRequest storage assetRequest = _unsafeRedemptionRequestAccess(assetRequests, i);
             RedemptionRequest storage userRequest =
-                _unsafeRedemptionRequestAccess(userRequests, assetRequest.referenceIndex);
-            if (clock() >= assetRequest.claimableAfter) {
+                _unsafeRedemptionRequestByAssetAccess(userRequestsByAsset, userRequests, i);
+            if (clock() >= userRequest.claimableAfter) {
                 uint256 remainingClaimable;
-                (remainingToClaim, remainingClaimable) = _updateClaim(userRequest, assetRequest, remainingToClaim);
+                (remainingToClaim, remainingClaimable) = _updateClaim(userRequest, remainingToClaim);
                 if (remainingToClaim == 0) {
                     unchecked {
                         firstUnclaimedIndex[asset] = remainingClaimable == 0 ? i + 1 : i;
@@ -743,16 +744,12 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
      * `_claimTokens` to adjust the amount claimed on each redemption request.
      * It ensures that each request is updated correctly and provides the remaining claimable amount for further
      * processing.
-     * @param userRequest The storage pointer to the user's general redemption request.
-     * @param assetRequest The storage pointer to the user's asset-specific redemption request.
+     * @param userRequest The storage pointer to the user's redemption request.
      * @param amount The amount to claim from the request.
      * @return remainingToClaim The remaining amount to claim after the current operation.
      * @return remainingClaimable The remaining claimable amount after the current operation.
      */
-    function _updateClaim(RedemptionRequest storage userRequest, RedemptionRequest storage assetRequest, uint256 amount)
-        internal
-        returns (uint256, uint256)
-    {
+    function _updateClaim(RedemptionRequest storage userRequest, uint256 amount) internal returns (uint256, uint256) {
         uint256 requested = userRequest.amount;
         uint256 remainingClaimable;
         unchecked {
@@ -760,7 +757,6 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
         }
         if (remainingClaimable < amount) {
             userRequest.claimed = requested;
-            assetRequest.claimed = requested;
             unchecked {
                 amount -= remainingClaimable;
                 remainingClaimable = 0;
@@ -772,7 +768,6 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
                 remainingClaimable = requested - claimed;
             }
             userRequest.claimed = claimed;
-            assetRequest.claimed = claimed;
             amount = 0;
         }
         return (amount, remainingClaimable);
@@ -828,18 +823,42 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
      * checks. This method is used internally to update the state of redemption requests during the claiming process.
      * Care must be taken when using this function due to the lack of bounds checking; incorrect usage could lead to
      * undefined behavior or contract vulnerabilities.
-     * @param arr The storage array containing the user's redemption requests.
+     * @param userRequests The storage array containing the user's redemption requests.
      * @param pos The index of the redemption request within the array to access.
      * @return request A storage pointer to the `RedemptionRequest` at the specified index in the array.
      */
-    function _unsafeRedemptionRequestAccess(RedemptionRequest[] storage arr, uint256 pos)
+    function _unsafeRedemptionRequestAccess(RedemptionRequest[] storage userRequests, uint256 pos)
         internal
         pure
         returns (RedemptionRequest storage request)
     {
         assembly {
-            mstore(0, arr.slot)
+            mstore(0, userRequests.slot)
             request.slot := add(keccak256(0, 0x20), mul(pos, 3))
         }
+    }
+
+    /**
+     * @dev Provides low-level, unchecked access to a specific redemption request within the user's array of redemption
+     * requests by asset.
+     * This function utilizes a low-level assembly technique to retrieve the index of the redemption request in the
+     * global array of redemption requests, and then access the specific request using unchecked array indexing.
+     * It is used to efficiently navigate through arrays without incurring the gas cost associated with bounds checking.
+     * Care must be taken when using this function as it assumes that the provided position is within the valid range
+     * and that the data integrity is maintained elsewhere in the contract logic. Improper use can lead to serious bugs
+     * and security vulnerabilities.
+     * @param userRequestsByAsset Array of uint256 containing indices of redemption requests for a specific asset.
+     * @param userRequests Array of all redemption requests made by users.
+     * @param pos Index in `userRequestsByAsset` pointing to the position in `userRequests`.
+     * @return request Storage pointer to the `RedemptionRequest` corresponding to the index found in
+     * `userRequestsByAsset` at position `pos`.
+     */
+    function _unsafeRedemptionRequestByAssetAccess(
+        uint256[] storage userRequestsByAsset,
+        RedemptionRequest[] storage userRequests,
+        uint256 pos
+    ) internal view returns (RedemptionRequest storage request) {
+        StorageSlot.Uint256Slot storage slot = userRequestsByAsset.unsafeAccess(pos);
+        request = _unsafeRedemptionRequestAccess(userRequests, slot.value);
     }
 }

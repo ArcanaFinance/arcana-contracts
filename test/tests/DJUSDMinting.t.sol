@@ -702,7 +702,7 @@ contract DJUSDMintingCoreTest is BaseSetup, CommonErrors {
         // ~ config ~
 
         uint256 amount = 10 ether;
-        uint256 half = amount/2;
+        uint256 half = amount / 2;
 
         vm.prank(address(djUsdMintingContract));
         djUsdToken.mint(alice, amount);
@@ -1239,7 +1239,7 @@ contract DJUSDMintingCoreTest is BaseSetup, CommonErrors {
 
         uint256 amount = 10 ether;
         deal(address(USTB), bob, amount);
-        
+
         deal(address(USTB), alice, amount);
 
         vm.startPrank(bob);
@@ -1284,7 +1284,6 @@ contract DJUSDMintingCoreTest is BaseSetup, CommonErrors {
     }
 
     function test_setClaimDelay() public {
-
         // ~ Pre-state check ~
 
         assertEq(djUsdMintingContract.claimDelay(), 5 days);
@@ -1300,7 +1299,6 @@ contract DJUSDMintingCoreTest is BaseSetup, CommonErrors {
     }
 
     function test_updateCustodian() public {
-
         // ~ Pre-state check ~
 
         assertEq(djUsdMintingContract.custodian(), custodian1);
@@ -1316,7 +1314,6 @@ contract DJUSDMintingCoreTest is BaseSetup, CommonErrors {
     }
 
     function test_restoreAsset() public {
-
         // ~ Pre-state check ~
 
         assertEq(djUsdMintingContract.isSupportedAsset(address(USTB)), true);
@@ -1332,7 +1329,6 @@ contract DJUSDMintingCoreTest is BaseSetup, CommonErrors {
         assertEq(allAssets[0], address(USTB));
         assertEq(allAssets[1], address(USDCToken));
         assertEq(allAssets[2], address(USDTToken));
-
 
         // ~ Execute removeSupportedAsset ~
 
@@ -1393,7 +1389,8 @@ contract DJUSDMintingCoreTest is BaseSetup, CommonErrors {
 
         // ~ Execute requests for USTB ~
 
-        for (uint256 i; i < numMints; ++i) { // requests for USTB
+        for (uint256 i; i < numMints; ++i) {
+            // requests for USTB
             vm.startPrank(alice);
             djUsdToken.approve(address(djUsdMintingContract), mintAmount);
             djUsdMintingContract.requestTokens(address(USTB), mintAmount);
@@ -1407,7 +1404,8 @@ contract DJUSDMintingCoreTest is BaseSetup, CommonErrors {
 
         // ~ Execute requests for USDC
 
-        for (uint256 i; i < numMints; ++i) { // requests for USDC
+        for (uint256 i; i < numMints; ++i) {
+            // requests for USDC
             vm.startPrank(alice);
             djUsdToken.approve(address(djUsdMintingContract), mintAmount);
             djUsdMintingContract.requestTokens(address(USDCToken), mintAmount);
