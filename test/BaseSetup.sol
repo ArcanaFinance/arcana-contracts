@@ -9,13 +9,15 @@ pragma solidity ^0.8.19;
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 // contracts
-import {DJUSDMinting} from "../src/DJUSDMinting.sol";
+import {DJUSDMinter} from "../src/DJUSDMinter.sol";
 import {DJUSDPointsBoostVault} from "../src/DJUSDPointsBoostingVault.sol";
-import {MockOracle} from "../src/mock/MockOracle.sol";
-import {MockToken} from "../src/mock/MockToken.sol";
+import {MockOracle} from "./mock/MockOracle.sol";
+import {MockToken} from "./mock/MockToken.sol";
+import {LZEndpointMock} from "./mock/LZEndpointMock.sol";
 import {DJUSD} from "../src/DJUSD.sol";
 import {DJUSDTaxManager} from "../src/DJUSDTaxManager.sol";
 import {DJUSDFeeCollector} from "../src/DJUSDFeeCollector.sol";
+import {SatelliteCustodian} from "../src/SatelliteCustodian.sol";
 
 // interfaces
 import {IDJUSD} from "../src/interfaces/IDJUSD.sol";
@@ -33,6 +35,8 @@ contract BaseSetup is Test, IDJUSDDefinitions {
     DJUSDTaxManager internal taxManager;
     DJUSDFeeCollector internal feeCollector;
     DJUSDPointsBoostVault internal djUsdVault;
+    SatelliteCustodian internal custodian;
+    LZEndpointMock public layerZeroEndpoint;
     MockToken internal USTB;
     MockOracle internal USTBOracle;
     MockToken internal cbETHToken;
@@ -40,7 +44,7 @@ contract BaseSetup is Test, IDJUSDDefinitions {
     MockToken internal USDCToken;
     MockToken internal USDTToken;
     MockToken internal token;
-    DJUSDMinting internal djUsdMintingContract;
+    DJUSDMinter internal djUsdMintingContract;
     SigUtils internal sigUtils;
     SigUtils internal sigUtilsDJUSD;
 
@@ -55,10 +59,10 @@ contract BaseSetup is Test, IDJUSDDefinitions {
     uint256 internal constant gatekeeperPrivateKey = 0x1DEA1;
     uint256 internal constant bobPrivateKey = 0x1DEA2;
     uint256 internal constant alicePrivateKey = 0x1DBA2;
-    uint256 internal constant custodian1PrivateKey = 0x1DCDE;
     uint256 internal constant randomerPrivateKey = 0x1DECC;
     uint256 internal constant rebaseManagerPrivateKey = 0x1DB11;
-    uint256 internal constant layerZeroEndpointPrivateKey = 0x1DB12;
+    uint256 internal constant gelatoPrivateKey = 0x1AB01;
+    uint256 internal constant mainCustodianPrivateKey = 0x1AB02;
 
     address internal owner;
     address internal newOwner;
@@ -71,10 +75,10 @@ contract BaseSetup is Test, IDJUSDDefinitions {
     address internal gatekeeper;
     address internal bob;
     address internal alice;
-    address internal custodian1;
+    address internal gelato;
+    address internal mainCustodian;
     address internal randomer;
     address internal rebaseManager;
-    address internal layerZeroEndpoint;
 
     address internal NATIVE_TOKEN = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
@@ -131,7 +135,6 @@ contract BaseSetup is Test, IDJUSDDefinitions {
         vm.label(gatekeeper, "gatekeeper");
         vm.label(bob, "bob");
         vm.label(alice, "alice");
-        vm.label(custodian1, "custodian1");
         vm.label(randomer, "randomer");
 
         address[] memory distributors = new address[](2);
@@ -144,7 +147,9 @@ contract BaseSetup is Test, IDJUSDDefinitions {
 
         // ~ Deploy Contracts ~
 
-        djUsdToken = new DJUSD(1, layerZeroEndpoint);
+        layerZeroEndpoint = new LZEndpointMock(uint16(block.chainid));
+
+        djUsdToken = new DJUSD(1, address(layerZeroEndpoint));
         ERC1967Proxy djUsdTokenProxy = new ERC1967Proxy(
             address(djUsdToken), abi.encodeWithSelector(DJUSD.initialize.selector, address(this), rebaseManager)
         );
@@ -154,18 +159,28 @@ contract BaseSetup is Test, IDJUSDDefinitions {
 
         taxManager = new DJUSDTaxManager(owner, address(djUsdToken), address(feeCollector));
 
-        djUsdMintingContract = new DJUSDMinting(IDJUSD(address(djUsdToken)));
+        djUsdMintingContract = new DJUSDMinter(IDJUSD(address(djUsdToken)));
         ERC1967Proxy djinnMintingProxy = new ERC1967Proxy(
             address(djUsdMintingContract),
-            abi.encodeWithSelector(DJUSDMinting.initialize.selector, owner, 5 days, custodian1)
+            abi.encodeWithSelector(DJUSDMinter.initialize.selector, owner, 5 days)
         );
-        djUsdMintingContract = DJUSDMinting(payable(address(djinnMintingProxy)));
+        djUsdMintingContract = DJUSDMinter(payable(address(djinnMintingProxy)));
+
+        custodian = new SatelliteCustodian(address(djUsdMintingContract), 1);
+        ERC1967Proxy custodianProxy = new ERC1967Proxy(
+            address(custodian),
+            abi.encodeWithSelector(SatelliteCustodian.initialize.selector, owner, gelato, mainCustodian)
+        );
+        custodian = SatelliteCustodian(address(custodianProxy));
 
         djUsdVault = new DJUSDPointsBoostVault(address(djUsdToken));
 
         // ~ Config ~
 
         vm.startPrank(owner);
+
+        // set custodian on minter
+        djUsdMintingContract.updateCustodian(address(custodian));
 
         // Add self as approved custodian
         djUsdMintingContract.addSupportedAsset(address(USTB), address(USTBOracle));
@@ -195,9 +210,9 @@ contract BaseSetup is Test, IDJUSDDefinitions {
         gatekeeper = vm.addr(gatekeeperPrivateKey);
         bob = vm.addr(bobPrivateKey);
         alice = vm.addr(alicePrivateKey);
-        custodian1 = vm.addr(custodian1PrivateKey);
         randomer = vm.addr(randomerPrivateKey);
         rebaseManager = vm.addr(rebaseManagerPrivateKey);
-        layerZeroEndpoint = vm.addr(layerZeroEndpointPrivateKey);
+        gelato = vm.addr(gelatoPrivateKey);
+        mainCustodian = vm.addr(mainCustodianPrivateKey);
     }
 }

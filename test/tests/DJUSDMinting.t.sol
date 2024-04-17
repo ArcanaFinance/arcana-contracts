@@ -4,8 +4,8 @@ pragma solidity ^0.8.19;
 /* solhint-disable func-name-mixedcase  */
 
 import {BaseSetup} from "../BaseSetup.sol";
-import {DJUSDMinting} from "../../src/DJUSDMinting.sol";
-import {MockToken} from "../../src/mock/MockToken.sol";
+import {DJUSDMinter} from "../../src/DJUSDMinter.sol";
+import {MockToken} from "../mock/MockToken.sol";
 import {DJUSD} from "../../src/DJUSD.sol";
 import {IDJUSD} from "../../src/interfaces/IDJUSD.sol";
 import {DJUSDTaxManager} from "../../src/DJUSDTaxManager.sol";
@@ -13,10 +13,10 @@ import {IDJUSDDefinitions} from "../../src/interfaces/IDJUSDDefinitions.sol";
 import {CommonErrors} from "../../src/interfaces/CommonErrors.sol";
 
 /**
- * @title DJUSDMintingCoreTest
- * @notice Unit Tests for DJUSDMinting contract interactions
+ * @title DJUSDMinterCoreTest
+ * @notice Unit Tests for DJUSDMinter contract interactions
  */
-contract DJUSDMintingCoreTest is BaseSetup, CommonErrors {
+contract DJUSDMinterCoreTest is BaseSetup, CommonErrors {
     string public UNREAL_RPC_URL = vm.envString("UNREAL_RPC_URL");
 
     function setUp() public override {
@@ -33,11 +33,11 @@ contract DJUSDMintingCoreTest is BaseSetup, CommonErrors {
         assertEq(assets[1], address(USDCToken));
         assertEq(assets[2], address(USDTToken));
 
-        assertEq(djUsdMintingContract.custodian(), custodian1);
+        assertEq(djUsdMintingContract.custodian(), address(custodian));
     }
 
     function test_djusdMinting_isUpgradeable() public {
-        DJUSDMinting newImplementation = new DJUSDMinting(IDJUSD(address(djUsdToken)));
+        DJUSDMinter newImplementation = new DJUSDMinter(IDJUSD(address(djUsdToken)));
 
         bytes32 implementationSlot =
             vm.load(address(djUsdMintingContract), 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc);
@@ -52,7 +52,7 @@ contract DJUSDMintingCoreTest is BaseSetup, CommonErrors {
     }
 
     function test_djusdMinting_isUpgradeable_onlyOwner() public {
-        DJUSDMinting newImplementation = new DJUSDMinting(IDJUSD(address(djUsdToken)));
+        DJUSDMinter newImplementation = new DJUSDMinter(IDJUSD(address(djUsdToken)));
 
         vm.prank(minter);
         vm.expectRevert();
@@ -124,7 +124,7 @@ contract DJUSDMintingCoreTest is BaseSetup, CommonErrors {
         assertFalse(djUsdMintingContract.isSupportedAsset(asset));
 
         vm.prank(owner);
-        vm.expectRevert(abi.encodeWithSelector(DJUSDMinting.NotSupportedAsset.selector, asset));
+        vm.expectRevert(abi.encodeWithSelector(DJUSDMinter.NotSupportedAsset.selector, asset));
         djUsdMintingContract.removeSupportedAsset(asset);
     }
 
@@ -160,7 +160,7 @@ contract DJUSDMintingCoreTest is BaseSetup, CommonErrors {
         vm.stopPrank();
 
         assertEq(USTB.balanceOf(bob), 0);
-        assertEq(USTB.balanceOf(custodian1), amount);
+        assertEq(USTB.balanceOf(address(custodian)), amount);
         assertEq(djUsdToken.balanceOf(bob), amount);
     }
 
@@ -175,7 +175,7 @@ contract DJUSDMintingCoreTest is BaseSetup, CommonErrors {
         vm.stopPrank();
 
         assertEq(USTB.balanceOf(bob), 0);
-        assertEq(USTB.balanceOf(custodian1), amount);
+        assertEq(USTB.balanceOf(address(custodian)), amount);
         assertEq(djUsdToken.balanceOf(bob), amount);
     }
 
@@ -194,7 +194,7 @@ contract DJUSDMintingCoreTest is BaseSetup, CommonErrors {
         assertEq(USTB.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(address(djUsdMintingContract)), amount);
 
-        DJUSDMinting.RedemptionRequest[] memory requests =
+        DJUSDMinter.RedemptionRequest[] memory requests =
             djUsdMintingContract.getRedemptionRequests(alice, address(USTB), 0, 10);
         assertEq(requests.length, 0);
 
@@ -261,7 +261,7 @@ contract DJUSDMintingCoreTest is BaseSetup, CommonErrors {
         assertEq(USTB.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(address(djUsdMintingContract)), amount);
 
-        DJUSDMinting.RedemptionRequest[] memory requests =
+        DJUSDMinter.RedemptionRequest[] memory requests =
             djUsdMintingContract.getRedemptionRequests(alice, address(USTB), 0, 10);
         assertEq(requests.length, 0);
 
@@ -292,7 +292,7 @@ contract DJUSDMintingCoreTest is BaseSetup, CommonErrors {
 
         // ~ Custodian executes extendClaimTimestamp ~
 
-        vm.prank(custodian1);
+        vm.prank(address(custodian));
         djUsdMintingContract.extendClaimTimestamp(alice, address(USTB), 0, uint48(block.timestamp + newDelay));
 
         // ~ Warp to original post-claimDelay and query claimable ~
@@ -331,7 +331,7 @@ contract DJUSDMintingCoreTest is BaseSetup, CommonErrors {
         assertEq(USTB.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(address(djUsdMintingContract)), amount);
 
-        DJUSDMinting.RedemptionRequest[] memory requests =
+        DJUSDMinter.RedemptionRequest[] memory requests =
             djUsdMintingContract.getRedemptionRequests(alice, address(USTB), 0, 10);
         assertEq(requests.length, 0);
 
@@ -399,7 +399,7 @@ contract DJUSDMintingCoreTest is BaseSetup, CommonErrors {
         assertEq(USTB.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(address(djUsdMintingContract)), amount1 + amount2);
 
-        DJUSDMinting.RedemptionRequest[] memory requests =
+        DJUSDMinter.RedemptionRequest[] memory requests =
             djUsdMintingContract.getRedemptionRequests(alice, address(USTB), 0, 10);
         assertEq(requests.length, 0);
 
@@ -495,7 +495,7 @@ contract DJUSDMintingCoreTest is BaseSetup, CommonErrors {
 
         assertEq(djUsdToken.balanceOf(alice), amount * 2);
 
-        DJUSDMinting.RedemptionRequest[] memory requests =
+        DJUSDMinter.RedemptionRequest[] memory requests =
             djUsdMintingContract.getRedemptionRequests(alice, address(USTB), 0, 10);
         assertEq(requests.length, 0);
 
@@ -635,7 +635,7 @@ contract DJUSDMintingCoreTest is BaseSetup, CommonErrors {
         assertEq(USTB.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(address(djUsdMintingContract)), amount);
 
-        DJUSDMinting.RedemptionRequest[] memory requests =
+        DJUSDMinter.RedemptionRequest[] memory requests =
             djUsdMintingContract.getRedemptionRequests(alice, address(USTB), 0, 10);
         assertEq(requests.length, 0);
 
@@ -714,7 +714,7 @@ contract DJUSDMintingCoreTest is BaseSetup, CommonErrors {
         assertEq(USTB.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(address(djUsdMintingContract)), amount);
 
-        DJUSDMinting.RedemptionRequest[] memory requests =
+        DJUSDMinter.RedemptionRequest[] memory requests =
             djUsdMintingContract.getRedemptionRequests(alice, address(USTB), 0, 10);
         assertEq(requests.length, 0);
 
@@ -825,7 +825,7 @@ contract DJUSDMintingCoreTest is BaseSetup, CommonErrors {
         assertEq(djUsdToken.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(alice), 0);
 
-        DJUSDMinting.RedemptionRequest[] memory requests =
+        DJUSDMinter.RedemptionRequest[] memory requests =
             djUsdMintingContract.getRedemptionRequests(alice, address(USTB), 0, 10);
         assertEq(requests.length, 1);
         assertEq(requests[0].amount, amount);
@@ -892,7 +892,7 @@ contract DJUSDMintingCoreTest is BaseSetup, CommonErrors {
         assertEq(USTB.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(address(djUsdMintingContract)), amount);
 
-        DJUSDMinting.RedemptionRequest[] memory requests =
+        DJUSDMinter.RedemptionRequest[] memory requests =
             djUsdMintingContract.getRedemptionRequests(alice, address(USTB), 0, 10);
         assertEq(requests.length, 1);
         assertEq(requests[0].amount, amount);
@@ -964,7 +964,7 @@ contract DJUSDMintingCoreTest is BaseSetup, CommonErrors {
         vm.stopPrank();
 
         assertEq(USTB.balanceOf(alice), 0);
-        assertEq(USTB.balanceOf(custodian1), amount);
+        assertEq(USTB.balanceOf(address(custodian)), amount);
         assertApproxEqAbs(djUsdToken.balanceOf(alice), amount, 2);
     }
 
@@ -983,7 +983,7 @@ contract DJUSDMintingCoreTest is BaseSetup, CommonErrors {
         vm.stopPrank();
 
         assertEq(USTB.balanceOf(alice), 0);
-        assertEq(USTB.balanceOf(custodian1), amount);
+        assertEq(USTB.balanceOf(address(custodian)), amount);
         assertApproxEqAbs(djUsdToken.balanceOf(alice), amount, 0);
 
         uint256 preTotalSupply = djUsdToken.totalSupply();
@@ -1013,7 +1013,7 @@ contract DJUSDMintingCoreTest is BaseSetup, CommonErrors {
         assertEq(USTB.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(address(djUsdMintingContract)), newBal);
 
-        DJUSDMinting.RedemptionRequest[] memory requests =
+        DJUSDMinter.RedemptionRequest[] memory requests =
             djUsdMintingContract.getRedemptionRequests(alice, address(USTB), 0, 10);
         assertEq(requests.length, 1);
         assertEq(requests[0].amount, newBal);
@@ -1061,7 +1061,7 @@ contract DJUSDMintingCoreTest is BaseSetup, CommonErrors {
         vm.stopPrank();
 
         assertEq(USTB.balanceOf(alice), 0);
-        assertEq(USTB.balanceOf(custodian1), amount);
+        assertEq(USTB.balanceOf(address(custodian)), amount);
         assertApproxEqAbs(djUsdToken.balanceOf(alice), amount, 0);
 
         uint256 preTotalSupply = djUsdToken.totalSupply();
@@ -1089,7 +1089,7 @@ contract DJUSDMintingCoreTest is BaseSetup, CommonErrors {
         assertEq(USTB.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(address(djUsdMintingContract)), newBal);
 
-        DJUSDMinting.RedemptionRequest[] memory requests =
+        DJUSDMinter.RedemptionRequest[] memory requests =
             djUsdMintingContract.getRedemptionRequests(alice, address(USTB), 0, 10);
         assertEq(requests.length, 1);
         assertEq(requests[0].amount, newBal);
@@ -1138,7 +1138,7 @@ contract DJUSDMintingCoreTest is BaseSetup, CommonErrors {
         vm.stopPrank();
 
         assertEq(USTB.balanceOf(alice), 0);
-        assertEq(USTB.balanceOf(custodian1), amount);
+        assertEq(USTB.balanceOf(address(custodian)), amount);
         assertApproxEqAbs(djUsdToken.balanceOf(alice), amount, 0);
 
         uint256 preTotalSupply = djUsdToken.totalSupply();
@@ -1168,7 +1168,7 @@ contract DJUSDMintingCoreTest is BaseSetup, CommonErrors {
         assertEq(USTB.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(address(djUsdMintingContract)), newBal);
 
-        DJUSDMinting.RedemptionRequest[] memory requests =
+        DJUSDMinter.RedemptionRequest[] memory requests =
             djUsdMintingContract.getRedemptionRequests(alice, address(USTB), 0, 10);
         assertEq(requests.length, 1);
         assertEq(requests[0].amount, newBal);
@@ -1251,7 +1251,7 @@ contract DJUSDMintingCoreTest is BaseSetup, CommonErrors {
 
         assertEq(USTB.balanceOf(bob), 0);
         // USTB went to custodian
-        assertEq(USTB.balanceOf(custodian1), amount);
+        assertEq(USTB.balanceOf(address(custodian)), amount);
         assertEq(USTB.balanceOf(address(djUsdMintingContract)), 0);
         assertEq(djUsdToken.balanceOf(bob), amount);
 
@@ -1277,7 +1277,7 @@ contract DJUSDMintingCoreTest is BaseSetup, CommonErrors {
         // ~ Post-state check 2 ~
 
         assertEq(USTB.balanceOf(alice), 0);
-        assertEq(USTB.balanceOf(custodian1), amount);
+        assertEq(USTB.balanceOf(address(custodian)), amount);
         // USTB stay in contract
         assertEq(USTB.balanceOf(address(djUsdMintingContract)), amount);
         assertEq(djUsdToken.balanceOf(alice), amount);
@@ -1301,7 +1301,7 @@ contract DJUSDMintingCoreTest is BaseSetup, CommonErrors {
     function test_updateCustodian() public {
         // ~ Pre-state check ~
 
-        assertEq(djUsdMintingContract.custodian(), custodian1);
+        assertEq(djUsdMintingContract.custodian(), address(custodian));
 
         // ~ Execute setClaimDelay ~
 
@@ -1384,7 +1384,7 @@ contract DJUSDMintingCoreTest is BaseSetup, CommonErrors {
 
         // ~ Pre-state check ~
 
-        DJUSDMinting.RedemptionRequest[] memory requests = djUsdMintingContract.getRedemptionRequests(alice, 0, 10);
+        DJUSDMinter.RedemptionRequest[] memory requests = djUsdMintingContract.getRedemptionRequests(alice, 0, 10);
         assertEq(requests.length, 0);
 
         // ~ Execute requests for USTB ~

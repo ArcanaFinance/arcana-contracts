@@ -38,7 +38,7 @@ import {CommonValidations} from "./libraries/CommonValidations.sol";
  * `IERC6372` for interoperability with other contract systems. The constructor is replaced by an initializer function
  * to support proxy deployment.
  */
-contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable, CommonErrors, IERC6372 {
+contract DJUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable, CommonErrors, IERC6372 {
     using Arrays for uint256[];
     using CommonValidations for *;
     using EnumerableSet for EnumerableSet.AddressSet;
@@ -175,16 +175,14 @@ contract DJUSDMinting is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
      * administrative actions.
      * @param initialClaimDelay The initial delay time (in seconds) before which a redemption request becomes claimable.
      * This is a security measure to prevent immediate claims post-request.
-     * @param initialCustodian The custodian of collateral that will be exchanged for DJUSD tokens.
      */
-    function initialize(address initialOwner, uint48 initialClaimDelay, address initialCustodian) public initializer {
+    function initialize(address initialOwner, uint48 initialClaimDelay) public initializer {
         __Ownable_init(initialOwner);
         __ReentrancyGuard_init();
         __UUPSUpgradeable_init();
 
         DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
         $.claimDelay = initialClaimDelay;
-        $.custodian = initialCustodian;
     }
 
     /**

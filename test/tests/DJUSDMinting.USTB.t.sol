@@ -8,7 +8,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 // local files
 import {BaseSetup} from "../BaseSetup.sol";
-import {DJUSDMinting} from "../../src/DJUSDMinting.sol";
+import {DJUSDMinter} from "../../src/DJUSDMinter.sol";
 import {DJUSD} from "../../src/DJUSD.sol";
 import {DJUSDTaxManager} from "../../src/DJUSDTaxManager.sol";
 import {IDJUSDDefinitions} from "../../src/interfaces/IDJUSDDefinitions.sol";
@@ -17,10 +17,10 @@ import {IDJUSDDefinitions} from "../../src/interfaces/IDJUSDDefinitions.sol";
 import "../utils/Constants.sol";
 
 /**
- * @title DJUSDMintingUSTBIntegrationTest
- * @notice Unit Tests for DJUSDMinting contract interactions
+ * @title DJUSDMinterUSTBIntegrationTest
+ * @notice Unit Tests for DJUSDMinter contract interactions
  */
-contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
+contract DJUSDMinterUSTBIntegrationTest is BaseSetup {
     string public UNREAL_RPC_URL = vm.envString("UNREAL_RPC_URL");
     IERC20 public unrealUSTB = IERC20(UNREAL_USTB);
 
@@ -71,7 +71,7 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
         assertEq(assets.length, 1);
         assertEq(assets[0], address(unrealUSTB));
 
-        assertEq(djUsdMintingContract.custodian(), custodian1);
+        assertEq(djUsdMintingContract.custodian(), address(custodian));
     }
 
     function test_USTB_mint_to_bob() public {
@@ -87,7 +87,7 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
         vm.stopPrank();
 
         assertEq(unrealUSTB.balanceOf(bob), preBal - amount);
-        assertApproxEqAbs(unrealUSTB.balanceOf(custodian1), amount, 1);
+        assertApproxEqAbs(unrealUSTB.balanceOf(address(custodian)), amount, 1);
         assertApproxEqAbs(djUsdToken.balanceOf(bob), amount, 1);
     }
 
@@ -105,7 +105,7 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
         vm.stopPrank();
 
         assertApproxEqAbs(unrealUSTB.balanceOf(bob), preBal - amount, 2);
-        assertApproxEqAbs(unrealUSTB.balanceOf(custodian1), amount, 2);
+        assertApproxEqAbs(unrealUSTB.balanceOf(address(custodian)), amount, 2);
         assertApproxEqAbs(djUsdToken.balanceOf(bob), amount, 2);
     }
 
@@ -124,7 +124,7 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
         assertEq(unrealUSTB.balanceOf(alice), 0);
         assertEq(unrealUSTB.balanceOf(address(djUsdMintingContract)), amount);
 
-        DJUSDMinting.RedemptionRequest[] memory requests =
+        DJUSDMinter.RedemptionRequest[] memory requests =
             djUsdMintingContract.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
         assertEq(requests.length, 0);
 
@@ -185,7 +185,7 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
         assertEq(unrealUSTB.balanceOf(alice), 0);
         assertEq(unrealUSTB.balanceOf(address(djUsdMintingContract)), amount);
 
-        DJUSDMinting.RedemptionRequest[] memory requests =
+        DJUSDMinter.RedemptionRequest[] memory requests =
             djUsdMintingContract.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
         assertEq(requests.length, 0);
 
@@ -253,7 +253,7 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
         assertEq(unrealUSTB.balanceOf(alice), 0);
         assertEq(unrealUSTB.balanceOf(address(djUsdMintingContract)), amount1 + amount2);
 
-        DJUSDMinting.RedemptionRequest[] memory requests =
+        DJUSDMinter.RedemptionRequest[] memory requests =
             djUsdMintingContract.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
         assertEq(requests.length, 0);
 
@@ -350,7 +350,7 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
         assertEq(unrealUSTB.balanceOf(alice), 0);
         assertEq(unrealUSTB.balanceOf(address(djUsdMintingContract)), amount);
 
-        DJUSDMinting.RedemptionRequest[] memory requests =
+        DJUSDMinter.RedemptionRequest[] memory requests =
             djUsdMintingContract.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
         assertEq(requests.length, 0);
 
@@ -443,7 +443,7 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
         assertEq(unrealUSTB.balanceOf(alice), 0);
         assertEq(unrealUSTB.balanceOf(address(djUsdMintingContract)), amount);
 
-        DJUSDMinting.RedemptionRequest[] memory requests =
+        DJUSDMinter.RedemptionRequest[] memory requests =
             djUsdMintingContract.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
         assertEq(requests.length, 1);
         assertEq(requests[0].amount, amount);
@@ -521,7 +521,7 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
         vm.stopPrank();
 
         assertEq(unrealUSTB.balanceOf(alice), preBal - amount);
-        assertApproxEqAbs(unrealUSTB.balanceOf(custodian1), amount, 1);
+        assertApproxEqAbs(unrealUSTB.balanceOf(address(custodian)), amount, 1);
         assertApproxEqAbs(djUsdToken.balanceOf(alice), amount, 3);
     }
 
@@ -542,7 +542,7 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
         vm.stopPrank();
 
         assertEq(unrealUSTB.balanceOf(alice), preBal - amount);
-        assertApproxEqAbs(unrealUSTB.balanceOf(custodian1), amount, 1);
+        assertApproxEqAbs(unrealUSTB.balanceOf(address(custodian)), amount, 1);
         assertApproxEqAbs(djUsdToken.balanceOf(alice), amount, 1);
 
         uint256 preTotalSupply = djUsdToken.totalSupply();
@@ -573,7 +573,7 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
         assertEq(djUsdToken.balanceOf(alice), 0);
         assertEq(unrealUSTB.balanceOf(alice), preBal - amount);
 
-        DJUSDMinting.RedemptionRequest[] memory requests =
+        DJUSDMinter.RedemptionRequest[] memory requests =
             djUsdMintingContract.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
         assertEq(requests.length, 1);
         assertEq(requests[0].amount, newBal);
@@ -623,7 +623,7 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
         vm.stopPrank();
 
         assertEq(unrealUSTB.balanceOf(alice), preBal - amount);
-        assertApproxEqAbs(unrealUSTB.balanceOf(custodian1), amount, 1);
+        assertApproxEqAbs(unrealUSTB.balanceOf(address(custodian)), amount, 1);
         assertApproxEqAbs(djUsdToken.balanceOf(alice), amount, 1);
 
         uint256 preTotalSupply = djUsdToken.totalSupply();
@@ -652,7 +652,7 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
         assertEq(djUsdToken.balanceOf(alice), 0);
         assertEq(unrealUSTB.balanceOf(alice), preBal - amount);
 
-        DJUSDMinting.RedemptionRequest[] memory requests =
+        DJUSDMinter.RedemptionRequest[] memory requests =
             djUsdMintingContract.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
         assertEq(requests.length, 1);
         assertEq(requests[0].amount, newBal);
@@ -703,7 +703,7 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
         _deal(address(unrealUSTB), alice, 0);
 
         assertEq(unrealUSTB.balanceOf(alice), 0);
-        assertApproxEqAbs(unrealUSTB.balanceOf(custodian1), amount, 1);
+        assertApproxEqAbs(unrealUSTB.balanceOf(address(custodian)), amount, 1);
         assertApproxEqAbs(djUsdToken.balanceOf(alice), amount, 1);
 
         uint256 preTotalSupply = djUsdToken.totalSupply();
@@ -735,7 +735,7 @@ contract DJUSDMintingUSTBIntegrationTest is BaseSetup {
         assertEq(unrealUSTB.balanceOf(alice), 0);
         assertEq(unrealUSTB.balanceOf(address(djUsdMintingContract)), newBal);
 
-        DJUSDMinting.RedemptionRequest[] memory requests =
+        DJUSDMinter.RedemptionRequest[] memory requests =
             djUsdMintingContract.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
         assertEq(requests.length, 1);
         assertEq(requests[0].amount, newBal);

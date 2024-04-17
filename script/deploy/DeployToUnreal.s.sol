@@ -10,7 +10,7 @@ import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.s
 // local imports
 import {DJUSD} from "../../src/DJUSD.sol";
 import {IDJUSD} from "../../src/interfaces/IDJUSD.sol";
-import {DJUSDMinting} from "../../src/DJUSDMinting.sol";
+import {DJUSDMinter} from "../../src/DJUSDMinter.sol";
 import {DJUSDTaxManager} from "../../src/DJUSDTaxManager.sol";
 import {DJUSDFeeCollector} from "../../src/DJUSDFeeCollector.sol";
 import {DJUSDPointsBoostVault} from "../../src/DJUSDPointsBoostingVault.sol";
@@ -83,13 +83,13 @@ contract DeployToUnreal is DeployUtility {
         // Deploy taxManager
         DJUSDTaxManager taxManager = new DJUSDTaxManager(adminAddress, address(djUsdToken), address(feeCollector));
 
-        // Deploy DJUSDMinting contract.
-        DJUSDMinting djUsdMintingContract = new DJUSDMinting(IDJUSD(address(djUsdToken)));
+        // Deploy DJUSDMinter contract.
+        DJUSDMinter djUsdMintingContract = new DJUSDMinter(IDJUSD(address(djUsdToken)));
         ERC1967Proxy djinnMintingProxy = new ERC1967Proxy(
             address(djUsdMintingContract),
-            abi.encodeWithSelector(DJUSDMinting.initialize.selector, adminAddress, 5 days, UNREAL_CUSTODIAN)
+            abi.encodeWithSelector(DJUSDMinter.initialize.selector, adminAddress, 5 days, UNREAL_CUSTODIAN)
         );
-        djUsdMintingContract = DJUSDMinting(payable(address(djinnMintingProxy)));
+        djUsdMintingContract = DJUSDMinter(payable(address(djinnMintingProxy)));
 
         // Deploy DJUSD Vault
         DJUSDPointsBoostVault djUsdVault = new DJUSDPointsBoostVault(address(djUsdToken));
@@ -111,7 +111,7 @@ contract DeployToUnreal is DeployUtility {
         // --------------
 
         _saveDeploymentAddress("DJUSD", address(djUsdToken));
-        _saveDeploymentAddress("DJUSDMinting", address(djUsdMintingContract));
+        _saveDeploymentAddress("DJUSDMinter", address(djUsdMintingContract));
         _saveDeploymentAddress("DJUSDTaxManager", address(taxManager));
         _saveDeploymentAddress("DJUSDFeeCollector", address(feeCollector));
         _saveDeploymentAddress("DJUSDPointsBoostVault", address(djUsdVault));

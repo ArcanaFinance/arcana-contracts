@@ -22,7 +22,7 @@ import {CrossChainToken} from "@tangible/contracts/tokens/CrossChainToken.sol";
 contract DJUSD is LayerZeroRebaseTokenUpgradeable, UUPSUpgradeable, IDJUSDDefinitions {
     // ~ Variables ~
 
-    /// @dev Stores the address of the `DJUSDMinting` contract.
+    /// @dev Stores the address of the `DJUSDMinter` contract.
     address public minter;
     /// @dev Stores the address of the Rebase Manager which calls `setRebaseIndex`.
     address public rebaseManager;
