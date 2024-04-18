@@ -31,7 +31,7 @@ contract SatelliteCustodianTest is BaseSetup {
         // deal doesn't work with unrealUSTB since the storage layout is different
         if (token == address(unrealUSTB)) {
             // if address is opted out, update normal balance (basket is opted out of rebasing)
-            if (give == address(djUsdMintingContract)) {
+            if (give == address(djUsdMinter)) {
                 bytes32 USTBStorageLocation = 0x52c63247e1f47db19d5ce0460030c497f067ca4cebf71ba98eeadabe20bace00;
                 uint256 mapSlot = 0;
                 bytes32 slot = keccak256(abi.encode(give, uint256(USTBStorageLocation) + mapSlot));
@@ -52,14 +52,14 @@ contract SatelliteCustodianTest is BaseSetup {
     }
 
     function test_custodian_init_state() public {
-        assertEq(address(custodian.djUsdMinter()), address(djUsdMintingContract));
+        assertEq(address(custodian.djUsdMinter()), address(djUsdMinter));
         assertEq(custodian.dstChainId(), uint16(1));
         assertEq(custodian.gelato(), gelato);
         assertEq(custodian.dstCustodian(), mainCustodian);
     }
 
     function test_custodian_isUpgradeable() public {
-        SatelliteCustodian newImplementation = new SatelliteCustodian(address(djUsdMintingContract), uint16(1));
+        SatelliteCustodian newImplementation = new SatelliteCustodian(address(djUsdMinter), uint16(1));
 
         bytes32 implementationSlot =
             vm.load(address(custodian), 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc);
@@ -74,7 +74,7 @@ contract SatelliteCustodianTest is BaseSetup {
     }
 
     function test_custodian_isUpgradeable_onlyOwner() public {
-        SatelliteCustodian newImplementation = new SatelliteCustodian(address(djUsdMintingContract), uint16(1));
+        SatelliteCustodian newImplementation = new SatelliteCustodian(address(djUsdMinter), uint16(1));
 
         vm.prank(bob);
         vm.expectRevert();
@@ -89,7 +89,7 @@ contract SatelliteCustodianTest is BaseSetup {
 
         uint256 amount = 1_000 * 1e18;
 
-        vm.prank(address(djUsdMintingContract));
+        vm.prank(address(djUsdMinter));
         djUsdToken.mint(address(custodian), amount);
 
         // ~ Pre-state check ~
@@ -127,7 +127,7 @@ contract SatelliteCustodianTest is BaseSetup {
 
         // ~ Post-state check ~
 
-        assertEq(unrealUSTB.balanceOf(address(custodian)), preBal-amount);
+        assertEq(unrealUSTB.balanceOf(address(custodian)), preBal - amount);
         assertApproxEqAbs(unrealUSTB.balanceOf(owner), amount, 1);
     }
 
@@ -135,7 +135,7 @@ contract SatelliteCustodianTest is BaseSetup {
         // ~ Config ~
 
         uint256 amount = 1_000 * 1e18;
-        vm.prank(address(djUsdMintingContract));
+        vm.prank(address(djUsdMinter));
         djUsdToken.mint(address(custodian), amount);
 
         // only owner can call withdrawFunds
@@ -146,14 +146,14 @@ contract SatelliteCustodianTest is BaseSetup {
         // can't withdraw more than what is in contract's balance
         vm.prank(owner);
         vm.expectRevert();
-        custodian.withdrawFunds(address(djUsdToken), amount+1);
+        custodian.withdrawFunds(address(djUsdToken), amount + 1);
     }
 
     function test_custodian_bridgeFunds() public {
         // ~ Config ~
 
         uint256 amount = 1_000 * 1e18;
-        vm.prank(address(djUsdMintingContract));
+        vm.prank(address(djUsdMinter));
         djUsdToken.mint(address(custodian), amount);
 
         bytes memory adapterParams = abi.encodePacked(uint16(1), uint256(200000));
@@ -163,7 +163,7 @@ contract SatelliteCustodianTest is BaseSetup {
         vm.deal(address(owner), fee);
 
         vm.prank(owner);
-        custodian.bridgeFunds{value:fee}(address(djUsdToken), owner, address(0), adapterParams);
+        custodian.bridgeFunds{value: fee}(address(djUsdToken), owner, address(0), adapterParams);
     }
 
     function test_custodian_bridgeFunds_restrictions() public {}

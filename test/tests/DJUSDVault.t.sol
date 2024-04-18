@@ -27,7 +27,7 @@ contract DJUSDVaultTest is BaseSetup {
         // ~ Config ~
 
         uint256 amount = 10 ether;
-        vm.prank(address(djUsdMintingContract));
+        vm.prank(address(djUsdMinter));
         djUsdToken.mint(bob, amount);
 
         // ~ Pre-state check ~
@@ -60,7 +60,7 @@ contract DJUSDVaultTest is BaseSetup {
 
         // ~ Config ~
 
-        vm.prank(address(djUsdMintingContract));
+        vm.prank(address(djUsdMinter));
         djUsdToken.mint(bob, amount);
 
         if (disableRebase) {
@@ -95,7 +95,7 @@ contract DJUSDVaultTest is BaseSetup {
 
         uint256 amount = 10 ether;
         deal(address(djUsdVault), bob, amount);
-        vm.prank(address(djUsdMintingContract));
+        vm.prank(address(djUsdMinter));
         djUsdToken.mint(address(djUsdVault), amount);
 
         // ~ Pre-state check ~
@@ -127,7 +127,7 @@ contract DJUSDVaultTest is BaseSetup {
         // ~ Config ~
 
         deal(address(djUsdVault), bob, amount);
-        vm.prank(address(djUsdMintingContract));
+        vm.prank(address(djUsdMinter));
         djUsdToken.mint(address(djUsdVault), amount);
 
         if (disableRebase) {
@@ -165,7 +165,7 @@ contract DJUSDVaultTest is BaseSetup {
 
         uint256 amount = 10 ether;
         deal(address(djUsdVault), bob, amount);
-        vm.prank(address(djUsdMintingContract));
+        vm.prank(address(djUsdMinter));
         djUsdToken.mint(address(djUsdVault), amount);
 
         // ~ Pre-state check ~

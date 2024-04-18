@@ -44,7 +44,7 @@ contract BaseSetup is Test, IDJUSDDefinitions {
     MockToken internal USDCToken;
     MockToken internal USDTToken;
     MockToken internal token;
-    DJUSDMinter internal djUsdMintingContract;
+    DJUSDMinter internal djUsdMinter;
     SigUtils internal sigUtils;
     SigUtils internal sigUtilsDJUSD;
 
@@ -159,14 +159,14 @@ contract BaseSetup is Test, IDJUSDDefinitions {
 
         taxManager = new DJUSDTaxManager(owner, address(djUsdToken), address(feeCollector));
 
-        djUsdMintingContract = new DJUSDMinter(IDJUSD(address(djUsdToken)));
+        djUsdMinter = new DJUSDMinter(IDJUSD(address(djUsdToken)));
         ERC1967Proxy djinnMintingProxy = new ERC1967Proxy(
-            address(djUsdMintingContract),
+            address(djUsdMinter),
             abi.encodeWithSelector(DJUSDMinter.initialize.selector, owner, 5 days)
         );
-        djUsdMintingContract = DJUSDMinter(payable(address(djinnMintingProxy)));
+        djUsdMinter = DJUSDMinter(payable(address(djinnMintingProxy)));
 
-        custodian = new SatelliteCustodian(address(djUsdMintingContract), 1);
+        custodian = new SatelliteCustodian(address(djUsdMinter), 1);
         ERC1967Proxy custodianProxy = new ERC1967Proxy(
             address(custodian),
             abi.encodeWithSelector(SatelliteCustodian.initialize.selector, owner, gelato, mainCustodian)
@@ -180,18 +180,18 @@ contract BaseSetup is Test, IDJUSDDefinitions {
         vm.startPrank(owner);
 
         // set custodian on minter
-        djUsdMintingContract.updateCustodian(address(custodian));
+        djUsdMinter.updateCustodian(address(custodian));
 
         // Add self as approved custodian
-        djUsdMintingContract.addSupportedAsset(address(USTB), address(USTBOracle));
-        djUsdMintingContract.addSupportedAsset(address(USDCToken), address(USTBOracle));
-        djUsdMintingContract.addSupportedAsset(address(USDTToken), address(USTBOracle));
+        djUsdMinter.addSupportedAsset(address(USTB), address(USTBOracle));
+        djUsdMinter.addSupportedAsset(address(USDCToken), address(USTBOracle));
+        djUsdMinter.addSupportedAsset(address(USDTToken), address(USTBOracle));
 
         // Mint stEth to the actor in order to test
         USTB.mint(_amountToDeposit, bob);
         vm.stopPrank();
 
-        djUsdToken.setMinter(address(djUsdMintingContract));
+        djUsdToken.setMinter(address(djUsdMinter));
 
         djUsdToken.setSupplyLimit(type(uint256).max);
 

@@ -13,6 +13,9 @@ import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {Time} from "@openzeppelin/contracts/utils/types/Time.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
+// tangible imports
+import {RebaseTokenMath} from "@tangible/contracts/libraries/RebaseTokenMath.sol";
+
 // interfaces
 import {CommonErrors} from "./interfaces/CommonErrors.sol";
 import {IDJUSD} from "./interfaces/IDJUSD.sol";
@@ -629,6 +632,34 @@ contract DJUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
     function getPendingClaims(address asset) external view returns (uint256 amount) {
         DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
         amount = $.pendingClaims[asset];
+    }
+
+    /**
+     * @notice Provides a quote of DJUSD tokens a user would receive if they used a specified amountIn of an asset to
+     * mint DJUSD.
+     * @dev Accounts for the user's rebase opt-out status. If opted out, a 1:1 ratio is used. Otherwise, rebase
+     * adjustments apply.
+     * @param asset The address of the supported asset to calculate the quote for.
+     * @param from The account whose opt-out status to check.
+     * @param amountIn The amount of collateral being used to mint DJUSD.
+     * @return assets The amount of DJUSD `from` would receive if they minted with `amountIn` of `asset`.
+     */
+    function quoteMint(address asset, address from, uint256 amountIn)
+        external
+        view
+        validAsset(asset, false)
+        returns (uint256 assets)
+    {
+        (bool success, bytes memory data) = asset.staticcall(abi.encodeCall(IRebaseToken.optedOut, (from)));
+        if (success) {
+            bool isOptedOut = abi.decode(data, (bool));
+            if (!isOptedOut) {
+                uint256 rebaseIndex = IRebaseToken(asset).rebaseIndex();
+                uint256 djusdShares = RebaseTokenMath.toShares(amountIn, rebaseIndex);
+                amountIn = RebaseTokenMath.toTokens(djusdShares, rebaseIndex);
+            }
+        }
+        assets = IOracle(_getDJUSDMinterStorage().assetInfos[asset].oracle).valueOf(amountIn, Math.Rounding.Floor);
     }
 
     /**

@@ -19,14 +19,14 @@ import {DJUSDPointsBoostVault} from "../../src/DJUSDPointsBoostingVault.sol";
 import "../../test/utils/Constants.sol";
 
 /**
- * @dev To run:
- *         forge script script/deploy/DeployToUnreal.s.sol:DeployToUnreal --broadcast --legacy \
- *         --gas-estimate-multiplier 200 \
- *         --verify --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
- *
- *     @dev To verify manually:
- *         forge verify-contract <CONTRACT_ADDRESS> --chain-id 18233 --watch \
- *         src/Contract.sol:Contract --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
+    @dev To run:
+        forge script script/deploy/DeployToUnreal.s.sol:DeployToUnreal --broadcast --legacy \
+        --gas-estimate-multiplier 200 \
+        --verify --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
+
+    @dev To verify manually:
+        forge verify-contract <CONTRACT_ADDRESS> --chain-id 18233 --watch \
+        src/Contract.sol:Contract --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
  */
 
 /**
@@ -87,7 +87,7 @@ contract DeployToUnreal is DeployUtility {
         DJUSDMinter djUsdMintingContract = new DJUSDMinter(IDJUSD(address(djUsdToken)));
         ERC1967Proxy djinnMintingProxy = new ERC1967Proxy(
             address(djUsdMintingContract),
-            abi.encodeWithSelector(DJUSDMinter.initialize.selector, adminAddress, 5 days, UNREAL_CUSTODIAN)
+            abi.encodeWithSelector(DJUSDMinter.initialize.selector, adminAddress, 5 days)
         );
         djUsdMintingContract = DJUSDMinter(payable(address(djinnMintingProxy)));
 
@@ -97,6 +97,8 @@ contract DeployToUnreal is DeployUtility {
         // ------
         // Config
         // ------
+
+        djUsdMintingContract.updateCustodian(UNREAL_CUSTODIAN);
 
         djUsdMintingContract.addSupportedAsset(UNREAL_USTB, UNREAL_USTB_ORACLE);
 

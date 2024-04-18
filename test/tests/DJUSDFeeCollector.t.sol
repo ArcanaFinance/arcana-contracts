@@ -43,7 +43,7 @@ contract DJUSDFeeCollectorTest is BaseSetup {
         // ~ Config ~
 
         uint256 amount = 1 ether;
-        vm.prank(address(djUsdMintingContract));
+        vm.prank(address(djUsdMinter));
         djUsdToken.mint(address(feeCollector), amount);
 
         // ~ Pre-State check ~
@@ -68,7 +68,7 @@ contract DJUSDFeeCollectorTest is BaseSetup {
 
         // ~ Config ~
 
-        vm.prank(address(djUsdMintingContract));
+        vm.prank(address(djUsdMinter));
         djUsdToken.mint(address(feeCollector), amount);
 
         // ~ Pre-State check ~

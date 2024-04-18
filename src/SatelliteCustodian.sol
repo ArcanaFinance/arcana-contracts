@@ -21,10 +21,9 @@ import {DJUSDMinter} from "./DJUSDMinter.sol";
 contract SatelliteCustodian is OwnableUpgradeable, UUPSUpgradeable {
     using SafeERC20 for IERC20;
 
-    
-    DJUSDMinter immutable public djUsdMinter;
+    DJUSDMinter public immutable djUsdMinter;
 
-    uint16 immutable public dstChainId;
+    uint16 public immutable dstChainId;
 
     address public gelato;
 
@@ -57,7 +56,11 @@ contract SatelliteCustodian is OwnableUpgradeable, UUPSUpgradeable {
         dstCustodian = initialDstCustodian;
     }
 
-    function bridgeFunds(address asset, address refundAddress, address zroPaymentAddress, bytes memory adapterParams) external payable onlyGelato {
+    function bridgeFunds(address asset, address refundAddress, address zroPaymentAddress, bytes memory adapterParams)
+        external
+        payable
+        onlyGelato
+    {
         uint256 bal = IERC20(asset).balanceOf(address(this));
 
         ICommonOFT.LzCallParams memory params = ICommonOFT.LzCallParams({
@@ -66,7 +69,9 @@ contract SatelliteCustodian is OwnableUpgradeable, UUPSUpgradeable {
             adapterParams: adapterParams
         });
 
-        IOFTV2(asset).sendFrom{value: msg.value}(address(this), dstChainId, keccak256(abi.encodePacked(dstCustodian)), bal, params);
+        IOFTV2(asset).sendFrom{value: msg.value}(
+            address(this), dstChainId, keccak256(abi.encodePacked(dstCustodian)), bal, params
+        );
         emit FundsBridged(asset, bal);
     }
 
