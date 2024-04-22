@@ -71,6 +71,7 @@ contract DJUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
         mapping(address user => mapping(address asset => uint256)) firstUnclaimedIndex;
         mapping(address user => mapping(address asset => uint256[])) redemptionRequestsByAsset;
         mapping(address user => RedemptionRequest[]) redemptionRequests;
+        uint256 coverageRatio;
     }
 
     IDJUSD public immutable DJUSD;
@@ -92,6 +93,8 @@ contract DJUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
 
     event ClaimDelayUpdated(uint48 claimDelay);
 
+    event CoverageRatioUpdated(uint256 ratio);
+
     event CustodianUpdated(address indexed custodian);
 
     event CustodyTransfer(address indexed custodian, address indexed asset, uint256 amount);
@@ -111,7 +114,7 @@ contract DJUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
         uint256 oldClaimableAfter,
         uint256 newClaimableAfter
     );
-    event TokensClaimed(address indexed user, address indexed asset, uint256 amount);
+    event TokensClaimed(address indexed user, address indexed asset, uint256 djusdAmount, uint256 claimed);
 
     error InsufficientOutputAmount(uint256 expected, uint256 actual);
     error NotCustodian(address account);
@@ -186,6 +189,7 @@ contract DJUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
 
         DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
         $.claimDelay = initialClaimDelay;
+        $.coverageRatio = 1e18;
     }
 
     /**
@@ -214,6 +218,10 @@ contract DJUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
         return _getDJUSDMinterStorage().claimDelay;
     }
 
+    function coverageRatio() external view returns (uint256) { // TODO: NatSpec
+        return _getDJUSDMinterStorage().coverageRatio;
+    }
+
     /**
      * @notice Sets a new claim delay for the redemption requests.
      * @dev This function allows the contract owner to adjust the claim delay, affecting all future redemption requests.
@@ -227,6 +235,14 @@ contract DJUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
         $.claimDelay.requireDifferentUint48(delay);
         $.claimDelay = delay;
         emit ClaimDelayUpdated(delay);
+    }
+
+    function setCoverageRatio(uint256 ratio) external onlyOwner { // TODO: NatSpec & onlyOwner?
+        ratio.requireLessThanOrEqualToUint256(1e18);
+        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        $.coverageRatio.requireDifferentUint256(ratio);
+        $.coverageRatio = ratio;
+        emit CoverageRatioUpdated(ratio);
     }
 
     /**
@@ -476,7 +492,8 @@ contract DJUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
         DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
         address user = msg.sender;
 
-        amount.requireSufficientFunds(IERC20(asset).balanceOf(address(this)));
+        uint256 toClaim = amount * $.coverageRatio / 1e18;
+        toClaim.requireSufficientFunds(IERC20(asset).balanceOf(address(this)));
 
         RedemptionRequest[] storage userRequests = $.redemptionRequests[user];
         uint256[] storage userRequestsByAsset = $.redemptionRequestsByAsset[user][asset];
@@ -490,11 +507,11 @@ contract DJUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
             }
         }
 
-        IERC20(asset).safeTransfer(user, amount);
+        IERC20(asset).safeTransfer(user, toClaim);
 
         $.pendingClaims[asset] -= amount;
 
-        emit TokensClaimed(user, asset, amount);
+        emit TokensClaimed(user, asset, amount, toClaim);
     }
 
     /**

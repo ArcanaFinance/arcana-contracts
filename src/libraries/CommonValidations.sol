@@ -108,6 +108,18 @@ library CommonValidations {
     }
 
     /**
+     * @dev Ensures that the first uint256 value is less than the second. If not, it reverts with a `ValueUnchanged`
+     * error.
+     * @param self The first uint256 value for comparison.
+     * @param other The second uint256 value to compare against the first.
+     */
+    function requireLessThanOrEqualToUint256(uint256 self, uint256 other) internal pure {
+        if (self > other) {
+            revert CommonErrors.ValueTooHigh(self, other);
+        }
+    }
+
+    /**
      * @dev Validates that the available funds or resources are sufficient to meet a requested amount. If not, it
      * reverts with an `InsufficientFunds` error.
      * @param requested The amount requested or required for an operation.
