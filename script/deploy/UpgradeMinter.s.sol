@@ -5,9 +5,9 @@ import {console2} from "forge-std/Script.sol";
 import {DeployUtility} from "../DeployUtility.sol";
 
 // local imports
-import {DJUSD} from "../../src/DJUSD.sol";
-import {IDJUSD} from "../../src/interfaces/IDJUSD.sol";
-import {DJUSDMinter} from "../../src/DJUSDMinter.sol";
+import {USDa} from "../../src/USDa.sol";
+import {IUSDa} from "../../src/interfaces/IUSDa.sol";
+import {USDaMinter} from "../../src/USDaMinter.sol";
 
 // helpers
 import "../../test/utils/Constants.sol";
@@ -29,7 +29,7 @@ import "../../test/utils/Constants.sol";
  * @notice This script deploys the RWA ecosystem to Unreal chain.
  */
 contract UpgradeMinter is DeployUtility {
-    DJUSDMinter public djUsdMinter;
+    USDaMinter public usdaMinter;
     address public djUsdToken;
 
     uint256 public DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
@@ -40,8 +40,8 @@ contract UpgradeMinter is DeployUtility {
     function setUp() public {
         vm.createSelectFork(UNREAL_RPC_URL);
         _setUp("unreal");
-        djUsdMinter = DJUSDMinter(_loadDeploymentAddress("DJUSDMinter"));
-        djUsdToken = _loadDeploymentAddress("DJUSD");
+        usdaMinter = USDaMinter(_loadDeploymentAddress("USDaMinter"));
+        djUsdToken = _loadDeploymentAddress("USDa");
     }
 
     // ~ Script ~
@@ -49,8 +49,8 @@ contract UpgradeMinter is DeployUtility {
     function run() public {
         vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
 
-        DJUSDMinter newDjUsdMinter = new DJUSDMinter(IDJUSD(djUsdToken));
-        djUsdMinter.upgradeToAndCall(address(newDjUsdMinter), "");
+        USDaMinter newDjUsdMinter = new USDaMinter(IUSDa(djUsdToken));
+        usdaMinter.upgradeToAndCall(address(newDjUsdMinter), "");
         
         vm.stopBroadcast();
     }

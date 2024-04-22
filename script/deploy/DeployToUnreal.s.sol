@@ -8,12 +8,12 @@ import {DeployUtility} from "../DeployUtility.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 // local imports
-import {DJUSD} from "../../src/DJUSD.sol";
-import {IDJUSD} from "../../src/interfaces/IDJUSD.sol";
-import {DJUSDMinter} from "../../src/DJUSDMinter.sol";
-import {DJUSDTaxManager} from "../../src/DJUSDTaxManager.sol";
-import {DJUSDFeeCollector} from "../../src/DJUSDFeeCollector.sol";
-import {DJUSDPointsBoostVault} from "../../src/DJUSDPointsBoostingVault.sol";
+import {USDa} from "../../src/USDa.sol";
+import {IUSDa} from "../../src/interfaces/IUSDa.sol";
+import {USDaMinter} from "../../src/USDaMinter.sol";
+import {USDaTaxManager} from "../../src/USDaTaxManager.sol";
+import {USDaFeeCollector} from "../../src/USDaFeeCollector.sol";
+import {USDaPointsBoostVault} from "../../src/USDaPointsBoostingVault.sol";
 
 // helpers
 import "../../test/utils/Constants.sol";
@@ -65,34 +65,34 @@ contract DeployToUnreal is DeployUtility {
         ratios[0] = 1;
         ratios[1] = 1;
 
-        // Deploy DJUSD token
-        DJUSD djUsdToken = new DJUSD(UNREAL_CHAINID, UNREAL_LZ_ENDPOINT_V2);
+        // Deploy USDa token
+        USDa djUsdToken = new USDa(UNREAL_CHAINID, UNREAL_LZ_ENDPOINT_V2);
         ERC1967Proxy djUsdTokenProxy = new ERC1967Proxy(
             address(djUsdToken),
             abi.encodeWithSelector(
-                DJUSD.initialize.selector,
+                USDa.initialize.selector,
                 adminAddress,
                 adminAddress // TODO: RebaseManager
             )
         );
-        djUsdToken = DJUSD(address(djUsdTokenProxy));
+        djUsdToken = USDa(address(djUsdTokenProxy));
 
         // Deploy FeeCollector
-        DJUSDFeeCollector feeCollector = new DJUSDFeeCollector(adminAddress, address(djUsdToken), distributors, ratios);
+        USDaFeeCollector feeCollector = new USDaFeeCollector(adminAddress, address(djUsdToken), distributors, ratios);
 
         // Deploy taxManager
-        DJUSDTaxManager taxManager = new DJUSDTaxManager(adminAddress, address(djUsdToken), address(feeCollector));
+        USDaTaxManager taxManager = new USDaTaxManager(adminAddress, address(djUsdToken), address(feeCollector));
 
-        // Deploy DJUSDMinter contract.
-        DJUSDMinter djUsdMintingContract = new DJUSDMinter(IDJUSD(address(djUsdToken)));
-        ERC1967Proxy djinnMintingProxy = new ERC1967Proxy(
+        // Deploy USDaMinter contract.
+        USDaMinter djUsdMintingContract = new USDaMinter(IUSDa(address(djUsdToken)));
+        ERC1967Proxy arcanaMintingProxy = new ERC1967Proxy(
             address(djUsdMintingContract),
-            abi.encodeWithSelector(DJUSDMinter.initialize.selector, adminAddress, 5 days)
+            abi.encodeWithSelector(USDaMinter.initialize.selector, adminAddress, 5 days)
         );
-        djUsdMintingContract = DJUSDMinter(payable(address(djinnMintingProxy)));
+        djUsdMintingContract = USDaMinter(payable(address(arcanaMintingProxy)));
 
-        // Deploy DJUSD Vault
-        DJUSDPointsBoostVault djUsdVault = new DJUSDPointsBoostVault(address(djUsdToken));
+        // Deploy USDa Vault
+        USDaPointsBoostVault djUsdVault = new USDaPointsBoostVault(address(djUsdToken));
 
         // ------
         // Config
@@ -112,11 +112,11 @@ contract DeployToUnreal is DeployUtility {
         // Save Addresses
         // --------------
 
-        _saveDeploymentAddress("DJUSD", address(djUsdToken));
-        _saveDeploymentAddress("DJUSDMinter", address(djUsdMintingContract));
-        _saveDeploymentAddress("DJUSDTaxManager", address(taxManager));
-        _saveDeploymentAddress("DJUSDFeeCollector", address(feeCollector));
-        _saveDeploymentAddress("DJUSDPointsBoostVault", address(djUsdVault));
+        _saveDeploymentAddress("USDa", address(djUsdToken));
+        _saveDeploymentAddress("USDaMinter", address(djUsdMintingContract));
+        _saveDeploymentAddress("USDaTaxManager", address(taxManager));
+        _saveDeploymentAddress("USDaFeeCollector", address(feeCollector));
+        _saveDeploymentAddress("USDaPointsBoostVault", address(djUsdVault));
 
         vm.stopBroadcast();
     }

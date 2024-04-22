@@ -4,7 +4,7 @@ pragma solidity ^0.8.19;
 import {IERC20, ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {RebaseTokenMath} from "@tangible/contracts/libraries/RebaseTokenMath.sol";
 
-import {DJUSD as DJUSDToken} from "./DJUSD.sol";
+import {USDa as USDaToken} from "./USDa.sol";
 
 /**
  * @title djUSD Points Boost Vault
@@ -13,8 +13,8 @@ import {DJUSD as DJUSDToken} from "./DJUSD.sol";
  * for djUSD within this system.
  * @author Caesar LaVey
  */
-contract DJUSDPointsBoostVault is ERC20 {
-    address public immutable DJUSD;
+contract USDaPointsBoostVault is ERC20 {
+    address public immutable USDa;
 
     event Deposit(address indexed caller, address indexed owner, uint256 assets, uint256 shares);
     event Withdraw(
@@ -23,11 +23,11 @@ contract DJUSDPointsBoostVault is ERC20 {
 
     /**
      * @dev Sets the djUSD token address and disables its rebase functionality upon deployment.
-     * @param djusd The address of the djUSD token.
+     * @param usda The address of the djUSD token.
      */
-    constructor(address djusd) ERC20("djUSD Points Token", "djPT") {
-        DJUSD = djusd;
-        DJUSDToken(djusd).disableRebase(address(this), true);
+    constructor(address usda) ERC20("djUSD Points Token", "djPT") {
+        USDa = usda;
+        USDaToken(usda).disableRebase(address(this), true);
     }
 
     /**
@@ -51,12 +51,12 @@ contract DJUSDPointsBoostVault is ERC20 {
      * @return assets The equivalent amount of djUSD assets.
      */
     function previewRedeem(address from, uint256 shares) external view returns (uint256 assets) {
-        if (DJUSDToken(DJUSD).optedOut(from)) {
+        if (USDaToken(USDa).optedOut(from)) {
             assets = shares;
         } else {
-            uint256 rebaseIndex = DJUSDToken(DJUSD).rebaseIndex();
-            uint256 djusdShares = RebaseTokenMath.toShares(shares, rebaseIndex);
-            assets = RebaseTokenMath.toTokens(djusdShares, rebaseIndex);
+            uint256 rebaseIndex = USDaToken(USDa).rebaseIndex();
+            uint256 usdaShares = RebaseTokenMath.toShares(shares, rebaseIndex);
+            assets = RebaseTokenMath.toTokens(usdaShares, rebaseIndex);
         }
     }
 
@@ -68,7 +68,7 @@ contract DJUSDPointsBoostVault is ERC20 {
      * @return shares The amount of djPT tokens minted.
      */
     function deposit(uint256 assets, address recipient) external returns (uint256 shares) {
-        shares = _pullDJUSD(msg.sender, assets);
+        shares = _pullUSDa(msg.sender, assets);
         _mint(recipient, shares);
         emit Deposit(msg.sender, recipient, assets, shares);
     }
@@ -82,7 +82,7 @@ contract DJUSDPointsBoostVault is ERC20 {
      */
     function redeem(uint256 shares, address recipient) external returns (uint256 assets) {
         _burn(msg.sender, shares);
-        assets = _pushDJUSD(recipient, shares);
+        assets = _pushUSDa(recipient, shares);
         emit Withdraw(msg.sender, recipient, msg.sender, assets, shares);
     }
 
@@ -92,8 +92,8 @@ contract DJUSDPointsBoostVault is ERC20 {
      * @param amount The amount of djUSD tokens to transfer.
      * @return The amount of djUSD tokens successfully transferred.
      */
-    function _pullDJUSD(address from, uint256 amount) internal returns (uint256) {
-        IERC20 token = IERC20(DJUSD);
+    function _pullUSDa(address from, uint256 amount) internal returns (uint256) {
+        IERC20 token = IERC20(USDa);
         uint256 balanceBefore = token.balanceOf(address(this));
         token.transferFrom(from, address(this), amount);
         return token.balanceOf(address(this)) - balanceBefore;
@@ -105,8 +105,8 @@ contract DJUSDPointsBoostVault is ERC20 {
      * @param amount The amount of djUSD tokens to transfer.
      * @return The amount of djUSD tokens successfully transferred.
      */
-    function _pushDJUSD(address to, uint256 amount) internal returns (uint256) {
-        IERC20 token = IERC20(DJUSD);
+    function _pushUSDa(address to, uint256 amount) internal returns (uint256) {
+        IERC20 token = IERC20(USDa);
         uint256 balanceBefore = token.balanceOf(to);
         token.transfer(to, amount);
         return token.balanceOf(to) - balanceBefore;

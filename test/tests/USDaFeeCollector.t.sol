@@ -8,22 +8,22 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 // local files
 import {BaseSetup} from "../BaseSetup.sol";
-import {DJUSDFeeCollector} from "../../src/DJUSDFeeCollector.sol";
+import {USDaFeeCollector} from "../../src/USDaFeeCollector.sol";
 
 /**
- * @title DJUSDFeeCollectorTest
- * @notice Unit Tests for DJUSDFeeCollector contract interactions
+ * @title USDaFeeCollectorTest
+ * @notice Unit Tests for USDaFeeCollector contract interactions
  */
-contract DJUSDFeeCollectorTest is BaseSetup {
+contract USDaFeeCollectorTest is BaseSetup {
     address public constant REVENUE_DISTRIBUTOR = address(bytes20(bytes("REVENUE_DISTRIBUTOR")));
-    address public constant DJINN_ESCROW = address(bytes20(bytes("DJINN_ESCROW")));
+    address public constant ARCANA_ESCROW = address(bytes20(bytes("ARCANA_ESCROW")));
 
     function setUp() public override {
         super.setUp();
 
         address[] memory distributors = new address[](2);
         distributors[0] = REVENUE_DISTRIBUTOR;
-        distributors[1] = DJINN_ESCROW;
+        distributors[1] = ARCANA_ESCROW;
 
         uint256[] memory ratios = new uint256[](2);
         ratios[0] = 1;
@@ -34,57 +34,57 @@ contract DJUSDFeeCollectorTest is BaseSetup {
     }
 
     function test_feeColector_init_state() public {
-        assertEq(feeCollector.DJUSD(), address(djUsdToken));
+        assertEq(feeCollector.USDa(), address(djUsdToken));
         assertEq(feeCollector.distributors(0), REVENUE_DISTRIBUTOR);
-        assertEq(feeCollector.distributors(1), DJINN_ESCROW);
+        assertEq(feeCollector.distributors(1), ARCANA_ESCROW);
     }
 
-    function test_feeCollector_distributeDJUSD() public {
+    function test_feeCollector_distributeUSDa() public {
         // ~ Config ~
 
         uint256 amount = 1 ether;
-        vm.prank(address(djUsdMinter));
+        vm.prank(address(usdaMinter));
         djUsdToken.mint(address(feeCollector), amount);
 
         // ~ Pre-State check ~
 
         assertEq(djUsdToken.balanceOf(address(feeCollector)), amount);
         assertEq(djUsdToken.balanceOf(REVENUE_DISTRIBUTOR), 0);
-        assertEq(djUsdToken.balanceOf(DJINN_ESCROW), 0);
+        assertEq(djUsdToken.balanceOf(ARCANA_ESCROW), 0);
 
-        // ~ Execute distributeDJUSD ~
+        // ~ Execute distributeUSDa ~
 
-        feeCollector.distributeDJUSD();
+        feeCollector.distributeUSDa();
 
         // ~ Pre-State check ~
 
         assertEq(djUsdToken.balanceOf(address(feeCollector)), 0);
         assertEq(djUsdToken.balanceOf(REVENUE_DISTRIBUTOR), amount / 2);
-        assertEq(djUsdToken.balanceOf(DJINN_ESCROW), amount / 2);
+        assertEq(djUsdToken.balanceOf(ARCANA_ESCROW), amount / 2);
     }
 
-    function test_feeCollector_distributeDJUSD_fuzzing(uint256 amount) public {
+    function test_feeCollector_distributeUSDa_fuzzing(uint256 amount) public {
         amount = bound(amount, 1, 1_000_000 ether);
 
         // ~ Config ~
 
-        vm.prank(address(djUsdMinter));
+        vm.prank(address(usdaMinter));
         djUsdToken.mint(address(feeCollector), amount);
 
         // ~ Pre-State check ~
 
         assertEq(djUsdToken.balanceOf(address(feeCollector)), amount);
         assertEq(djUsdToken.balanceOf(REVENUE_DISTRIBUTOR), 0);
-        assertEq(djUsdToken.balanceOf(DJINN_ESCROW), 0);
+        assertEq(djUsdToken.balanceOf(ARCANA_ESCROW), 0);
 
-        // ~ Execute distributeDJUSD ~
+        // ~ Execute distributeUSDa ~
 
-        feeCollector.distributeDJUSD();
+        feeCollector.distributeUSDa();
 
         // ~ Pre-State check ~
 
         assertApproxEqAbs(djUsdToken.balanceOf(address(feeCollector)), 0, 1);
         assertEq(djUsdToken.balanceOf(REVENUE_DISTRIBUTOR), amount / 2);
-        assertEq(djUsdToken.balanceOf(DJINN_ESCROW), amount / 2);
+        assertEq(djUsdToken.balanceOf(ARCANA_ESCROW), amount / 2);
     }
 }

@@ -9,19 +9,19 @@ pragma solidity ^0.8.19;
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 // contracts
-import {DJUSDMinter} from "../src/DJUSDMinter.sol";
-import {DJUSDPointsBoostVault} from "../src/DJUSDPointsBoostingVault.sol";
+import {USDaMinter} from "../src/USDaMinter.sol";
+import {USDaPointsBoostVault} from "../src/USDaPointsBoostingVault.sol";
 import {MockOracle} from "./mock/MockOracle.sol";
 import {MockToken} from "./mock/MockToken.sol";
 import {LZEndpointMock} from "./mock/LZEndpointMock.sol";
-import {DJUSD} from "../src/DJUSD.sol";
-import {DJUSDTaxManager} from "../src/DJUSDTaxManager.sol";
-import {DJUSDFeeCollector} from "../src/DJUSDFeeCollector.sol";
-import {SatelliteCustodian} from "../src/SatelliteCustodian.sol";
+import {USDa} from "../src/USDa.sol";
+import {USDaTaxManager} from "../src/USDaTaxManager.sol";
+import {USDaFeeCollector} from "../src/USDaFeeCollector.sol";
+import {CustodianManager} from "../src/CustodianManager.sol";
 
 // interfaces
-import {IDJUSD} from "../src/interfaces/IDJUSD.sol";
-import {IDJUSDDefinitions} from "../src/interfaces/IDJUSDDefinitions.sol";
+import {IUSDa} from "../src/interfaces/IUSDa.sol";
+import {IUSDaDefinitions} from "../src/interfaces/IUSDaDefinitions.sol";
 
 // helpers
 import {stdStorage, StdStorage, Test} from "forge-std/Test.sol";
@@ -29,13 +29,13 @@ import {SigUtils} from "./utils/SigUtils.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {Utils} from "./utils/Utils.sol";
 
-contract BaseSetup is Test, IDJUSDDefinitions {
+contract BaseSetup is Test, IUSDaDefinitions {
     Utils internal utils;
-    DJUSD internal djUsdToken;
-    DJUSDTaxManager internal taxManager;
-    DJUSDFeeCollector internal feeCollector;
-    DJUSDPointsBoostVault internal djUsdVault;
-    SatelliteCustodian internal custodian;
+    USDa internal djUsdToken;
+    USDaTaxManager internal taxManager;
+    USDaFeeCollector internal feeCollector;
+    USDaPointsBoostVault internal djUsdVault;
+    CustodianManager internal custodian;
     LZEndpointMock public layerZeroEndpoint;
     MockToken internal USTB;
     MockOracle internal USTBOracle;
@@ -44,9 +44,9 @@ contract BaseSetup is Test, IDJUSDDefinitions {
     MockToken internal USDCToken;
     MockToken internal USDTToken;
     MockToken internal token;
-    DJUSDMinter internal djUsdMinter;
+    USDaMinter internal usdaMinter;
     SigUtils internal sigUtils;
-    SigUtils internal sigUtilsDJUSD;
+    SigUtils internal sigUtilsUSDa;
 
     uint256 internal constant ownerPrivateKey = 0xA11CE;
     uint256 internal constant newOwnerPrivateKey = 0xA14CE;
@@ -54,8 +54,8 @@ contract BaseSetup is Test, IDJUSDDefinitions {
     uint256 internal constant redeemerPrivateKey = 0xB45DE;
     uint256 internal constant maker1PrivateKey = 0xA13CE;
     uint256 internal constant maker2PrivateKey = 0xA14CE;
-    uint256 internal constant trader1PrivateKey = 0x1DE;
-    uint256 internal constant trader2PrivateKey = 0x1DEA;
+    uint256 internal constant adminPrivateKey = 0x1DE;
+    uint256 internal constant whitelisterPrivateKey = 0x1DEA;
     uint256 internal constant gatekeeperPrivateKey = 0x1DEA1;
     uint256 internal constant bobPrivateKey = 0x1DEA2;
     uint256 internal constant alicePrivateKey = 0x1DBA2;
@@ -70,8 +70,8 @@ contract BaseSetup is Test, IDJUSDDefinitions {
     address internal redeemer;
     address internal maker1;
     address internal maker2;
-    address internal trader1;
-    address internal trader2;
+    address internal admin;
+    address internal whitelister;
     address internal gatekeeper;
     address internal bob;
     address internal alice;
@@ -88,11 +88,11 @@ contract BaseSetup is Test, IDJUSDDefinitions {
     bytes32 internal adminRole = 0x00;
     bytes32 internal redeemerRole = keccak256("REDEEMER_ROLE");
 
-    // DJUSD error encodings
-    bytes internal OnlyMinterErr = abi.encodeWithSelector(IDJUSDDefinitions.OnlyMinter.selector);
-    bytes internal ZeroAddressExceptionErr = abi.encodeWithSelector(IDJUSDDefinitions.ZeroAddressException.selector);
-    bytes internal CantRenounceOwnershipErr = abi.encodeWithSelector(IDJUSDDefinitions.CantRenounceOwnership.selector);
-    bytes internal LimitExceeded = abi.encodeWithSelector(IDJUSDDefinitions.SupplyLimitExceeded.selector);
+    // USDa error encodings
+    bytes internal OnlyMinterErr = abi.encodeWithSelector(IUSDaDefinitions.OnlyMinter.selector);
+    bytes internal ZeroAddressExceptionErr = abi.encodeWithSelector(IUSDaDefinitions.ZeroAddressException.selector);
+    bytes internal CantRenounceOwnershipErr = abi.encodeWithSelector(IUSDaDefinitions.CantRenounceOwnership.selector);
+    bytes internal LimitExceeded = abi.encodeWithSelector(IUSDaDefinitions.SupplyLimitExceeded.selector);
 
     uint256 internal _slippageRange = 50000000000000000;
     uint256 internal _amountToDeposit = 50 * 10 ** 18;
@@ -130,8 +130,8 @@ contract BaseSetup is Test, IDJUSDDefinitions {
         vm.label(owner, "owner");
         vm.label(maker1, "maker1");
         vm.label(maker2, "maker2");
-        vm.label(trader1, "trader1");
-        vm.label(trader2, "trader2");
+        vm.label(admin, "admin");
+        vm.label(whitelister, "whitelister");
         vm.label(gatekeeper, "gatekeeper");
         vm.label(bob, "bob");
         vm.label(alice, "alice");
@@ -149,49 +149,57 @@ contract BaseSetup is Test, IDJUSDDefinitions {
 
         layerZeroEndpoint = new LZEndpointMock(uint16(block.chainid));
 
-        djUsdToken = new DJUSD(1, address(layerZeroEndpoint));
+        djUsdToken = new USDa(1, address(layerZeroEndpoint));
         ERC1967Proxy djUsdTokenProxy = new ERC1967Proxy(
-            address(djUsdToken), abi.encodeWithSelector(DJUSD.initialize.selector, address(this), rebaseManager)
+            address(djUsdToken), abi.encodeWithSelector(USDa.initialize.selector, address(this), rebaseManager)
         );
-        djUsdToken = DJUSD(address(djUsdTokenProxy));
+        djUsdToken = USDa(address(djUsdTokenProxy));
 
-        feeCollector = new DJUSDFeeCollector(owner, address(djUsdToken), distributors, ratios);
+        feeCollector = new USDaFeeCollector(owner, address(djUsdToken), distributors, ratios);
 
-        taxManager = new DJUSDTaxManager(owner, address(djUsdToken), address(feeCollector));
+        taxManager = new USDaTaxManager(owner, address(djUsdToken), address(feeCollector));
 
-        djUsdMinter = new DJUSDMinter(IDJUSD(address(djUsdToken)));
-        ERC1967Proxy djinnMintingProxy = new ERC1967Proxy(
-            address(djUsdMinter),
-            abi.encodeWithSelector(DJUSDMinter.initialize.selector, owner, 5 days)
+        usdaMinter = new USDaMinter(IUSDa(address(djUsdToken)));
+        ERC1967Proxy arcanaMintingProxy = new ERC1967Proxy(
+            address(usdaMinter),
+            abi.encodeWithSelector(USDaMinter.initialize.selector,
+                owner,
+                admin,
+                whitelister,
+                5 days
+            )
         );
-        djUsdMinter = DJUSDMinter(payable(address(djinnMintingProxy)));
+        usdaMinter = USDaMinter(payable(address(arcanaMintingProxy)));
 
-        custodian = new SatelliteCustodian(address(djUsdMinter), 1);
+        custodian = new CustodianManager(address(usdaMinter));
         ERC1967Proxy custodianProxy = new ERC1967Proxy(
             address(custodian),
-            abi.encodeWithSelector(SatelliteCustodian.initialize.selector, owner, gelato, mainCustodian)
+            abi.encodeWithSelector(CustodianManager.initialize.selector, owner, mainCustodian)
         );
-        custodian = SatelliteCustodian(address(custodianProxy));
+        custodian = CustodianManager(address(custodianProxy));
 
-        djUsdVault = new DJUSDPointsBoostVault(address(djUsdToken));
+        djUsdVault = new USDaPointsBoostVault(address(djUsdToken));
 
         // ~ Config ~
 
         vm.startPrank(owner);
 
+        usdaMinter.modifyWhitelist(bob, true);
+        usdaMinter.modifyWhitelist(alice, true);
+
         // set custodian on minter
-        djUsdMinter.updateCustodian(address(custodian));
+        usdaMinter.updateCustodian(address(custodian));
 
         // Add self as approved custodian
-        djUsdMinter.addSupportedAsset(address(USTB), address(USTBOracle));
-        djUsdMinter.addSupportedAsset(address(USDCToken), address(USTBOracle));
-        djUsdMinter.addSupportedAsset(address(USDTToken), address(USTBOracle));
+        usdaMinter.addSupportedAsset(address(USTB), address(USTBOracle));
+        usdaMinter.addSupportedAsset(address(USDCToken), address(USTBOracle));
+        usdaMinter.addSupportedAsset(address(USDTToken), address(USTBOracle));
 
         // Mint stEth to the actor in order to test
         USTB.mint(_amountToDeposit, bob);
         vm.stopPrank();
 
-        djUsdToken.setMinter(address(djUsdMinter));
+        djUsdToken.setMinter(address(usdaMinter));
 
         djUsdToken.setSupplyLimit(type(uint256).max);
 
@@ -205,8 +213,8 @@ contract BaseSetup is Test, IDJUSDDefinitions {
         redeemer = vm.addr(redeemerPrivateKey);
         maker1 = vm.addr(maker1PrivateKey);
         maker2 = vm.addr(maker2PrivateKey);
-        trader1 = vm.addr(trader1PrivateKey);
-        trader2 = vm.addr(trader2PrivateKey);
+        admin = vm.addr(adminPrivateKey);
+        whitelister = vm.addr(whitelisterPrivateKey);
         gatekeeper = vm.addr(gatekeeperPrivateKey);
         bob = vm.addr(bobPrivateKey);
         alice = vm.addr(alicePrivateKey);

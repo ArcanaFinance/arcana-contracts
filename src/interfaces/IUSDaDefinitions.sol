@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.19;
 
-interface IDJUSDDefinitions {
+interface IUSDaDefinitions {
     // ~ Events ~
 
     /// @notice This event is fired when the minter changes

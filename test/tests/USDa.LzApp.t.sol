@@ -9,12 +9,12 @@ import {stdStorage, StdStorage, Test} from "forge-std/Test.sol";
 import {SigUtils} from "../utils/SigUtils.sol";
 import {Vm} from "forge-std/Vm.sol";
 
-import {DJUSD} from "../../src/DJUSD.sol";
+import {USDa} from "../../src/USDa.sol";
 import {BaseSetup} from "../BaseSetup.sol";
 import {LZEndpointMock} from "../mock/LZEndpointMock.sol";
 
-contract DJUSDLzAppTest is Test, BaseSetup {
-    DJUSD internal _djUsdToken;
+contract USDaLzAppTest is Test, BaseSetup {
+    USDa internal _djUsdToken;
 
     // mock
     LZEndpointMock internal _lzEndpoint;
@@ -35,12 +35,12 @@ contract DJUSDLzAppTest is Test, BaseSetup {
 
         _lzEndpoint = new LZEndpointMock(uint16(block.chainid));
 
-        _djUsdToken = new DJUSD(block.chainid, address(_lzEndpoint));
+        _djUsdToken = new USDa(block.chainid, address(_lzEndpoint));
         ERC1967Proxy _djUsdTokenProxy = new ERC1967Proxy(
-            address(_djUsdToken), abi.encodeWithSelector(DJUSD.initialize.selector, _owner, _rebaseManager)
+            address(_djUsdToken), abi.encodeWithSelector(USDa.initialize.selector, _owner, _rebaseManager)
         );
-        _djUsdToken = DJUSD(address(_djUsdTokenProxy));
-        vm.label(address(_djUsdToken), "DJUSD_Proxy");
+        _djUsdToken = USDa(address(_djUsdTokenProxy));
+        vm.label(address(_djUsdToken), "USDa_Proxy");
 
         vm.prank(_owner);
         _djUsdToken.setMinter(_minter);

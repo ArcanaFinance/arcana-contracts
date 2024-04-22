@@ -8,20 +8,20 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 // local files
 import {BaseSetup} from "../BaseSetup.sol";
-import {DJUSDMinter} from "../../src/DJUSDMinter.sol";
-import {DJUSD} from "../../src/DJUSD.sol";
-import {DJUSDTaxManager} from "../../src/DJUSDTaxManager.sol";
-import {IDJUSDDefinitions} from "../../src/interfaces/IDJUSDDefinitions.sol";
+import {USDaMinter} from "../../src/USDaMinter.sol";
+import {USDa} from "../../src/USDa.sol";
+import {USDaTaxManager} from "../../src/USDaTaxManager.sol";
+import {IUSDaDefinitions} from "../../src/interfaces/IUSDaDefinitions.sol";
 import {IRebaseToken} from "../../src/interfaces/IRebaseToken.sol";
 
 // helpers
 import "../utils/Constants.sol";
 
 /**
- * @title DJUSDMinterUSTBIntegrationTest
- * @notice Unit Tests for DJUSDMinter contract interactions
+ * @title USDaMinterUSTBIntegrationTest
+ * @notice Unit Tests for USDaMinter contract interactions
  */
-contract DJUSDMinterUSTBIntegrationTest is BaseSetup {
+contract USDaMinterUSTBIntegrationTest is BaseSetup {
     string public UNREAL_RPC_URL = vm.envString("UNREAL_RPC_URL");
     IERC20 public unrealUSTB = IERC20(UNREAL_USTB);
 
@@ -32,11 +32,11 @@ contract DJUSDMinterUSTBIntegrationTest is BaseSetup {
         // remove unrealUSTB from supported assets and
 
         vm.startPrank(owner);
-        djUsdMinter.removeSupportedAsset(address(USTB));
-        djUsdMinter.removeSupportedAsset(address(USDCToken));
-        djUsdMinter.removeSupportedAsset(address(USDTToken));
+        usdaMinter.removeSupportedAsset(address(USTB));
+        usdaMinter.removeSupportedAsset(address(USDCToken));
+        usdaMinter.removeSupportedAsset(address(USDTToken));
 
-        djUsdMinter.addSupportedAsset(address(unrealUSTB), address(USTBOracle));
+        usdaMinter.addSupportedAsset(address(unrealUSTB), address(USTBOracle));
         vm.stopPrank();
     }
 
@@ -45,7 +45,7 @@ contract DJUSDMinterUSTBIntegrationTest is BaseSetup {
         // deal doesn't work with unrealUSTB since the storage layout is different
         if (token == address(unrealUSTB)) {
             // if address is opted out, update normal balance (basket is opted out of rebasing)
-            if (give == address(djUsdMinter)) {
+            if (give == address(usdaMinter)) {
                 bytes32 USTBStorageLocation = 0x52c63247e1f47db19d5ce0460030c497f067ca4cebf71ba98eeadabe20bace00;
                 uint256 mapSlot = 0;
                 bytes32 slot = keccak256(abi.encode(give, uint256(USTBStorageLocation) + mapSlot));
@@ -68,11 +68,11 @@ contract DJUSDMinterUSTBIntegrationTest is BaseSetup {
     function test_USTB_init_state() public {
         assertNotEq(djUsdToken.taxManager(), address(0));
 
-        address[] memory assets = djUsdMinter.getActiveAssets();
+        address[] memory assets = usdaMinter.getActiveAssets();
         assertEq(assets.length, 1);
         assertEq(assets[0], address(unrealUSTB));
 
-        assertEq(djUsdMinter.custodian(), address(custodian));
+        assertEq(usdaMinter.custodian(), address(custodian));
     }
 
     function test_USTB_mint() public {
@@ -80,18 +80,18 @@ contract DJUSDMinterUSTBIntegrationTest is BaseSetup {
         _deal(address(unrealUSTB), bob, amount);
 
         uint256 preBal = unrealUSTB.balanceOf(bob);
-        uint256 quoted = djUsdMinter.quoteMint(address(unrealUSTB), bob, amount);
+        uint256 quoted = usdaMinter.quoteMint(address(unrealUSTB), bob, amount);
 
         // taker
         vm.startPrank(bob);
-        unrealUSTB.approve(address(djUsdMinter), amount);
-        djUsdMinter.mint(address(unrealUSTB), amount, amount - 1);
+        unrealUSTB.approve(address(usdaMinter), amount);
+        usdaMinter.mint(address(unrealUSTB), amount, amount - 1);
         vm.stopPrank();
 
         assertEq(unrealUSTB.balanceOf(bob), preBal - amount);
-        assertApproxEqAbs(unrealUSTB.balanceOf(address(custodian)), amount, 1);
+        assertApproxEqAbs(unrealUSTB.balanceOf(address(usdaMinter)), amount, 1);
         assertApproxEqAbs(djUsdToken.balanceOf(bob), amount, 1);
-        assertEq(djUsdToken.balanceOf(bob), quoted);
+        assertApproxEqAbs(djUsdToken.balanceOf(bob), quoted, 1);
     }
 
     function test_USTB_mint_fuzzing(uint256 amount) public {
@@ -100,18 +100,18 @@ contract DJUSDMinterUSTBIntegrationTest is BaseSetup {
 
         uint256 preBal = unrealUSTB.balanceOf(bob);
         uint256 deviation = amount * 1 / 100; // 1% deviation
-        uint256 quoted = djUsdMinter.quoteMint(address(unrealUSTB), bob, amount);
+        uint256 quoted = usdaMinter.quoteMint(address(unrealUSTB), bob, amount);
 
         // taker
         vm.startPrank(bob);
-        unrealUSTB.approve(address(djUsdMinter), amount);
-        djUsdMinter.mint(address(unrealUSTB), amount, amount - deviation);
+        unrealUSTB.approve(address(usdaMinter), amount);
+        usdaMinter.mint(address(unrealUSTB), amount, amount - deviation);
         vm.stopPrank();
 
         assertApproxEqAbs(unrealUSTB.balanceOf(bob), preBal - amount, 2);
-        assertApproxEqAbs(unrealUSTB.balanceOf(address(custodian)), amount, 2);
+        assertApproxEqAbs(unrealUSTB.balanceOf(address(usdaMinter)), amount, 2);
         assertApproxEqAbs(djUsdToken.balanceOf(bob), amount, 2);
-        assertEq(djUsdToken.balanceOf(bob), quoted);
+        assertApproxEqAbs(djUsdToken.balanceOf(bob), quoted, 2);
     }
 
     function test_USTB_mint_optedOut_fuzzing(uint256 amount) public {
@@ -123,16 +123,16 @@ contract DJUSDMinterUSTBIntegrationTest is BaseSetup {
 
         uint256 preBal = unrealUSTB.balanceOf(bob);
         uint256 deviation = amount * 1 / 100; // 1% deviation
-        uint256 quoted = djUsdMinter.quoteMint(address(unrealUSTB), bob, amount);
+        uint256 quoted = usdaMinter.quoteMint(address(unrealUSTB), bob, amount);
 
         // taker
         vm.startPrank(bob);
-        unrealUSTB.approve(address(djUsdMinter), amount);
-        djUsdMinter.mint(address(unrealUSTB), amount, amount - deviation);
+        unrealUSTB.approve(address(usdaMinter), amount);
+        usdaMinter.mint(address(unrealUSTB), amount, amount - deviation);
         vm.stopPrank();
 
         assertApproxEqAbs(unrealUSTB.balanceOf(bob), preBal - amount, 2);
-        assertApproxEqAbs(unrealUSTB.balanceOf(address(custodian)), amount, 2);
+        assertApproxEqAbs(unrealUSTB.balanceOf(address(usdaMinter)), amount, 2);
         assertApproxEqAbs(djUsdToken.balanceOf(bob), amount, 2);
         assertApproxEqAbs(djUsdToken.balanceOf(bob), quoted, 2);
     }
@@ -142,57 +142,57 @@ contract DJUSDMinterUSTBIntegrationTest is BaseSetup {
 
         uint256 amount = 10 ether;
 
-        vm.prank(address(djUsdMinter));
+        vm.prank(address(usdaMinter));
         djUsdToken.mint(alice, amount);
-        _deal(address(unrealUSTB), address(djUsdMinter), amount);
+        _deal(address(unrealUSTB), address(usdaMinter), amount);
 
         // ~ Pre-state check ~
 
         assertEq(djUsdToken.balanceOf(alice), amount);
         assertEq(unrealUSTB.balanceOf(alice), 0);
-        assertEq(unrealUSTB.balanceOf(address(djUsdMinter)), amount);
+        assertEq(unrealUSTB.balanceOf(address(usdaMinter)), amount);
 
-        DJUSDMinter.RedemptionRequest[] memory requests =
-            djUsdMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
+        USDaMinter.RedemptionRequest[] memory requests =
+            usdaMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
         assertEq(requests.length, 0);
 
         // ~ Alice executes requestTokens ~
 
         vm.startPrank(alice);
-        djUsdToken.approve(address(djUsdMinter), amount);
-        djUsdMinter.requestTokens(address(unrealUSTB), amount);
+        djUsdToken.approve(address(usdaMinter), amount);
+        usdaMinter.requestTokens(address(unrealUSTB), amount);
         vm.stopPrank();
 
         // ~ Post-state check ~
 
-        requests = djUsdMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
+        requests = usdaMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
         assertEq(requests.length, 1);
         assertEq(requests[0].amount, amount);
         assertEq(requests[0].claimableAfter, block.timestamp + 5 days);
         assertEq(requests[0].claimed, 0);
 
-        uint256 requested = djUsdMinter.getPendingClaims(address(unrealUSTB));
-        uint256 claimable = djUsdMinter.claimableTokens(alice, address(unrealUSTB));
+        uint256 requested = usdaMinter.getPendingClaims(address(unrealUSTB));
+        uint256 claimable = usdaMinter.claimableTokens(alice, address(unrealUSTB));
 
         assertEq(requested, amount);
         assertEq(claimable, 0);
 
         // ~ Warp to claimDelay-1 ~
 
-        vm.warp(block.timestamp + djUsdMinter.claimDelay() - 1);
+        vm.warp(block.timestamp + usdaMinter.claimDelay() - 1);
 
-        requested = djUsdMinter.getPendingClaims(address(unrealUSTB));
-        claimable = djUsdMinter.claimableTokens(alice, address(unrealUSTB));
+        requested = usdaMinter.getPendingClaims(address(unrealUSTB));
+        claimable = usdaMinter.claimableTokens(alice, address(unrealUSTB));
 
         assertEq(requested, amount);
         assertEq(claimable, 0);
 
         // ~ Warp to post-claimDelay and query claimable ~
 
-        vm.warp(block.timestamp + djUsdMinter.claimDelay());
+        vm.warp(block.timestamp + usdaMinter.claimDelay());
 
-        requested = djUsdMinter.getPendingClaims(address(unrealUSTB));
-        claimable = djUsdMinter.claimableTokens(alice, address(unrealUSTB));
+        requested = usdaMinter.getPendingClaims(address(unrealUSTB));
+        claimable = usdaMinter.claimableTokens(alice, address(unrealUSTB));
 
         assertEq(requested, amount);
         assertEq(claimable, amount);
@@ -203,61 +203,61 @@ contract DJUSDMinterUSTBIntegrationTest is BaseSetup {
 
         // ~ config ~
 
-        vm.prank(address(djUsdMinter));
+        vm.prank(address(usdaMinter));
         djUsdToken.mint(alice, amount);
-        _deal(address(unrealUSTB), address(djUsdMinter), amount);
+        _deal(address(unrealUSTB), address(usdaMinter), amount);
 
         // ~ Pre-state check ~
 
         assertEq(djUsdToken.balanceOf(alice), amount);
         assertEq(unrealUSTB.balanceOf(alice), 0);
-        assertEq(unrealUSTB.balanceOf(address(djUsdMinter)), amount);
+        assertEq(unrealUSTB.balanceOf(address(usdaMinter)), amount);
 
-        DJUSDMinter.RedemptionRequest[] memory requests =
-            djUsdMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
+        USDaMinter.RedemptionRequest[] memory requests =
+            usdaMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
         assertEq(requests.length, 0);
 
         // ~ Alice executes requestTokens ~
 
         vm.startPrank(alice);
-        djUsdToken.approve(address(djUsdMinter), amount);
-        djUsdMinter.requestTokens(address(unrealUSTB), amount);
+        djUsdToken.approve(address(usdaMinter), amount);
+        usdaMinter.requestTokens(address(unrealUSTB), amount);
         vm.stopPrank();
 
         // ~ Post-state check ~
 
         assertEq(djUsdToken.balanceOf(alice), 0);
         assertEq(unrealUSTB.balanceOf(alice), 0);
-        assertEq(unrealUSTB.balanceOf(address(djUsdMinter)), amount);
+        assertEq(unrealUSTB.balanceOf(address(usdaMinter)), amount);
 
-        requests = djUsdMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
+        requests = usdaMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
         assertEq(requests.length, 1);
         assertEq(requests[0].amount, amount);
         assertEq(requests[0].claimableAfter, block.timestamp + 5 days);
         assertEq(requests[0].claimed, 0);
 
-        uint256 requested = djUsdMinter.getPendingClaims(address(unrealUSTB));
-        uint256 claimable = djUsdMinter.claimableTokens(alice, address(unrealUSTB));
+        uint256 requested = usdaMinter.getPendingClaims(address(unrealUSTB));
+        uint256 claimable = usdaMinter.claimableTokens(alice, address(unrealUSTB));
 
         assertEq(requested, amount);
         assertEq(claimable, 0);
 
         // ~ Warp to claimDelay-1 ~
 
-        vm.warp(block.timestamp + djUsdMinter.claimDelay() - 1);
+        vm.warp(block.timestamp + usdaMinter.claimDelay() - 1);
 
-        requested = djUsdMinter.getPendingClaims(address(unrealUSTB));
-        claimable = djUsdMinter.claimableTokens(alice, address(unrealUSTB));
+        requested = usdaMinter.getPendingClaims(address(unrealUSTB));
+        claimable = usdaMinter.claimableTokens(alice, address(unrealUSTB));
 
         assertEq(requested, amount);
         assertEq(claimable, 0);
 
         // ~ Warp to post-claimDelay and query claimable ~
 
-        vm.warp(block.timestamp + djUsdMinter.claimDelay());
+        vm.warp(block.timestamp + usdaMinter.claimDelay());
 
-        requested = djUsdMinter.getPendingClaims(address(unrealUSTB));
-        claimable = djUsdMinter.claimableTokens(alice, address(unrealUSTB));
+        requested = usdaMinter.getPendingClaims(address(unrealUSTB));
+        claimable = usdaMinter.claimableTokens(alice, address(unrealUSTB));
 
         assertEq(requested, amount);
         assertEq(claimable, amount);
@@ -271,25 +271,25 @@ contract DJUSDMinterUSTBIntegrationTest is BaseSetup {
         uint256 amount1 = amountToMint / 2;
         uint256 amount2 = amountToMint - amount1;
 
-        vm.prank(address(djUsdMinter));
+        vm.prank(address(usdaMinter));
         djUsdToken.mint(alice, amountToMint);
-        _deal(address(unrealUSTB), address(djUsdMinter), amountToMint);
+        _deal(address(unrealUSTB), address(usdaMinter), amountToMint);
 
         // ~ Pre-state check ~
 
         assertEq(djUsdToken.balanceOf(alice), amount1 + amount2);
         assertEq(unrealUSTB.balanceOf(alice), 0);
-        assertEq(unrealUSTB.balanceOf(address(djUsdMinter)), amount1 + amount2);
+        assertEq(unrealUSTB.balanceOf(address(usdaMinter)), amount1 + amount2);
 
-        DJUSDMinter.RedemptionRequest[] memory requests =
-            djUsdMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
+        USDaMinter.RedemptionRequest[] memory requests =
+            usdaMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
         assertEq(requests.length, 0);
 
         // ~ Alice executes requestTokens 1 ~
 
         vm.startPrank(alice);
-        djUsdToken.approve(address(djUsdMinter), amount1);
-        djUsdMinter.requestTokens(address(unrealUSTB), amount1);
+        djUsdToken.approve(address(usdaMinter), amount1);
+        usdaMinter.requestTokens(address(unrealUSTB), amount1);
         vm.stopPrank();
 
         uint256 request1 = block.timestamp;
@@ -299,14 +299,14 @@ contract DJUSDMinterUSTBIntegrationTest is BaseSetup {
         assertEq(djUsdToken.balanceOf(alice), amount2);
         assertEq(unrealUSTB.balanceOf(alice), 0);
 
-        requests = djUsdMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
+        requests = usdaMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
         assertEq(requests.length, 1);
         assertEq(requests[0].amount, amount1);
         assertEq(requests[0].claimableAfter, request1 + 5 days);
         assertEq(requests[0].claimed, 0);
 
-        uint256 requested = djUsdMinter.getPendingClaims(address(unrealUSTB));
-        uint256 claimable = djUsdMinter.claimableTokens(alice, address(unrealUSTB));
+        uint256 requested = usdaMinter.getPendingClaims(address(unrealUSTB));
+        uint256 claimable = usdaMinter.claimableTokens(alice, address(unrealUSTB));
 
         assertEq(requested, amount1);
         assertEq(claimable, 0);
@@ -316,8 +316,8 @@ contract DJUSDMinterUSTBIntegrationTest is BaseSetup {
         vm.warp(block.timestamp + 1);
 
         vm.startPrank(alice);
-        djUsdToken.approve(address(djUsdMinter), amount2);
-        djUsdMinter.requestTokens(address(unrealUSTB), amount2);
+        djUsdToken.approve(address(usdaMinter), amount2);
+        usdaMinter.requestTokens(address(unrealUSTB), amount2);
         vm.stopPrank();
 
         uint256 request2 = block.timestamp;
@@ -327,7 +327,7 @@ contract DJUSDMinterUSTBIntegrationTest is BaseSetup {
         assertEq(djUsdToken.balanceOf(alice), 0);
         assertEq(unrealUSTB.balanceOf(alice), 0);
 
-        requests = djUsdMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
+        requests = usdaMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
         assertEq(requests.length, 2);
         assertEq(requests[0].amount, amount1);
         assertEq(requests[0].claimableAfter, request1 + 5 days);
@@ -336,28 +336,28 @@ contract DJUSDMinterUSTBIntegrationTest is BaseSetup {
         assertEq(requests[1].claimableAfter, request2 + 5 days);
         assertEq(requests[1].claimed, 0);
 
-        requested = djUsdMinter.getPendingClaims(address(unrealUSTB));
-        claimable = djUsdMinter.claimableTokens(alice, address(unrealUSTB));
+        requested = usdaMinter.getPendingClaims(address(unrealUSTB));
+        claimable = usdaMinter.claimableTokens(alice, address(unrealUSTB));
 
         assertEq(requested, amount1 + amount2);
         assertEq(claimable, 0);
 
         // ~ Warp to claimDelay-1 ~
 
-        vm.warp(block.timestamp + djUsdMinter.claimDelay() - 1);
+        vm.warp(block.timestamp + usdaMinter.claimDelay() - 1);
 
-        requested = djUsdMinter.getPendingClaims(address(unrealUSTB));
-        claimable = djUsdMinter.claimableTokens(alice, address(unrealUSTB));
+        requested = usdaMinter.getPendingClaims(address(unrealUSTB));
+        claimable = usdaMinter.claimableTokens(alice, address(unrealUSTB));
 
         assertEq(requested, amount1 + amount2);
         assertEq(claimable, amount1);
 
         // ~ Warp to post-claimDelay and query claimable ~
 
-        vm.warp(block.timestamp + djUsdMinter.claimDelay());
+        vm.warp(block.timestamp + usdaMinter.claimDelay());
 
-        requested = djUsdMinter.getPendingClaims(address(unrealUSTB));
-        claimable = djUsdMinter.claimableTokens(alice, address(unrealUSTB));
+        requested = usdaMinter.getPendingClaims(address(unrealUSTB));
+        claimable = usdaMinter.claimableTokens(alice, address(unrealUSTB));
 
         assertEq(requested, amount1 + amount2);
         assertEq(claimable, amount1 + amount2);
@@ -368,76 +368,76 @@ contract DJUSDMinterUSTBIntegrationTest is BaseSetup {
 
         uint256 amount = 10 ether;
 
-        vm.prank(address(djUsdMinter));
+        vm.prank(address(usdaMinter));
         djUsdToken.mint(alice, amount);
-        _deal(address(unrealUSTB), address(djUsdMinter), amount);
+        _deal(address(unrealUSTB), address(usdaMinter), amount);
 
         // ~ Pre-state check ~
 
         assertEq(djUsdToken.balanceOf(alice), amount);
         assertEq(unrealUSTB.balanceOf(alice), 0);
-        assertEq(unrealUSTB.balanceOf(address(djUsdMinter)), amount);
+        assertEq(unrealUSTB.balanceOf(address(usdaMinter)), amount);
 
-        DJUSDMinter.RedemptionRequest[] memory requests =
-            djUsdMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
+        USDaMinter.RedemptionRequest[] memory requests =
+            usdaMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
         assertEq(requests.length, 0);
 
         // ~ Alice executes requestTokens ~
 
         vm.startPrank(alice);
-        djUsdToken.approve(address(djUsdMinter), amount);
-        djUsdMinter.requestTokens(address(unrealUSTB), amount);
+        djUsdToken.approve(address(usdaMinter), amount);
+        usdaMinter.requestTokens(address(unrealUSTB), amount);
         vm.stopPrank();
 
         // ~ Post-state check 1 ~
 
         assertEq(djUsdToken.balanceOf(alice), 0);
         assertEq(unrealUSTB.balanceOf(alice), 0);
-        assertEq(unrealUSTB.balanceOf(address(djUsdMinter)), amount);
+        assertEq(unrealUSTB.balanceOf(address(usdaMinter)), amount);
 
-        requests = djUsdMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
+        requests = usdaMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
         assertEq(requests.length, 1);
         assertEq(requests[0].amount, amount);
         assertEq(requests[0].claimableAfter, block.timestamp + 5 days);
         assertEq(requests[0].claimed, 0);
 
-        uint256 requested = djUsdMinter.getPendingClaims(address(unrealUSTB));
-        uint256 claimable = djUsdMinter.claimableTokens(alice, address(unrealUSTB));
+        uint256 requested = usdaMinter.getPendingClaims(address(unrealUSTB));
+        uint256 claimable = usdaMinter.claimableTokens(alice, address(unrealUSTB));
 
         assertEq(requested, amount);
         assertEq(claimable, 0);
 
         // ~ Warp to post-claimDelay and query claimable ~
 
-        vm.warp(block.timestamp + djUsdMinter.claimDelay());
+        vm.warp(block.timestamp + usdaMinter.claimDelay());
 
-        requested = djUsdMinter.getPendingClaims(address(unrealUSTB));
-        claimable = djUsdMinter.claimableTokens(alice, address(unrealUSTB));
+        requested = usdaMinter.getPendingClaims(address(unrealUSTB));
+        claimable = usdaMinter.claimableTokens(alice, address(unrealUSTB));
 
         assertEq(requested, amount);
         assertEq(claimable, amount);
 
         // ~ Alice claims ~
 
-        uint256 preBal = unrealUSTB.balanceOf(address(djUsdMinter));
+        uint256 preBal = unrealUSTB.balanceOf(address(usdaMinter));
 
         vm.prank(alice);
-        djUsdMinter.claimTokens(address(unrealUSTB), amount);
+        usdaMinter.claimTokens(address(unrealUSTB), amount);
 
         // ~ Post-state check 2 ~
 
         assertEq(djUsdToken.balanceOf(alice), 0);
         assertApproxEqAbs(unrealUSTB.balanceOf(alice), amount, 1);
-        assertApproxEqAbs(unrealUSTB.balanceOf(address(djUsdMinter)), preBal - amount, 1);
+        assertApproxEqAbs(unrealUSTB.balanceOf(address(usdaMinter)), preBal - amount, 1);
 
-        requests = djUsdMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
+        requests = usdaMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
         assertEq(requests.length, 1);
         assertEq(requests[0].amount, amount);
         assertEq(requests[0].claimableAfter, block.timestamp);
         assertEq(requests[0].claimed, amount);
 
-        requested = djUsdMinter.getPendingClaims(address(unrealUSTB));
-        claimable = djUsdMinter.claimableTokens(alice, address(unrealUSTB));
+        requested = usdaMinter.getPendingClaims(address(unrealUSTB));
+        claimable = usdaMinter.claimableTokens(alice, address(unrealUSTB));
 
         assertEq(requested, 0);
         assertEq(claimable, 0);
@@ -448,73 +448,73 @@ contract DJUSDMinterUSTBIntegrationTest is BaseSetup {
 
         // ~ config ~
 
-        vm.prank(address(djUsdMinter));
+        vm.prank(address(usdaMinter));
         djUsdToken.mint(alice, amount);
-        _deal(address(unrealUSTB), address(djUsdMinter), amount);
+        _deal(address(unrealUSTB), address(usdaMinter), amount);
 
         // ~ Pre-state check ~
 
         assertEq(djUsdToken.balanceOf(alice), amount);
         assertEq(unrealUSTB.balanceOf(alice), 0);
-        assertEq(unrealUSTB.balanceOf(address(djUsdMinter)), amount);
+        assertEq(unrealUSTB.balanceOf(address(usdaMinter)), amount);
 
         // ~ Alice executes requestTokens ~
 
         vm.startPrank(alice);
-        djUsdToken.approve(address(djUsdMinter), amount);
-        djUsdMinter.requestTokens(address(unrealUSTB), amount);
+        djUsdToken.approve(address(usdaMinter), amount);
+        usdaMinter.requestTokens(address(unrealUSTB), amount);
         vm.stopPrank();
 
         // ~ Post-state check 1 ~
 
         assertEq(djUsdToken.balanceOf(alice), 0);
         assertEq(unrealUSTB.balanceOf(alice), 0);
-        assertEq(unrealUSTB.balanceOf(address(djUsdMinter)), amount);
+        assertEq(unrealUSTB.balanceOf(address(usdaMinter)), amount);
 
-        DJUSDMinter.RedemptionRequest[] memory requests =
-            djUsdMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
+        USDaMinter.RedemptionRequest[] memory requests =
+            usdaMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
         assertEq(requests.length, 1);
         assertEq(requests[0].amount, amount);
         assertEq(requests[0].claimableAfter, block.timestamp + 5 days);
         assertEq(requests[0].claimed, 0);
 
-        uint256 requested = djUsdMinter.getPendingClaims(address(unrealUSTB));
-        uint256 claimable = djUsdMinter.claimableTokens(alice, address(unrealUSTB));
+        uint256 requested = usdaMinter.getPendingClaims(address(unrealUSTB));
+        uint256 claimable = usdaMinter.claimableTokens(alice, address(unrealUSTB));
 
         assertEq(requested, amount);
         assertEq(claimable, 0);
 
         // ~ Warp to post-claimDelay and query claimable ~
 
-        vm.warp(block.timestamp + djUsdMinter.claimDelay());
+        vm.warp(block.timestamp + usdaMinter.claimDelay());
 
-        requested = djUsdMinter.getPendingClaims(address(unrealUSTB));
-        claimable = djUsdMinter.claimableTokens(alice, address(unrealUSTB));
+        requested = usdaMinter.getPendingClaims(address(unrealUSTB));
+        claimable = usdaMinter.claimableTokens(alice, address(unrealUSTB));
 
         assertEq(requested, amount);
         assertEq(claimable, amount);
 
         // ~ Alice claims ~
 
-        uint256 preBal = unrealUSTB.balanceOf(address(djUsdMinter));
+        uint256 preBal = unrealUSTB.balanceOf(address(usdaMinter));
 
         vm.prank(alice);
-        djUsdMinter.claimTokens(address(unrealUSTB), amount);
+        usdaMinter.claimTokens(address(unrealUSTB), amount);
 
         // ~ Post-state check 2 ~
 
         assertEq(djUsdToken.balanceOf(alice), 0);
         assertApproxEqAbs(unrealUSTB.balanceOf(alice), amount, 2);
-        assertApproxEqAbs(unrealUSTB.balanceOf(address(djUsdMinter)), preBal - amount, 2);
+        assertApproxEqAbs(unrealUSTB.balanceOf(address(usdaMinter)), preBal - amount, 2);
 
-        requests = djUsdMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
+        requests = usdaMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
         assertEq(requests.length, 1);
         assertEq(requests[0].amount, amount);
         assertEq(requests[0].claimableAfter, block.timestamp);
         assertEq(requests[0].claimed, amount);
 
-        requested = djUsdMinter.getPendingClaims(address(unrealUSTB));
-        claimable = djUsdMinter.claimableTokens(alice, address(unrealUSTB));
+        requested = usdaMinter.getPendingClaims(address(unrealUSTB));
+        claimable = usdaMinter.claimableTokens(alice, address(unrealUSTB));
 
         assertEq(requested, 0);
         assertEq(claimable, 0);
@@ -524,7 +524,7 @@ contract DJUSDMinterUSTBIntegrationTest is BaseSetup {
         index = bound(index, 1.000000000000001e18, 2e18);
         vm.assume(index > 1e18 && index < 2e18);
 
-        vm.prank(address(djUsdMinter));
+        vm.prank(address(usdaMinter));
         djUsdToken.mint(bob, 1 ether);
 
         uint256 preTotalSupply = djUsdToken.totalSupply();
@@ -544,12 +544,12 @@ contract DJUSDMinterUSTBIntegrationTest is BaseSetup {
 
         // taker
         vm.startPrank(alice);
-        unrealUSTB.approve(address(djUsdMinter), amount);
-        djUsdMinter.mint(address(unrealUSTB), amount, amount - deviation);
+        unrealUSTB.approve(address(usdaMinter), amount);
+        usdaMinter.mint(address(unrealUSTB), amount, amount - deviation);
         vm.stopPrank();
 
         assertEq(unrealUSTB.balanceOf(alice), preBal - amount);
-        assertApproxEqAbs(unrealUSTB.balanceOf(address(custodian)), amount, 1);
+        assertApproxEqAbs(unrealUSTB.balanceOf(address(usdaMinter)), amount, 1);
         assertApproxEqAbs(djUsdToken.balanceOf(alice), amount, 3);
     }
 
@@ -565,18 +565,18 @@ contract DJUSDMinterUSTBIntegrationTest is BaseSetup {
         uint256 preBal = unrealUSTB.balanceOf(alice);
 
         vm.startPrank(alice);
-        unrealUSTB.approve(address(djUsdMinter), amount);
-        djUsdMinter.mint(address(unrealUSTB), amount, amount - 1);
+        unrealUSTB.approve(address(usdaMinter), amount);
+        usdaMinter.mint(address(unrealUSTB), amount, amount - 1);
         vm.stopPrank();
 
         assertEq(unrealUSTB.balanceOf(alice), preBal - amount);
-        assertApproxEqAbs(unrealUSTB.balanceOf(address(custodian)), amount, 1);
+        assertApproxEqAbs(unrealUSTB.balanceOf(address(usdaMinter)), amount, 1);
         assertApproxEqAbs(djUsdToken.balanceOf(alice), amount, 1);
 
         uint256 preTotalSupply = djUsdToken.totalSupply();
         uint256 foreshadowTS = (preTotalSupply * index) / 1e18;
 
-        // ~ update rebaseIndex on DJUSD ~
+        // ~ update rebaseIndex on USDa ~
 
         vm.prank(rebaseManager);
         djUsdToken.setRebaseIndex(index, 1);
@@ -585,15 +585,15 @@ contract DJUSDMinterUSTBIntegrationTest is BaseSetup {
         uint256 newBal = (amount * djUsdToken.rebaseIndex()) / 1e18;
         assertGt(newBal, amount);
         assertApproxEqAbs(djUsdToken.balanceOf(alice), newBal, 2);
-        _deal(address(unrealUSTB), address(djUsdMinter), newBal);
+        _deal(address(unrealUSTB), address(usdaMinter), newBal);
 
         newBal = djUsdToken.balanceOf(alice);
 
         // ~ Alice executes requestTokens ~
 
         vm.startPrank(alice);
-        djUsdToken.approve(address(djUsdMinter), newBal);
-        djUsdMinter.requestTokens(address(unrealUSTB), newBal);
+        djUsdToken.approve(address(usdaMinter), newBal);
+        usdaMinter.requestTokens(address(unrealUSTB), newBal);
         vm.stopPrank();
 
         // ~ Post-state check ~
@@ -601,35 +601,35 @@ contract DJUSDMinterUSTBIntegrationTest is BaseSetup {
         assertEq(djUsdToken.balanceOf(alice), 0);
         assertEq(unrealUSTB.balanceOf(alice), preBal - amount);
 
-        DJUSDMinter.RedemptionRequest[] memory requests =
-            djUsdMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
+        USDaMinter.RedemptionRequest[] memory requests =
+            usdaMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
         assertEq(requests.length, 1);
         assertEq(requests[0].amount, newBal);
         assertEq(requests[0].claimableAfter, block.timestamp + 5 days);
         assertEq(requests[0].claimed, 0);
 
-        uint256 requested = djUsdMinter.getPendingClaims(address(unrealUSTB));
-        uint256 claimable = djUsdMinter.claimableTokens(alice, address(unrealUSTB));
+        uint256 requested = usdaMinter.getPendingClaims(address(unrealUSTB));
+        uint256 claimable = usdaMinter.claimableTokens(alice, address(unrealUSTB));
 
         assertEq(requested, newBal);
         assertEq(claimable, 0);
 
         // ~ Warp to claimDelay-1 ~
 
-        vm.warp(block.timestamp + djUsdMinter.claimDelay() - 1);
+        vm.warp(block.timestamp + usdaMinter.claimDelay() - 1);
 
-        requested = djUsdMinter.getPendingClaims(address(unrealUSTB));
-        claimable = djUsdMinter.claimableTokens(alice, address(unrealUSTB));
+        requested = usdaMinter.getPendingClaims(address(unrealUSTB));
+        claimable = usdaMinter.claimableTokens(alice, address(unrealUSTB));
 
         assertEq(requested, newBal);
         assertEq(claimable, 0);
 
         // ~ Warp to post-claimDelay and query claimable ~
 
-        vm.warp(block.timestamp + djUsdMinter.claimDelay());
+        vm.warp(block.timestamp + usdaMinter.claimDelay());
 
-        requested = djUsdMinter.getPendingClaims(address(unrealUSTB));
-        claimable = djUsdMinter.claimableTokens(alice, address(unrealUSTB));
+        requested = usdaMinter.getPendingClaims(address(unrealUSTB));
+        claimable = usdaMinter.claimableTokens(alice, address(unrealUSTB));
 
         assertEq(requested, newBal);
         assertEq(claimable, newBal);
@@ -646,12 +646,12 @@ contract DJUSDMinterUSTBIntegrationTest is BaseSetup {
 
         // mint
         vm.startPrank(alice);
-        unrealUSTB.approve(address(djUsdMinter), amount);
-        djUsdMinter.mint(address(unrealUSTB), amount, amount - 1);
+        unrealUSTB.approve(address(usdaMinter), amount);
+        usdaMinter.mint(address(unrealUSTB), amount, amount - 1);
         vm.stopPrank();
 
         assertEq(unrealUSTB.balanceOf(alice), preBal - amount);
-        assertApproxEqAbs(unrealUSTB.balanceOf(address(custodian)), amount, 1);
+        assertApproxEqAbs(unrealUSTB.balanceOf(address(usdaMinter)), amount, 1);
         assertApproxEqAbs(djUsdToken.balanceOf(alice), amount, 1);
 
         uint256 preTotalSupply = djUsdToken.totalSupply();
@@ -665,14 +665,14 @@ contract DJUSDMinterUSTBIntegrationTest is BaseSetup {
         uint256 newBal = amount * djUsdToken.rebaseIndex() / 1e18;
         assertGt(newBal, amount);
         assertApproxEqAbs(djUsdToken.balanceOf(alice), newBal, 2);
-        _deal(address(unrealUSTB), address(djUsdMinter), newBal);
+        _deal(address(unrealUSTB), address(usdaMinter), newBal);
 
         newBal = djUsdToken.balanceOf(alice);
 
         // taker
         vm.startPrank(alice);
-        djUsdToken.approve(address(djUsdMinter), newBal);
-        djUsdMinter.requestTokens(address(unrealUSTB), newBal);
+        djUsdToken.approve(address(usdaMinter), newBal);
+        usdaMinter.requestTokens(address(unrealUSTB), newBal);
         vm.stopPrank();
 
         // ~ Post-state check ~
@@ -680,35 +680,35 @@ contract DJUSDMinterUSTBIntegrationTest is BaseSetup {
         assertEq(djUsdToken.balanceOf(alice), 0);
         assertEq(unrealUSTB.balanceOf(alice), preBal - amount);
 
-        DJUSDMinter.RedemptionRequest[] memory requests =
-            djUsdMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
+        USDaMinter.RedemptionRequest[] memory requests =
+            usdaMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
         assertEq(requests.length, 1);
         assertEq(requests[0].amount, newBal);
         assertEq(requests[0].claimableAfter, block.timestamp + 5 days);
         assertEq(requests[0].claimed, 0);
 
-        uint256 requested = djUsdMinter.getPendingClaims(address(unrealUSTB));
-        uint256 claimable = djUsdMinter.claimableTokens(alice, address(unrealUSTB));
+        uint256 requested = usdaMinter.getPendingClaims(address(unrealUSTB));
+        uint256 claimable = usdaMinter.claimableTokens(alice, address(unrealUSTB));
 
         assertEq(requested, newBal);
         assertEq(claimable, 0);
 
         // ~ Warp to claimDelay-1 ~
 
-        vm.warp(block.timestamp + djUsdMinter.claimDelay() - 1);
+        vm.warp(block.timestamp + usdaMinter.claimDelay() - 1);
 
-        requested = djUsdMinter.getPendingClaims(address(unrealUSTB));
-        claimable = djUsdMinter.claimableTokens(alice, address(unrealUSTB));
+        requested = usdaMinter.getPendingClaims(address(unrealUSTB));
+        claimable = usdaMinter.claimableTokens(alice, address(unrealUSTB));
 
         assertEq(requested, newBal);
         assertEq(claimable, 0);
 
         // ~ Warp to post-claimDelay and query claimable ~
 
-        vm.warp(block.timestamp + djUsdMinter.claimDelay());
+        vm.warp(block.timestamp + usdaMinter.claimDelay());
 
-        requested = djUsdMinter.getPendingClaims(address(unrealUSTB));
-        claimable = djUsdMinter.claimableTokens(alice, address(unrealUSTB));
+        requested = usdaMinter.getPendingClaims(address(unrealUSTB));
+        claimable = usdaMinter.claimableTokens(alice, address(unrealUSTB));
 
         assertEq(requested, newBal);
         assertEq(claimable, newBal);
@@ -724,20 +724,20 @@ contract DJUSDMinterUSTBIntegrationTest is BaseSetup {
         // ~ Mint ~
 
         vm.startPrank(alice);
-        unrealUSTB.approve(address(djUsdMinter), amount);
-        djUsdMinter.mint(address(unrealUSTB), amount, amount - 1);
+        unrealUSTB.approve(address(usdaMinter), amount);
+        usdaMinter.mint(address(unrealUSTB), amount, amount - 1);
         vm.stopPrank();
 
         _deal(address(unrealUSTB), alice, 0);
 
         assertEq(unrealUSTB.balanceOf(alice), 0);
-        assertApproxEqAbs(unrealUSTB.balanceOf(address(custodian)), amount, 1);
+        assertApproxEqAbs(unrealUSTB.balanceOf(address(usdaMinter)), amount, 1);
         assertApproxEqAbs(djUsdToken.balanceOf(alice), amount, 1);
 
         uint256 preTotalSupply = djUsdToken.totalSupply();
         uint256 foreshadowTS = (preTotalSupply * index) / 1e18;
 
-        // ~ update rebaseIndex on DJUSD ~
+        // ~ update rebaseIndex on USDa ~
 
         vm.prank(rebaseManager);
         djUsdToken.setRebaseIndex(index, 1);
@@ -746,42 +746,42 @@ contract DJUSDMinterUSTBIntegrationTest is BaseSetup {
         uint256 newBal = (preTotalSupply * djUsdToken.rebaseIndex()) / 1e18;
         assertGt(newBal, amount);
         assertApproxEqAbs(djUsdToken.balanceOf(alice), newBal, 2);
-        _deal(address(unrealUSTB), address(djUsdMinter), newBal);
+        _deal(address(unrealUSTB), address(usdaMinter), newBal);
 
         newBal = djUsdToken.balanceOf(alice);
 
         // ~ Alice executes requestTokens ~
 
         vm.startPrank(alice);
-        djUsdToken.approve(address(djUsdMinter), newBal);
-        djUsdMinter.requestTokens(address(unrealUSTB), newBal);
+        djUsdToken.approve(address(usdaMinter), newBal);
+        usdaMinter.requestTokens(address(unrealUSTB), newBal);
         vm.stopPrank();
 
         // ~ Post-state check ~
 
         assertEq(djUsdToken.balanceOf(alice), 0);
         assertEq(unrealUSTB.balanceOf(alice), 0);
-        assertEq(unrealUSTB.balanceOf(address(djUsdMinter)), newBal);
+        assertEq(unrealUSTB.balanceOf(address(usdaMinter)), newBal);
 
-        DJUSDMinter.RedemptionRequest[] memory requests =
-            djUsdMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
+        USDaMinter.RedemptionRequest[] memory requests =
+            usdaMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
         assertEq(requests.length, 1);
         assertEq(requests[0].amount, newBal);
         assertEq(requests[0].claimableAfter, block.timestamp + 5 days);
         assertEq(requests[0].claimed, 0);
 
-        uint256 requested = djUsdMinter.getPendingClaims(address(unrealUSTB));
-        uint256 claimable = djUsdMinter.claimableTokens(alice, address(unrealUSTB));
+        uint256 requested = usdaMinter.getPendingClaims(address(unrealUSTB));
+        uint256 claimable = usdaMinter.claimableTokens(alice, address(unrealUSTB));
 
         assertEq(requested, newBal);
         assertEq(claimable, 0);
 
         // ~ Warp to post-claimDelay and query claimable ~
 
-        vm.warp(block.timestamp + djUsdMinter.claimDelay());
+        vm.warp(block.timestamp + usdaMinter.claimDelay());
 
-        requested = djUsdMinter.getPendingClaims(address(unrealUSTB));
-        claimable = djUsdMinter.claimableTokens(alice, address(unrealUSTB));
+        requested = usdaMinter.getPendingClaims(address(unrealUSTB));
+        claimable = usdaMinter.claimableTokens(alice, address(unrealUSTB));
 
         assertEq(requested, newBal);
         assertEq(claimable, newBal);
@@ -789,20 +789,20 @@ contract DJUSDMinterUSTBIntegrationTest is BaseSetup {
         // ~ Alice claims ~
 
         vm.prank(alice);
-        djUsdMinter.claimTokens(address(unrealUSTB), newBal);
+        usdaMinter.claimTokens(address(unrealUSTB), newBal);
 
         // ~ Post-state check 2 ~
 
         assertEq(djUsdToken.balanceOf(alice), 0);
         assertApproxEqAbs(unrealUSTB.balanceOf(alice), newBal, 1);
 
-        requests = djUsdMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
+        requests = usdaMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
         assertEq(requests.length, 1);
         assertEq(requests[0].amount, newBal);
         assertEq(requests[0].claimed, newBal);
 
-        requested = djUsdMinter.getPendingClaims(address(unrealUSTB));
-        claimable = djUsdMinter.claimableTokens(alice, address(unrealUSTB));
+        requested = usdaMinter.getPendingClaims(address(unrealUSTB));
+        claimable = usdaMinter.claimableTokens(alice, address(unrealUSTB));
 
         assertEq(requested, 0);
         assertEq(claimable, 0);

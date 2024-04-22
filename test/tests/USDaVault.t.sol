@@ -8,26 +8,26 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 // local files
 import {BaseSetup} from "../BaseSetup.sol";
-import {DJUSDPointsBoostVault} from "../../src/DJUSDPointsBoostingVault.sol";
+import {USDaPointsBoostVault} from "../../src/USDaPointsBoostingVault.sol";
 
 /**
- * @title DJUSDVaultTest
- * @notice Unit Tests for DJUSDPointsBoostVault contract interactions
+ * @title USDaVaultTest
+ * @notice Unit Tests for USDaPointsBoostVault contract interactions
  */
-contract DJUSDVaultTest is BaseSetup {
+contract USDaVaultTest is BaseSetup {
     function setUp() public override {
         super.setUp();
     }
 
     function test_vault_init_state() public {
-        assertEq(djUsdVault.DJUSD(), address(djUsdToken));
+        assertEq(djUsdVault.USDa(), address(djUsdToken));
     }
 
     function test_vault_deposit() public {
         // ~ Config ~
 
         uint256 amount = 10 ether;
-        vm.prank(address(djUsdMinter));
+        vm.prank(address(usdaMinter));
         djUsdToken.mint(bob, amount);
 
         // ~ Pre-state check ~
@@ -60,7 +60,7 @@ contract DJUSDVaultTest is BaseSetup {
 
         // ~ Config ~
 
-        vm.prank(address(djUsdMinter));
+        vm.prank(address(usdaMinter));
         djUsdToken.mint(bob, amount);
 
         if (disableRebase) {
@@ -95,7 +95,7 @@ contract DJUSDVaultTest is BaseSetup {
 
         uint256 amount = 10 ether;
         deal(address(djUsdVault), bob, amount);
-        vm.prank(address(djUsdMinter));
+        vm.prank(address(usdaMinter));
         djUsdToken.mint(address(djUsdVault), amount);
 
         // ~ Pre-state check ~
@@ -127,7 +127,7 @@ contract DJUSDVaultTest is BaseSetup {
         // ~ Config ~
 
         deal(address(djUsdVault), bob, amount);
-        vm.prank(address(djUsdMinter));
+        vm.prank(address(usdaMinter));
         djUsdToken.mint(address(djUsdVault), amount);
 
         if (disableRebase) {
@@ -165,7 +165,7 @@ contract DJUSDVaultTest is BaseSetup {
 
         uint256 amount = 10 ether;
         deal(address(djUsdVault), bob, amount);
-        vm.prank(address(djUsdMinter));
+        vm.prank(address(usdaMinter));
         djUsdToken.mint(address(djUsdVault), amount);
 
         // ~ Pre-state check ~

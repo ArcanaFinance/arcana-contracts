@@ -18,7 +18,7 @@ import {RebaseTokenMath} from "@tangible/contracts/libraries/RebaseTokenMath.sol
 
 // interfaces
 import {CommonErrors} from "./interfaces/CommonErrors.sol";
-import {IDJUSD} from "./interfaces/IDJUSD.sol";
+import {IUSDa} from "./interfaces/IUSDa.sol";
 import {IOracle} from "./interfaces/IOracle.sol";
 import {IRebaseToken} from "./interfaces/IRebaseToken.sol";
 
@@ -26,12 +26,12 @@ import {IRebaseToken} from "./interfaces/IRebaseToken.sol";
 import {CommonValidations} from "./libraries/CommonValidations.sol";
 
 /**
- * @title DJUSD Minter
+ * @title USDa Minter
  * @author Caesar LaVey
  *
- * @notice DJUSDMinter facilitates the minting and redemption process of DJUSD tokens against various supported assets.
- * It allows for adding and removing assets and custodians, minting DJUSD by depositing assets, and requesting
- * redemption of DJUSD for assets. The contract uses a delay mechanism for redemptions to enhance security and manages
+ * @notice USDaMinter facilitates the minting and redemption process of USDa tokens against various supported assets.
+ * It allows for adding and removing assets and custodians, minting USDa by depositing assets, and requesting
+ * redemption of USDa for assets. The contract uses a delay mechanism for redemptions to enhance security and manages
  * custody transfers of assets to designated custodians.
  *
  * @dev The contract leverages OpenZeppelin's upgradeable contracts to ensure future improvements can be made without
@@ -41,7 +41,7 @@ import {CommonValidations} from "./libraries/CommonValidations.sol";
  * `IERC6372` for interoperability with other contract systems. The constructor is replaced by an initializer function
  * to support proxy deployment.
  */
-contract DJUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable, CommonErrors, IERC6372 {
+contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable, CommonErrors, IERC6372 {
     using Arrays for uint256[];
     using CommonValidations for *;
     using EnumerableSet for EnumerableSet.AddressSet;
@@ -60,49 +60,48 @@ contract DJUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
         uint48 claimableAfter;
     }
 
-    /// @custom:storage-location erc7201:djinn.storage.DJUSDMinter
-    struct DJUSDMinterStorage {
-        uint8 activeAssetsLength;
-        uint48 claimDelay;
-        address custodian;
+    /// @custom:storage-location erc7201:arcana.storage.USDaMinter
+    struct USDaMinterStorage {
         EnumerableSet.AddressSet assets;
         mapping(address asset => AssetInfo) assetInfos;
         mapping(address asset => uint256) pendingClaims;
         mapping(address user => mapping(address asset => uint256)) firstUnclaimedIndex;
         mapping(address user => mapping(address asset => uint256[])) redemptionRequestsByAsset;
         mapping(address user => RedemptionRequest[]) redemptionRequests;
+        mapping(address user => bool) isWhitelisted;
         uint256 coverageRatio;
+        address custodian;
+        address admin;
+        address whitelister;
+        uint48 claimDelay;
+        uint8 activeAssetsLength;
     }
 
-    IDJUSD public immutable DJUSD;
+    IUSDa public immutable USDa;
 
-    // keccak256(abi.encode(uint256(keccak256("djinn.storage.DJUSDMinter")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant DJUSDMinterStorageLocation =
-        0x076ea32f4be917520eed196bef5b8986e4df8b1057872cb20bb9f7e8b6644f00;
+    // keccak256(abi.encode(uint256(keccak256("arcana.storage.USDaMinter")) - 1)) & ~bytes32(uint256(0xff))
+    bytes32 private constant USDaMinterStorageLocation =
+        0x70b533cc9d2662f7b017cf7a562919e2eb5c285358c6b5315aa15e465920a900;
 
-    function _getDJUSDMinterStorage() private pure returns (DJUSDMinterStorage storage $) {
+    function _getUSDaMinterStorage() private pure returns (USDaMinterStorage storage $) {
         // slither-disable-next-line assembly
         assembly {
-            $.slot := DJUSDMinterStorageLocation
+            $.slot := USDaMinterStorageLocation
         }
     }
 
     event AssetAdded(address indexed asset, address oracle);
     event AssetRemoved(address indexed asset);
     event AssetRestored(address indexed asset);
-
     event ClaimDelayUpdated(uint48 claimDelay);
-
     event CoverageRatioUpdated(uint256 ratio);
-
     event CustodianUpdated(address indexed custodian);
-
+    event AdminUpdated(address indexed admin);
+    event WhitelisterUpdated(address indexed whitelister);
+    event WhitelistStatusUpdated(address indexed whitelister, bool isWhitelisted);
     event CustodyTransfer(address indexed custodian, address indexed asset, uint256 amount);
-
     event Mint(address indexed user, address indexed asset, uint256 amount, uint256 received);
-
     event RebaseDisabled(address indexed asset);
-
     event TokensRequested(
         address indexed user, address indexed asset, uint256 indexed index, uint256 amount, uint256 claimableAfter
     );
@@ -114,11 +113,16 @@ contract DJUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
         uint256 oldClaimableAfter,
         uint256 newClaimableAfter
     );
-    event TokensClaimed(address indexed user, address indexed asset, uint256 djusdAmount, uint256 claimed);
+    event TokensClaimed(address indexed user, address indexed asset, uint256 usdaAmount, uint256 claimed);
 
     error InsufficientOutputAmount(uint256 expected, uint256 actual);
     error NotCustodian(address account);
     error NotSupportedAsset(address asset);
+    error NotAdmin(address account);
+    error NotWhitelisted(address account);
+    error NotWhitelister(address account);
+    error NoFundsWithdrawable(uint256 required, uint256 balance);
+    error InsufficientWithdrawable(uint256 canWithdraw, uint256 amount);
 
     /**
      * @dev Ensures that the function can only be called by the contract's designated custodian. This modifier enforces
@@ -126,9 +130,50 @@ contract DJUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
      * @custom:error NotCustodian Thrown if the caller is not the current custodian of the contract.
      */
     modifier onlyCustodian() {
-        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        USDaMinterStorage storage $ = _getUSDaMinterStorage();
         if (msg.sender != $.custodian) {
             revert NotCustodian(msg.sender);
+        }
+        _;
+    }
+
+    /**
+     * @dev Ensures that the function can only be called by the contract's designated admin. This modifier enforces
+     * role-based access control for sensitive functions that manage or alter asset states or user claims.
+     * @custom:error NotAdmin Thrown if the caller is not the current admin of the contract.
+     */
+    modifier onlyAdmin() {
+        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        if (msg.sender != $.admin && msg.sender != owner()) {
+            revert NotAdmin(msg.sender);
+        }
+        _;
+    }
+
+    /**
+     * @dev Ensures that the function can only be called by a whitelisted address. This modifier enforces
+     * role-based access control for minting and redeeming tokens. We use a whitelist mechanism to mitigate
+     * US-based users from interacting with the contract.
+     * @custom:error NotWhitelisted Thrown if the caller is not currently whitelisted.
+     */
+    modifier onlyWhitelisted() {
+        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        if (!$.isWhitelisted[msg.sender]) {
+            revert NotWhitelisted(msg.sender);
+        }
+        _;
+    }
+
+    /**
+     * @dev Ensures that the function can only be called by a whitelister address. This modifier enforces
+     * role-based access control for granting whitelist capabilities (mint, requestTokens, and claim) to EOAs.
+     * This address will most likely coincide with a gelato task for facilitating whitelists.
+     * @custom:error NotWhitelister Thrown if the caller is not the current whitelister of the contract.
+     */
+    modifier onlyWhitelister() {
+        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        if (msg.sender != $.whitelister && msg.sender != owner()) {
+            revert NotWhitelister(msg.sender);
         }
         _;
     }
@@ -145,7 +190,7 @@ contract DJUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
      * @param includeRemoved If true, the modifier allows the asset to be marked as removed in the list of assets.
      */
     modifier validAsset(address asset, bool includeRemoved) {
-        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        USDaMinterStorage storage $ = _getUSDaMinterStorage();
         if (!$.assets.contains(asset) || (!includeRemoved && $.assetInfos[asset].removed)) {
             revert NotSupportedAsset(asset);
         }
@@ -153,73 +198,48 @@ contract DJUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
     }
 
     /**
-     * @notice Initializes the DJUSDMinter contract with a reference to the DJUSD token contract.
-     * @dev This constructor sets the immutable DJUSD token contract address, ensuring that the DJUSDMinter contract
-     * always interacts with the correct instance of DJUSD.
+     * @notice Initializes the USDaMinter contract with a reference to the USDa token contract.
+     * @dev This constructor sets the immutable USDa token contract address, ensuring that the USDaMinter contract
+     * always interacts with the correct instance of USDa.
      * Since this is an upgradeable contract, the constructor does not perform any initialization logic that relies on
      * storage variables. Such logic is handled in the `initialize` function.
      * The constructor is only called once during the initial deployment before the contract is made upgradeable via a
      * proxy.
-     * @param djusd The address of the DJUSD token contract. This address is immutable and specifies the DJUSD instance
+     * @param usda The address of the USDa token contract. This address is immutable and specifies the USDa instance
      * that the minter will interact with.
      * @custom:oz-upgrades-unsafe-allow constructor
      */
-    constructor(IDJUSD djusd) {
-        DJUSD = djusd;
+    constructor(IUSDa usda) {
+        USDa = usda;
         _disableInitializers();
     }
 
     function _authorizeUpgrade(address) internal override onlyOwner {}
 
     /**
-     * @notice Initializes the DJUSDMinter contract post-deployment to set up initial state and configurations.
+     * @notice Initializes the USDaMinter contract post-deployment to set up initial state and configurations.
      * @dev This function initializes the contract with the OpenZeppelin upgradeable pattern. It sets the initial owner
      * of the contract and the initial claim delay for redemption requests.
      * It must be called immediately after deploying the proxy to ensure the contract is in a valid state. This replaces
      * the constructor logic for upgradeable contracts.
      * @param initialOwner The address that will be granted ownership of the contract, capable of performing
      * administrative actions.
+     * @param admin The address that has the ability to extend timestamp endTimes of redemption requests.
+     * @param whitelister The address capable of whitelisting EOAs, granting them the ability to mint, request redeems, and claim.
      * @param initialClaimDelay The initial delay time (in seconds) before which a redemption request becomes claimable.
      * This is a security measure to prevent immediate claims post-request.
      */
-    function initialize(address initialOwner, uint48 initialClaimDelay) public initializer {
+    function initialize(address initialOwner, address admin, address whitelister, uint48 initialClaimDelay) public initializer {
         __Ownable_init(initialOwner);
         __ReentrancyGuard_init();
         __UUPSUpgradeable_init();
 
-        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        $.admin = admin;
+        $.whitelister = whitelister;
         $.claimDelay = initialClaimDelay;
         $.coverageRatio = 1e18;
-    }
-
-    /**
-     * @inheritdoc IERC6372
-     */
-    function clock() public view returns (uint48) {
-        return Time.timestamp();
-    }
-
-    /**
-     * @inheritdoc IERC6372
-     */
-    // solhint-disable-next-line func-name-mixedcase
-    function CLOCK_MODE() external pure returns (string memory) {
-        return "mode=timestamp";
-    }
-
-    /**
-     * @notice Retrieves the current claim delay for redemption requests.
-     * @dev This function returns the duration in seconds that must pass before a redemption request becomes claimable.
-     * This is a security feature to prevent immediate withdrawals after requesting redemptions, providing a window for
-     * administrative checks.
-     * @return The current claim delay in seconds.
-     */
-    function claimDelay() external view returns (uint48) {
-        return _getDJUSDMinterStorage().claimDelay;
-    }
-
-    function coverageRatio() external view returns (uint256) { // TODO: NatSpec
-        return _getDJUSDMinterStorage().coverageRatio;
+        $.isWhitelisted[initialOwner] = true;
     }
 
     /**
@@ -231,39 +251,93 @@ contract DJUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
      * @param delay The new claim delay in seconds. Must be different from the current delay to be set successfully.
      */
     function setClaimDelay(uint48 delay) external onlyOwner {
-        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        USDaMinterStorage storage $ = _getUSDaMinterStorage();
         $.claimDelay.requireDifferentUint48(delay);
         $.claimDelay = delay;
         emit ClaimDelayUpdated(delay);
     }
 
-    function setCoverageRatio(uint256 ratio) external onlyOwner { // TODO: NatSpec & onlyOwner?
+    /**
+     * @notice This method allows the admin to update the coverageRatio.
+     * @dev The coverageRatio cannot be greater than 1e18. In the event the protocol's collateral is less than the amount needed
+     * to fund 100% of requests, this ratio would be set to sub-1e18 until the protocol goes back to 100%.
+     * @param ratio New ratio.
+     */
+    function setCoverageRatio(uint256 ratio) external onlyAdmin {
         ratio.requireLessThanOrEqualToUint256(1e18);
-        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        USDaMinterStorage storage $ = _getUSDaMinterStorage();
         $.coverageRatio.requireDifferentUint256(ratio);
         $.coverageRatio = ratio;
         emit CoverageRatioUpdated(ratio);
     }
 
     /**
-     * @notice Adds a new asset to the list of supported assets for minting DJUSD.
+     * @notice Allows the custodian to withdraw collateral from this contract.
+     * @dev This function takes into account the required assets and only allows the custodian to claim the difference
+     * between what is required and the balance in this contract assuming the balance is greater than what is required.
+     * @param asset ERC-20 asset being withdrawn from this contract. Does not need to be a valid collateral token.
+     * @param amount Amount of asset that is being withdrawn. Mustn't be greater than what is available (balance - required).
+     * @custom:error NotCustodian Thrown if the caller is not the custodian address.
+     * @custom:error NoFundsWithdrawable Thrown if there are no funds to be withdrawn or amount exceeds withdrawable.
+     * @custom:event CustodyTransfer Amount of asset transferred to what custodian.
+     */
+    function withdrawFunds(address asset, uint256 amount) external onlyCustodian {
+        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        uint256 required = $.pendingClaims[asset];
+        uint256 bal = IERC20(asset).balanceOf(address(this));
+
+        if (bal > required) {
+            address _custodian = $.custodian;
+            unchecked {
+                uint256 canSend = bal - required;
+                if (amount > canSend) revert InsufficientWithdrawable(canSend, amount);
+                IERC20(asset).safeTransfer(_custodian, amount);
+                emit CustodyTransfer(_custodian, asset, amount);
+            }
+        }
+        else {
+            revert NoFundsWithdrawable(required, bal);
+        }
+    }
+
+    /**
+     * @notice Allows the whitelister to change the whitelist status of an address.
+     * @dev The whitelist status of an address allows that address to execute mint, requestTokens, and claimTokens.
+     * These methods are protected by the whitelist role to stop any EOAs from restricted countries from interacting
+     * with the contract.
+     * @param account Address whitelist role is being udpated.
+     * @param isWhitelisted Status to set whitelist role to. If true, account is whitelisted.
+     * @custom:error NotWhitelister Thrown if the caller is not the whitelister address or owner.
+     * @custom:error InvalidZeroAddress Thrown if `account` is address(0).
+     * @custom:error ValueUnchanged Thrown if `isWhitelisted` is the current whitelist status of account.
+     */
+    function modifyWhitelist(address account, bool isWhitelisted) external onlyWhitelister {
+        account.requireNonZeroAddress();
+        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        $.isWhitelisted[account].requireDifferentBoolean(isWhitelisted);
+        $.isWhitelisted[account] = isWhitelisted;
+        emit WhitelistStatusUpdated(account, isWhitelisted);
+    }
+
+    /**
+     * @notice Adds a new asset to the list of supported assets for minting USDa.
      * @dev This function marks an asset as supported and disables rebasing for it if applicable. Only callable by the
-     * contract owner. It's essential for expanding the range of assets that can be used to mint DJUSD.
+     * contract owner. It's essential for expanding the range of assets that can be used to mint USDa.
      * Attempts to disable rebasing for the asset by calling `disableInitializers` on the asset contract. This is a
      * safety measure for assets that implement a rebase mechanism.
      * @param asset The address of the asset to add. Must be a contract address implementing the IERC20 interface.
      * @param oracle The address of the oracle contract that provides the asset's price feed.
      * @custom:error InvalidZeroAddress The asset address is the zero address.
-     * @custom:error InvalidAddress The asset address is the same as the DJUSD address.
+     * @custom:error InvalidAddress The asset address is the same as the USDa address.
      * @custom:error ValueUnchanged The asset is already supported.
      * @custom:event AssetAdded The address of the asset that was added.
      * @custom:event RebaseDisabled The address of the asset for which rebasing was disabled.
      */
     function addSupportedAsset(address asset, address oracle) external onlyOwner {
         asset.requireNonZeroAddress();
-        asset.requireNotEqual(address(DJUSD));
+        asset.requireNotEqual(address(USDa));
         oracle.requireNonZeroAddress();
-        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        USDaMinterStorage storage $ = _getUSDaMinterStorage();
         $.assets.requireAbsentAddress(asset);
         $.assets.add(asset);
         $.assetInfos[asset] = AssetInfo({oracle: oracle, removed: false});
@@ -277,7 +351,7 @@ contract DJUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
     }
 
     /**
-     * @notice Removes an asset from the list of supported assets for minting DJUSD, making it ineligible for future
+     * @notice Removes an asset from the list of supported assets for minting USDa, making it ineligible for future
      * operations until restored.
      * @dev This function allows the contract owner to temporarily remove an asset from the list of supported assets.
      * Removed assets can be restored using the `restoreAsset` function. It is crucial for managing the lifecycle and
@@ -287,7 +361,7 @@ contract DJUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
      * @custom:event AssetRemoved Logs the removal of the asset.
      */
     function removeSupportedAsset(address asset) external onlyOwner validAsset(asset, false) {
-        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        USDaMinterStorage storage $ = _getUSDaMinterStorage();
         $.assetInfos[asset].removed = true;
         $.activeAssetsLength--;
         emit AssetRemoved(asset);
@@ -306,20 +380,12 @@ contract DJUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
      * @custom:event AssetRestored Logs the restoration of the asset, making it active again.
      */
     function restoreAsset(address asset) external onlyOwner validAsset(asset, true) {
-        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        USDaMinterStorage storage $ = _getUSDaMinterStorage();
         AssetInfo storage assetInfo = $.assetInfos[asset];
         assetInfo.removed.requireDifferentBoolean(false);
         assetInfo.removed = false;
         $.activeAssetsLength++;
         emit AssetRestored(asset);
-    }
-
-    /**
-     * @notice Returns the custodian address stored in this contract
-     * @dev The custodian is the address where all collateral from supported assets are transferred during a mint.
-     */
-    function custodian() external view returns (address) {
-        return _getDJUSDMinterStorage().custodian;
     }
 
     /**
@@ -334,57 +400,80 @@ contract DJUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
      */
     function updateCustodian(address newCustodian) external onlyOwner {
         newCustodian.requireNonZeroAddress();
-        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        USDaMinterStorage storage $ = _getUSDaMinterStorage();
         $.custodian.requireDifferentAddress(newCustodian);
         $.custodian = newCustodian;
         emit CustodianUpdated(newCustodian);
     }
 
     /**
-     * @notice Checks if the specified asset is a supported asset that's acceptable collateral.
-     * @param asset The ERC-20 token in question.
-     * @return isSupported If true, the specified asset is a supported asset and therefore able to be used to mint
-     * DJUSD tokens 1:1.
+     * @notice Updates the admin state variable.
+     * @dev This function allows the contract owner to designate a new admin, capable of extending claimAfter times
+     * for requests and manipulating the coverageRatio variable.
+     * @param newAdmin The address of the new admin to be added.
+     * @custom:error InvalidZeroAddress The admin address is the zero address.
+     * @custom:error ValueUnchanged The admin is already set to the new address.
+     * @custom:event AdminUpdated The address of the admin that was added.
      */
-    function isSupportedAsset(address asset) external view returns (bool isSupported) {
-        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
-        isSupported = $.assets.contains(asset) && !$.assetInfos[asset].removed;
+    function updateAdmin(address newAdmin) external onlyOwner {
+        newAdmin.requireNonZeroAddress();
+        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        $.admin.requireDifferentAddress(newAdmin);
+        $.admin = newAdmin;
+        emit AdminUpdated(newAdmin);
     }
 
     /**
-     * @notice Mints DJUSD tokens in exchange for a specified amount of a supported asset, which is directly transferred
+     * @notice Updates the whitelister state variable.
+     * @dev This function allows the contract owner to designate a new whitelister, capable of modifying the whitelist
+     * status of EOA, granting them the ability to mint, requestTokens, and claimTokens.
+     * @param newWhitelister The address of the new whitelister to be added.
+     * @custom:error InvalidZeroAddress The whitelister address is the zero address.
+     * @custom:error ValueUnchanged The whitelister is already set to the new address.
+     * @custom:event WhitelisterUpdated The address of the whitelister that was added.
+     */
+    function updateWhitelister(address newWhitelister) external onlyOwner {
+        newWhitelister.requireNonZeroAddress();
+        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        $.whitelister.requireDifferentAddress(newWhitelister);
+        $.whitelister = newWhitelister;
+        emit WhitelisterUpdated(newWhitelister);
+    }
+
+    /**
+     * @notice Mints USDa tokens in exchange for a specified amount of a supported asset, which is directly transferred
      * to the custodian.
-     * @dev This function facilitates a user to deposit a supported asset directly to the custodian and receive DJUSD
+     * @dev This function facilitates a user to deposit a supported asset directly to the custodian and receive USDa
      * tokens in return.
      * The function ensures the asset is supported and employs non-reentrancy protection to prevent double spending.
-     * The actual amount of DJUSD minted equals the asset amount received by the custodian, which may vary due to
+     * The actual amount of USDa minted equals the asset amount received by the custodian, which may vary due to
      * transaction fees or adjustments.
      * The asset is pulled from the user to the custodian directly, ensuring transparency and traceability of asset
      * transfer.
      * @param asset The address of the supported asset to be deposited.
-     * @param amountIn The amount of the asset to be transferred from the user to the custodian in exchange for DJUSD.
-     * @return amountOut The amount of DJUSD minted and credited to the user's account.
+     * @param amountIn The amount of the asset to be transferred from the user to the custodian in exchange for USDa.
+     * @return amountOut The amount of USDa minted and credited to the user's account.
      * @custom:error NotSupportedAsset Indicates the asset is not supported for minting.
      * @custom:event Mint Logs the address of the user who minted, the asset address, the amount deposited, and the
-     * amount of DJUSD minted.
+     * amount of USDa minted.
      */
     function mint(address asset, uint256 amountIn, uint256 minAmountOut)
         external
         nonReentrant
         validAsset(asset, false)
+        onlyWhitelisted
         returns (uint256 amountOut)
     {
-        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        USDaMinterStorage storage $ = _getUSDaMinterStorage();
         address user = msg.sender;
-        address custodian_ = $.custodian;
 
-        amountIn = _pullAssets(user, custodian_, asset, amountIn);
+        amountIn = _pullAssets(user, asset, amountIn);
 
-        uint256 balanceBefore = DJUSD.balanceOf(user);
-        DJUSD.mint(user, IOracle($.assetInfos[asset].oracle).valueOf(amountIn, Math.Rounding.Floor));
+        uint256 balanceBefore = USDa.balanceOf(user);
+        USDa.mint(user, IOracle($.assetInfos[asset].oracle).valueOf(amountIn, Math.Rounding.Floor));
 
         unchecked {
-            amountOut = DJUSD.balanceOf(user) - balanceBefore;
+            amountOut = USDa.balanceOf(user) - balanceBefore;
         }
 
         if (amountOut < minAmountOut) {
@@ -395,21 +484,21 @@ contract DJUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
     }
 
     /**
-     * @notice Requests the redemption of DJUSD tokens for a specified amount of a supported asset.
-     * @dev Allows users to burn DJUSD tokens in exchange for a claim on a specified amount of a supported asset, after
+     * @notice Requests the redemption of USDa tokens for a specified amount of a supported asset.
+     * @dev Allows users to burn USDa tokens in exchange for a claim on a specified amount of a supported asset, after
      * a delay defined by `claimDelay`. The request is recorded and can be claimed after the delay period.
      * This function employs non-reentrancy protection and checks that the asset is supported. It burns the requested
-     * amount of DJUSD from the user's balance immediately.
+     * amount of USDa from the user's balance immediately.
      * @param asset The address of the supported asset the user wishes to claim.
-     * @param amount The amount of DJUSD the user wishes to redeem for the asset.
+     * @param amount The amount of USDa the user wishes to redeem for the asset.
      * @custom:error NotSupportedAsset The asset is not supported for redemption.
      * @custom:event TokensRequested The address of the user who requested, the asset address, the amount requested, and
      * the timestamp after which the claim can be made.
      */
-    function requestTokens(address asset, uint256 amount) external nonReentrant validAsset(asset, false) {
-        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+    function requestTokens(address asset, uint256 amount) external nonReentrant validAsset(asset, false) onlyWhitelisted {
+        USDaMinterStorage storage $ = _getUSDaMinterStorage();
         address user = msg.sender;
-        DJUSD.burnFrom(user, amount);
+        USDa.burnFrom(user, amount);
         $.pendingClaims[asset] += amount;
         uint48 claimableAfter = clock() + $.claimDelay;
         RedemptionRequest[] storage userRequests = $.redemptionRequests[user];
@@ -442,14 +531,92 @@ contract DJUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
      */
     function extendClaimTimestamp(address user, address asset, uint256 index, uint48 newClaimableAfter)
         external
-        onlyCustodian
+        onlyAdmin
     {
-        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        USDaMinterStorage storage $ = _getUSDaMinterStorage();
         RedemptionRequest storage request = $.redemptionRequests[user][index];
         uint48 claimableAfter = request.claimableAfter;
         claimableAfter.requireLessThanUint48(newClaimableAfter);
         request.claimableAfter = newClaimableAfter;
         emit TokenRequestUpdated(user, asset, index, request.amount, claimableAfter, newClaimableAfter);
+    }
+
+    /**
+     * @notice Returns the custodian address stored in this contract.
+     * @dev The custodian manages the collateral collected by this contract.
+     */
+    function custodian() external view returns (address) {
+        return _getUSDaMinterStorage().custodian;
+    }
+
+    /**
+     * @notice Returns the admin address stored in this contract.
+     * @dev The admin is responsible for extending request times and setting the coverage ratio.
+     */
+    function admin() external view returns (address) {
+        return _getUSDaMinterStorage().admin;
+    }
+
+    /**
+     * @notice Returns the whitelister address stored in this contract.
+     * @dev The whitelister is responsible for managing whitelist status of EOAs.
+     */
+    function whitelister() external view returns (address) {
+        return _getUSDaMinterStorage().whitelister;
+    }
+
+    /**
+     * @notice Returns if the specified account is whitelisted
+     * @dev If the account is whitelisted, they have the ability to call mint, requestTokens, and claimTokens.
+     */
+    function isWhitelisted(address account) external view returns (bool) {
+        return _getUSDaMinterStorage().isWhitelisted[account];
+    }
+
+    /**
+     * @inheritdoc IERC6372
+     */
+    function clock() public view returns (uint48) {
+        return Time.timestamp();
+    }
+
+    /**
+     * @inheritdoc IERC6372
+     */
+    // solhint-disable-next-line func-name-mixedcase
+    function CLOCK_MODE() external pure returns (string memory) {
+        return "mode=timestamp";
+    }
+
+    /**
+     * @notice Retrieves the current claim delay for redemption requests.
+     * @dev This function returns the duration in seconds that must pass before a redemption request becomes claimable.
+     * This is a security feature to prevent immediate withdrawals after requesting redemptions, providing a window for
+     * administrative checks.
+     * @return The current claim delay in seconds.
+     */
+    function claimDelay() external view returns (uint48) {
+        return _getUSDaMinterStorage().claimDelay;
+    }
+
+    /**
+     * @notice Returns the coverage ratio.
+     * @dev The coverage ratio would only be set to sub-1 in the event the amount of collateral collected wasnt enough
+     * to fund all requests.
+     */
+    function coverageRatio() external view returns (uint256) {
+        return _getUSDaMinterStorage().coverageRatio;
+    }
+
+    /**
+     * @notice Checks if the specified asset is a supported asset that's acceptable collateral.
+     * @param asset The ERC-20 token in question.
+     * @return isSupported If true, the specified asset is a supported asset and therefore able to be used to mint
+     * USDa tokens 1:1.
+     */
+    function isSupportedAsset(address asset) external view returns (bool isSupported) {
+        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        isSupported = $.assets.contains(asset) && !$.assetInfos[asset].removed;
     }
 
     /**
@@ -465,18 +632,23 @@ contract DJUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
      * @return amount The total amount of the specified asset that the user can currently claim.
      */
     function claimableTokens(address user, address asset)
-        public
+        external
         view
         validAsset(asset, true)
         returns (uint256 amount)
     {
+        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        uint256 ratio = $.coverageRatio;
+
         uint256 claimable = _calculateClaimableTokens(user, asset);
+        if (ratio < 1e18) claimable = claimable * ratio / 1e18; // TODO: Test
+
         uint256 available = IERC20(asset).balanceOf(address(this));
         return available < claimable ? available : claimable;
     }
 
     /**
-     * @notice Claims the requested supported assets in exchange for previously burned DJUSD tokens, if the claim delay
+     * @notice Claims the requested supported assets in exchange for previously burned USDa tokens, if the claim delay
      * has passed.
      * @dev This function allows users to claim supported assets for which they have previously made redemption requests
      * and the claim delay has elapsed.
@@ -488,8 +660,8 @@ contract DJUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
      * @custom:error InsufficientFunds The requested amount exceeds the claimable amount.
      * @custom:event TokensClaimed The address of the user who claimed, the asset address, and the amount claimed.
      */
-    function claimTokens(address asset, uint256 amount) external validAsset(asset, true) {
-        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+    function claimTokens(address asset, uint256 amount) external validAsset(asset, true) onlyWhitelisted {
+        USDaMinterStorage storage $ = _getUSDaMinterStorage();
         address user = msg.sender;
 
         uint256 toClaim = amount * $.coverageRatio / 1e18;
@@ -530,7 +702,7 @@ contract DJUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
         view
         returns (RedemptionRequest[] memory requests)
     {
-        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        USDaMinterStorage storage $ = _getUSDaMinterStorage();
         RedemptionRequest[] storage userRequests = $.redemptionRequests[user];
         uint256 numRequests = userRequests.length;
         if (from >= numRequests) {
@@ -573,7 +745,7 @@ contract DJUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
         view
         returns (RedemptionRequest[] memory requests)
     {
-        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        USDaMinterStorage storage $ = _getUSDaMinterStorage();
         RedemptionRequest[] storage userRequests = $.redemptionRequests[user];
         uint256[] storage userRequestsByAsset = $.redemptionRequestsByAsset[user][asset];
         uint256 numRequests = userRequestsByAsset.length;
@@ -607,7 +779,7 @@ contract DJUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
      * @return assets An array of addresses representing all assets that have been registered in the contract.
      */
     function getAllAssets() external view returns (address[] memory assets) {
-        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        USDaMinterStorage storage $ = _getUSDaMinterStorage();
         assets = $.assets.values();
     }
 
@@ -620,7 +792,7 @@ contract DJUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
      * @return assets An array of addresses representing all active assets in the contract.
      */
     function getActiveAssets() external view returns (address[] memory assets) {
-        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        USDaMinterStorage storage $ = _getUSDaMinterStorage();
 
         uint256 numAssets = $.assets.length();
         uint256 numActiveAssets = $.activeAssetsLength;
@@ -647,19 +819,19 @@ contract DJUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
      * @return amount Amount of asset that is pending claim in totality.
      */
     function getPendingClaims(address asset) external view returns (uint256 amount) {
-        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        USDaMinterStorage storage $ = _getUSDaMinterStorage();
         amount = $.pendingClaims[asset];
     }
 
     /**
-     * @notice Provides a quote of DJUSD tokens a user would receive if they used a specified amountIn of an asset to
-     * mint DJUSD.
+     * @notice Provides a quote of USDa tokens a user would receive if they used a specified amountIn of an asset to
+     * mint USDa.
      * @dev Accounts for the user's rebase opt-out status. If opted out, a 1:1 ratio is used. Otherwise, rebase
      * adjustments apply.
      * @param asset The address of the supported asset to calculate the quote for.
      * @param from The account whose opt-out status to check.
-     * @param amountIn The amount of collateral being used to mint DJUSD.
-     * @return assets The amount of DJUSD `from` would receive if they minted with `amountIn` of `asset`.
+     * @param amountIn The amount of collateral being used to mint USDa.
+     * @return assets The amount of USDa `from` would receive if they minted with `amountIn` of `asset`.
      */
     function quoteMint(address asset, address from, uint256 amountIn)
         external
@@ -672,11 +844,11 @@ contract DJUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
             bool isOptedOut = abi.decode(data, (bool));
             if (!isOptedOut) {
                 uint256 rebaseIndex = IRebaseToken(asset).rebaseIndex();
-                uint256 djusdShares = RebaseTokenMath.toShares(amountIn, rebaseIndex);
-                amountIn = RebaseTokenMath.toTokens(djusdShares, rebaseIndex);
+                uint256 usdaShares = RebaseTokenMath.toShares(amountIn, rebaseIndex);
+                amountIn = RebaseTokenMath.toTokens(usdaShares, rebaseIndex);
             }
         }
-        assets = IOracle(_getDJUSDMinterStorage().assetInfos[asset].oracle).valueOf(amountIn, Math.Rounding.Floor);
+        assets = IOracle(_getUSDaMinterStorage().assetInfos[asset].oracle).valueOf(amountIn, Math.Rounding.Floor);
     }
 
     /**
@@ -691,7 +863,7 @@ contract DJUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
      * @custom:error NotSupportedAsset The asset is not supported for redemption.
      */
     function requiredTokens(address asset) public view returns (uint256 amount) {
-        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        USDaMinterStorage storage $ = _getUSDaMinterStorage();
         uint256 totalPendingClaims = $.pendingClaims[asset];
         uint256 balance = IERC20(asset).balanceOf(address(this));
         if (totalPendingClaims > balance) {
@@ -715,7 +887,7 @@ contract DJUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
      * requests.
      */
     function _calculateClaimableTokens(address user, address asset) internal view returns (uint256 amount) {
-        DJUSDMinterStorage storage $ = _getDJUSDMinterStorage();
+        USDaMinterStorage storage $ = _getUSDaMinterStorage();
         uint256[] storage userRequestsByAsset = $.redemptionRequestsByAsset[user][asset];
         RedemptionRequest[] storage userRequests = $.redemptionRequests[user];
         uint256 numRequests = userRequestsByAsset.length;
@@ -820,46 +992,28 @@ contract DJUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
     }
 
     /**
-     * @dev Transfers a specified amount of a supported asset from a user's address directly to the custodian, adjusted
-     * based on the redemption requirements.
-     * This function is crucial during the minting process or when managing redemption requests. It assesses the total
-     * amount of the asset that is required to fulfill unclaimed redemption requests.
-     * If no additional tokens are needed for pending redemptions (i.e., required tokens are zero), the asset is
-     * directly transferred from the user to the custodian.
-     * If there are outstanding redemption obligations, the asset is initially transferred to this contract to ensure
-     * adequate availability for future claims. Excess tokens, beyond what is required for redemptions, are subsequently
-     * transferred to the custodian.
-     * This structured approach ensures that sufficient assets are always on hand to meet redemption claims while
-     * effectively managing incoming asset deposits for minting.
+     * @dev Transfers a specified amount of a supported asset from a user's address directly to this contract, adjusted
+     * based on the redemption requirements. We assess the contract's balance before the transfer and after the transfer
+     * to ensure the proper amount of tokens received is accounted. This comes in handy in the event a rebase rounding error
+     * results in a slight deviation between amount transferred and the amount received.
      * @param user The address from which the asset will be pulled.
-     * @param custodian_ The custodian to whom the asset will be transferred, either directly or after fulfilling
-     * redemption requirements.
      * @param asset The address of the supported asset to be transferred.
      * @param amount The intended amount of the asset to transfer from the user. The function calculates the actual
      * transfer based on the asset’s pending redemption needs.
-     * @return received The actual amount of the asset received by the contract or the custodian, which may differ from
-     * the intended amount due to transaction fees or after considering the required redemption amount.
-     * @custom:event CustodyTransfer Logs the transfer of the asset to the custodian, detailing the amount and involved
+     * @return received The actual amount of the asset received to this contract, which may differ from
+     * the intended amount due to transaction fees.
+     * @custom:event CustodyTransfer Logs the transfer of the asset to this contract, detailing the amount and involved
      * parties.
      */
-    function _pullAssets(address user, address custodian_, address asset, uint256 amount)
+    function _pullAssets(address user, address asset, uint256 amount)
         internal
         returns (uint256 received)
     {
-        uint256 required = requiredTokens(asset);
-        address recipient = required == 0 ? custodian_ : address(this);
+        uint256 balanceBefore = IERC20(asset).balanceOf(address(this));
+        IERC20(asset).safeTransferFrom(user, address(this), amount);
+        received = IERC20(asset).balanceOf(address(this)) - balanceBefore;
 
-        uint256 balanceBefore = IERC20(asset).balanceOf(recipient);
-        IERC20(asset).safeTransferFrom(user, recipient, amount);
-        received = IERC20(asset).balanceOf(recipient) - balanceBefore;
-
-        if (required != 0 && required < received) {
-            unchecked {
-                uint256 toSend = received - required;
-                IERC20(asset).safeTransfer(custodian_, toSend);
-                emit CustodyTransfer(custodian_, asset, toSend);
-            }
-        }
+        emit CustodyTransfer(address(this), asset, received);
     }
 
     /**

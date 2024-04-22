@@ -1,19 +1,19 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.19;
 
-import {DJUSD} from "./DJUSD.sol";
+import {USDa} from "./USDa.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
- * @title DJUSDTaxManager
- * @notice Tax Manager to DJUSD contract
- * @dev This contract manages the taxation of rebases on the DJUSD token. This contract facilitates the rebase of DJUSD
- * and during rebase, will calculate an amount of DJUSD to mint to the `feeCollector` and thus re-calculating the
+ * @title USDaTaxManager
+ * @notice Tax Manager to USDa contract
+ * @dev This contract manages the taxation of rebases on the USDa token. This contract facilitates the rebase of USDa
+ * and during rebase, will calculate an amount of USDa to mint to the `feeCollector` and thus re-calculating the
  * rebaseIndex to result in the targeted post-rebase totalSupply with the new minted tokens in mind.
  */
-contract DJUSDTaxManager is Ownable {
-    /// @dev Stores the contract reference to DJUSD.
-    DJUSD public immutable djUsd;
+contract USDaTaxManager is Ownable {
+    /// @dev Stores the contract reference to USDa.
+    USDa public immutable djUsd;
     /// @dev Stores the % of each rebase that is taxed.
     uint256 public taxRate = 0.1e18;
     /// @dev Stores the address in which newly minted tokens are sent to.
@@ -28,22 +28,22 @@ contract DJUSDTaxManager is Ownable {
     error ZeroAddressException();
 
     /**
-     * @notice Initializes DJUSDTaxManager.
+     * @notice Initializes USDaTaxManager.
      * @param _admin Initial owner address.
-     * @param _djusd Address of DJUSD contract.
+     * @param _usda Address of USDa contract.
      * @param _feeCollector Address of feeCollector.
      */
-    constructor(address _admin, address _djusd, address _feeCollector) Ownable(_admin) {
-        if (_djusd == address(0) || _feeCollector == address(0)) revert ZeroAddressException();
-        djUsd = DJUSD(_djusd);
+    constructor(address _admin, address _usda, address _feeCollector) Ownable(_admin) {
+        if (_usda == address(0) || _feeCollector == address(0)) revert ZeroAddressException();
+        djUsd = USDa(_usda);
         feeCollector = _feeCollector;
     }
 
     /**
-     * @notice This method facilitates the taxed rebase of DJUSD. It calculates the new total supply, given `nextIndex`.
+     * @notice This method facilitates the taxed rebase of USDa. It calculates the new total supply, given `nextIndex`.
      * It then takes a tax by
      * minting a percentage of the total supply delta and then calculating a new rebaseIndex.
-     * @param currentIndex The current rebaseIndex of DJUSD.
+     * @param currentIndex The current rebaseIndex of USDa.
      * @param nextIndex The new rebaseIndex used to calculate the new total supply.
      */
     function collectOnRebase(uint256 currentIndex, uint256 nextIndex) external {
