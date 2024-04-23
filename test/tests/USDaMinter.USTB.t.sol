@@ -422,7 +422,7 @@ contract USDaMinterUSTBIntegrationTest is BaseSetup {
         uint256 preBal = unrealUSTB.balanceOf(address(usdaMinter));
 
         vm.prank(alice);
-        usdaMinter.claimTokens(address(unrealUSTB), amount);
+        usdaMinter.claimTokens(address(unrealUSTB));
 
         // ~ Post-state check 2 ~
 
@@ -499,7 +499,7 @@ contract USDaMinterUSTBIntegrationTest is BaseSetup {
         uint256 preBal = unrealUSTB.balanceOf(address(usdaMinter));
 
         vm.prank(alice);
-        usdaMinter.claimTokens(address(unrealUSTB), amount);
+        usdaMinter.claimTokens(address(unrealUSTB));
 
         // ~ Post-state check 2 ~
 
@@ -789,7 +789,7 @@ contract USDaMinterUSTBIntegrationTest is BaseSetup {
         // ~ Alice claims ~
 
         vm.prank(alice);
-        usdaMinter.claimTokens(address(unrealUSTB), newBal);
+        usdaMinter.claimTokens(address(unrealUSTB));
 
         // ~ Post-state check 2 ~
 

@@ -116,6 +116,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
     event TokensClaimed(address indexed user, address indexed asset, uint256 usdaAmount, uint256 claimed);
 
     error InsufficientOutputAmount(uint256 expected, uint256 actual);
+    error NoTokensClaimable();
     error NotCustodian(address account);
     error NotSupportedAsset(address asset);
     error NotAdmin(address account);
@@ -306,17 +307,17 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * These methods are protected by the whitelist role to stop any EOAs from restricted countries from interacting
      * with the contract.
      * @param account Address whitelist role is being udpated.
-     * @param isWhitelisted Status to set whitelist role to. If true, account is whitelisted.
+     * @param whitelisted Status to set whitelist role to. If true, account is whitelisted.
      * @custom:error NotWhitelister Thrown if the caller is not the whitelister address or owner.
      * @custom:error InvalidZeroAddress Thrown if `account` is address(0).
-     * @custom:error ValueUnchanged Thrown if `isWhitelisted` is the current whitelist status of account.
+     * @custom:error ValueUnchanged Thrown if `whitelisted` is the current whitelist status of account.
      */
-    function modifyWhitelist(address account, bool isWhitelisted) external onlyWhitelister {
+    function modifyWhitelist(address account, bool whitelisted) external onlyWhitelister {
         account.requireNonZeroAddress();
         USDaMinterStorage storage $ = _getUSDaMinterStorage();
-        $.isWhitelisted[account].requireDifferentBoolean(isWhitelisted);
-        $.isWhitelisted[account] = isWhitelisted;
-        emit WhitelistStatusUpdated(account, isWhitelisted);
+        $.isWhitelisted[account].requireDifferentBoolean(whitelisted);
+        $.isWhitelisted[account] = whitelisted;
+        emit WhitelistStatusUpdated(account, whitelisted);
     }
 
     /**
@@ -513,6 +514,75 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
     }
 
     /**
+     * @notice Calculates the amount of a supported asset that a user can currently claim from their redemption
+     * requests.
+     * @dev Returns the total amount of the specified asset that the user is eligible to claim, based on their
+     * outstanding redemption requests and the claim delay. This function takes into account only claims that are past
+     * the claimable after timestamp.
+     * Can return a value less than the total requested if there are insufficient funds in the contract to fulfill the
+     * claim.
+     * @param user The address of the user for whom to calculate claimable assets.
+     * @param asset The address of the supported asset to calculate claimable amounts for.
+     * @return amount The total amount of the specified asset that the user can currently claim.
+     */
+    function claimableTokens(address user, address asset)
+        external
+        view
+        validAsset(asset, true)
+        returns (uint256 amount)
+    {
+        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        uint256 ratio = $.coverageRatio;
+
+        uint256 claimable = _calculateClaimableTokens(user, asset);
+        if (ratio < 1e18) claimable = claimable * ratio / 1e18; // TODO: Test
+
+        uint256 available = IERC20(asset).balanceOf(address(this));
+        return available < claimable ? available : claimable;
+    }
+
+    /**
+     * @notice Claims the requested supported assets in exchange for previously burned USDa tokens, if the claim delay
+     * has passed.
+     * @dev This function allows users to claim supported assets for which they have previously made redemption requests
+     * and the claim delay has elapsed.
+     * Uses `_unsafeRedemptionRequestByAssetAccess` to access redemption requests directly in storage, optimizing gas
+     * usage.
+     * It is vital that callers ensure the accuracy and appropriateness of the indices used to prevent errors.
+     * @param asset The address of the supported asset to be claimed.
+     * @custom:error InsufficientFunds The requested amount exceeds the claimable amount.
+     * @custom:event TokensClaimed The address of the user who claimed, the asset address, and the amount claimed.
+     */
+    function claimTokens(address asset) external validAsset(asset, true) onlyWhitelisted {
+        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        address user = msg.sender;
+
+        uint256 amount = _calculateClaimableTokens(user, asset);
+        if (amount == 0) revert NoTokensClaimable();
+
+        uint256 toClaim = amount * $.coverageRatio / 1e18;
+        toClaim.requireSufficientFunds(IERC20(asset).balanceOf(address(this)));
+
+        RedemptionRequest[] storage userRequests = $.redemptionRequests[user];
+        uint256[] storage userRequestsByAsset = $.redemptionRequestsByAsset[user][asset];
+        mapping(address asset => uint256) storage firstUnclaimedIndex = $.firstUnclaimedIndex[user];
+
+        uint256 remainingToClaim = _claimTokens(asset, amount, userRequests, userRequestsByAsset, firstUnclaimedIndex);
+
+        if (remainingToClaim != 0) {
+            unchecked {
+                revert InsufficientFunds(amount, amount - remainingToClaim);
+            }
+        }
+
+        IERC20(asset).safeTransfer(user, toClaim);
+
+        $.pendingClaims[asset] -= amount;
+
+        emit TokensClaimed(user, asset, amount, toClaim);
+    }
+
+    /**
      * @notice Extends the claimable after timestamp for a specific redemption request.
      * @dev Allows the custodian to delay the claimability of assets for a particular redemption request. This can be
      * used in scenarios where additional time is needed before the assets can be released or in response to changing
@@ -617,73 +687,6 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
     function isSupportedAsset(address asset) external view returns (bool isSupported) {
         USDaMinterStorage storage $ = _getUSDaMinterStorage();
         isSupported = $.assets.contains(asset) && !$.assetInfos[asset].removed;
-    }
-
-    /**
-     * @notice Calculates the amount of a supported asset that a user can currently claim from their redemption
-     * requests.
-     * @dev Returns the total amount of the specified asset that the user is eligible to claim, based on their
-     * outstanding redemption requests and the claim delay. This function takes into account only claims that are past
-     * the claimable after timestamp.
-     * Can return a value less than the total requested if there are insufficient funds in the contract to fulfill the
-     * claim.
-     * @param user The address of the user for whom to calculate claimable assets.
-     * @param asset The address of the supported asset to calculate claimable amounts for.
-     * @return amount The total amount of the specified asset that the user can currently claim.
-     */
-    function claimableTokens(address user, address asset)
-        external
-        view
-        validAsset(asset, true)
-        returns (uint256 amount)
-    {
-        USDaMinterStorage storage $ = _getUSDaMinterStorage();
-        uint256 ratio = $.coverageRatio;
-
-        uint256 claimable = _calculateClaimableTokens(user, asset);
-        if (ratio < 1e18) claimable = claimable * ratio / 1e18; // TODO: Test
-
-        uint256 available = IERC20(asset).balanceOf(address(this));
-        return available < claimable ? available : claimable;
-    }
-
-    /**
-     * @notice Claims the requested supported assets in exchange for previously burned USDa tokens, if the claim delay
-     * has passed.
-     * @dev This function allows users to claim supported assets for which they have previously made redemption requests
-     * and the claim delay has elapsed.
-     * Uses `_unsafeRedemptionRequestByAssetAccess` to access redemption requests directly in storage, optimizing gas
-     * usage.
-     * It is vital that callers ensure the accuracy and appropriateness of the indices used to prevent errors.
-     * @param asset The address of the supported asset to be claimed.
-     * @param amount The amount of the asset the user wishes to claim.
-     * @custom:error InsufficientFunds The requested amount exceeds the claimable amount.
-     * @custom:event TokensClaimed The address of the user who claimed, the asset address, and the amount claimed.
-     */
-    function claimTokens(address asset, uint256 amount) external validAsset(asset, true) onlyWhitelisted {
-        USDaMinterStorage storage $ = _getUSDaMinterStorage();
-        address user = msg.sender;
-
-        uint256 toClaim = amount * $.coverageRatio / 1e18;
-        toClaim.requireSufficientFunds(IERC20(asset).balanceOf(address(this)));
-
-        RedemptionRequest[] storage userRequests = $.redemptionRequests[user];
-        uint256[] storage userRequestsByAsset = $.redemptionRequestsByAsset[user][asset];
-        mapping(address asset => uint256) storage firstUnclaimedIndex = $.firstUnclaimedIndex[user];
-
-        uint256 remainingToClaim = _claimTokens(asset, amount, userRequests, userRequestsByAsset, firstUnclaimedIndex);
-
-        if (remainingToClaim != 0) {
-            unchecked {
-                revert InsufficientFunds(amount, amount - remainingToClaim);
-            }
-        }
-
-        IERC20(asset).safeTransfer(user, toClaim);
-
-        $.pendingClaims[asset] -= amount;
-
-        emit TokensClaimed(user, asset, amount, toClaim);
     }
 
     /**

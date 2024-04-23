@@ -3,6 +3,10 @@ pragma solidity ^0.8.19;
 
 /* solhint-disable func-name-mixedcase  */
 
+// oz imports
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+
+// local imports
 import {BaseSetup} from "../BaseSetup.sol";
 import {USDaMinter} from "../../src/USDaMinter.sol";
 import {MockToken} from "../mock/MockToken.sol";
@@ -36,7 +40,27 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         assertEq(usdaMinter.custodian(), address(custodian));
     }
 
-    function test_usdaMinting_isUpgradeable() public {
+    function test_usdaMinter_initializer() public {
+        USDaMinter newUSDaMinter = new USDaMinter(IUSDa(address(djUsdToken)));
+        ERC1967Proxy newUSDaMinterProxy = new ERC1967Proxy(
+            address(newUSDaMinter),
+            abi.encodeWithSelector(USDaMinter.initialize.selector,
+                owner,
+                admin,
+                whitelister,
+                5 days
+            )
+        );
+        newUSDaMinter = USDaMinter(payable(address(newUSDaMinterProxy)));
+
+        assertEq(newUSDaMinter.owner(), owner);
+        assertEq(newUSDaMinter.admin(), admin);
+        assertEq(newUSDaMinter.whitelister(), whitelister);
+        assertEq(newUSDaMinter.claimDelay(), 5 days);
+        assertEq(newUSDaMinter.coverageRatio(), 1e18);
+    }
+
+    function test_usdaMinter_isUpgradeable() public {
         USDaMinter newImplementation = new USDaMinter(IUSDa(address(djUsdToken)));
 
         bytes32 implementationSlot =
@@ -51,7 +75,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         assertEq(implementationSlot, bytes32(abi.encode(address(newImplementation))));
     }
 
-    function test_usdaMinting_isUpgradeable_onlyOwner() public {
+    function test_usdaMinter_isUpgradeable_onlyOwner() public {
         USDaMinter newImplementation = new USDaMinter(IUSDa(address(djUsdToken)));
 
         vm.prank(minter);
@@ -62,7 +86,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         usdaMinter.upgradeToAndCall(address(newImplementation), "");
     }
 
-    function test_unsupported_assets_ERC20_revert() public {
+    function test_usdaMinter_unsupported_assets_ERC20_revert() public {
         vm.startPrank(owner);
         usdaMinter.removeSupportedAsset(address(USTB));
         USTB.mint(_amountToDeposit, bob);
@@ -80,7 +104,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         vm.getRecordedLogs();
     }
 
-    function test_unsupported_assets_ETH_revert() public {
+    function test_usdaMinter_unsupported_assets_ETH_revert() public {
         vm.startPrank(owner);
         vm.deal(bob, _amountToDeposit);
         vm.stopPrank();
@@ -97,7 +121,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         vm.getRecordedLogs();
     }
 
-    function test_add_and_remove_supported_asset() public {
+    function test_usdaMinter_add_and_remove_supported_asset() public {
         address asset = address(20);
         address oracle = address(21);
         vm.startPrank(owner);
@@ -108,7 +132,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         assertFalse(usdaMinter.isSupportedAsset(asset));
     }
 
-    function test_cannot_add_asset_already_supported_revert() public {
+    function test_usdaMinter_cannot_add_asset_already_supported_revert() public {
         address asset = address(20);
         address oracle = address(21);
         vm.startPrank(owner);
@@ -119,7 +143,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         usdaMinter.addSupportedAsset(asset, oracle);
     }
 
-    function test_cannot_removeAsset_not_supported_revert() public {
+    function test_usdaMinter_cannot_removeAsset_not_supported_revert() public {
         address asset = address(20);
         assertFalse(usdaMinter.isSupportedAsset(asset));
 
@@ -128,19 +152,19 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         usdaMinter.removeSupportedAsset(asset);
     }
 
-    function test_cannotAdd_addressZero_revert() public {
+    function test_usdaMinter_cannotAdd_addressZero_revert() public {
         vm.prank(owner);
         vm.expectRevert(InvalidZeroAddress.selector);
         usdaMinter.addSupportedAsset(address(0), address(1));
     }
 
-    function test_cannotAdd_USDa_revert() public {
+    function test_usdaMinter_cannotAdd_USDa_revert() public {
         vm.prank(owner);
         vm.expectRevert();
         usdaMinter.addSupportedAsset(address(djUsdToken), address(1));
     }
 
-    function test_receive_eth() public {
+    function test_usdaMinter_receive_eth() public {
         assertEq(address(usdaMinter).balance, 0);
         vm.deal(owner, 10_000 ether);
         vm.prank(owner);
@@ -149,7 +173,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         assertEq(address(usdaMinter).balance, 0);
     }
 
-    function test_mint_to_bob() public {
+    function test_usdaMinter_mint() public {
         uint256 amount = 10 ether;
         deal(address(USTB), bob, amount);
 
@@ -164,7 +188,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         assertEq(djUsdToken.balanceOf(bob), amount);
     }
 
-    function test_mint_to_bob_fuzzing(uint256 amount) public {
+    function test_usdaMinter_mint_fuzzing(uint256 amount) public {
         vm.assume(amount > 0 && amount < _maxMintPerBlock);
         deal(address(USTB), bob, amount);
 
@@ -179,7 +203,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         assertEq(djUsdToken.balanceOf(bob), amount);
     }
 
-    function test_requestTokens_to_alice_noFuzz() public {
+    function test_usdaMinter_requestTokens_noFuzz() public {
         // ~ config ~
 
         uint256 amount = 10 ether;
@@ -243,7 +267,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         assertEq(claimable, amount);
     }
 
-    function test_requestTokens_then_extendClaimTimestamp() public {
+    function test_usdaMinter_requestTokens_then_extendClaimTimestamp() public {
         // ~ config ~
 
         uint256 amount = 10 ether;
@@ -314,7 +338,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         assertEq(claimable, amount);
     }
 
-    function test_requestTokens_to_alice_fuzzing(uint256 amount) public {
+    function test_usdaMinter_requestTokens_fuzzing(uint256 amount) public {
         vm.assume(amount > 0 && amount < _maxMintPerBlock);
 
         // ~ config ~
@@ -378,7 +402,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         assertEq(claimable, amount);
     }
 
-    function test_requestTokens_to_alice_multiple() public {
+    function test_usdaMinter_requestTokens_multiple() public {
         // ~ config ~
 
         uint256 amountToMint = 10 ether;
@@ -477,7 +501,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         assertEq(claimable, amount1 + amount2);
     }
 
-    function test_claim_multiple_assets() public {
+    function test_usdaMinter_claim_multiple_assets() public {
         // ~ config ~
 
         uint256 amount = 10 ether;
@@ -552,7 +576,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         // ~ Alice claims USTB ~
 
         vm.prank(alice);
-        usdaMinter.claimTokens(address(USTB), amount);
+        usdaMinter.claimTokens(address(USTB));
 
         // ~ Post-state check 2 ~
 
@@ -586,7 +610,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         // ~ Alice claims USDC ~
 
         vm.prank(alice);
-        usdaMinter.claimTokens(address(USDCToken), amount);
+        usdaMinter.claimTokens(address(USDCToken));
 
         // ~ Post-state check 3 ~
 
@@ -615,7 +639,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         assertEq(claimableUSDC, 0);
     }
 
-    function test_claim_noFuzz() public {
+    function test_usdaMinter_claim_noFuzz() public {
         // ~ config ~
 
         uint256 amount = 10 ether;
@@ -671,7 +695,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         // ~ Alice claims ~
 
         vm.prank(alice);
-        usdaMinter.claimTokens(address(USTB), amount);
+        usdaMinter.claimTokens(address(USTB));
 
         // ~ Post-state check 2 ~
 
@@ -692,108 +716,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         assertEq(claimable, 0);
     }
 
-    function test_claim_partial() public {
-        // ~ config ~
-
-        uint256 amount = 10 ether;
-        uint256 half = amount / 2;
-
-        vm.prank(address(usdaMinter));
-        djUsdToken.mint(alice, amount);
-        deal(address(USTB), address(usdaMinter), amount);
-
-        // ~ Pre-state check ~
-
-        assertEq(djUsdToken.balanceOf(alice), amount);
-        assertEq(USTB.balanceOf(alice), 0);
-        assertEq(USTB.balanceOf(address(usdaMinter)), amount);
-
-        USDaMinter.RedemptionRequest[] memory requests = usdaMinter.getRedemptionRequests(alice, address(USTB), 0, 10);
-        assertEq(requests.length, 0);
-
-        // ~ Alice executes requestTokens ~
-
-        vm.startPrank(alice);
-        djUsdToken.approve(address(usdaMinter), amount);
-        usdaMinter.requestTokens(address(USTB), amount);
-        vm.stopPrank();
-
-        // ~ Post-state check 1 ~
-
-        assertEq(djUsdToken.balanceOf(alice), 0);
-        assertEq(USTB.balanceOf(alice), 0);
-        assertEq(USTB.balanceOf(address(usdaMinter)), amount);
-
-        requests = usdaMinter.getRedemptionRequests(alice, address(USTB), 0, 10);
-        assertEq(requests.length, 1);
-        assertEq(requests[0].amount, amount);
-        assertEq(requests[0].claimableAfter, block.timestamp + 5 days);
-        assertEq(requests[0].claimed, 0);
-
-        uint256 requested = usdaMinter.getPendingClaims(address(USTB));
-        uint256 claimable = usdaMinter.claimableTokens(alice, address(USTB));
-
-        assertEq(requested, amount);
-        assertEq(claimable, 0);
-
-        // ~ Warp to post-claimDelay and query claimable ~
-
-        vm.warp(block.timestamp + usdaMinter.claimDelay());
-
-        requested = usdaMinter.getPendingClaims(address(USTB));
-        claimable = usdaMinter.claimableTokens(alice, address(USTB));
-
-        assertEq(requested, amount);
-        assertEq(claimable, amount);
-
-        // ~ Alice claims partial ~
-
-        vm.prank(alice);
-        usdaMinter.claimTokens(address(USTB), half);
-
-        // ~ Post-state check 2 ~
-
-        assertEq(djUsdToken.balanceOf(alice), 0);
-        assertEq(USTB.balanceOf(alice), half);
-        assertEq(USTB.balanceOf(address(usdaMinter)), amount - half);
-
-        requests = usdaMinter.getRedemptionRequests(alice, address(USTB), 0, 10);
-        assertEq(requests.length, 1);
-        assertEq(requests[0].amount, amount);
-        assertEq(requests[0].claimableAfter, block.timestamp);
-        assertEq(requests[0].claimed, half);
-
-        requested = usdaMinter.getPendingClaims(address(USTB));
-        claimable = usdaMinter.claimableTokens(alice, address(USTB));
-
-        assertEq(requested, amount - half);
-        assertEq(claimable, amount - half);
-
-        // ~ Alice claims the rest ~
-
-        vm.prank(alice);
-        usdaMinter.claimTokens(address(USTB), amount - half);
-
-        // ~ Post-state check 3 ~
-
-        assertEq(djUsdToken.balanceOf(alice), 0);
-        assertEq(USTB.balanceOf(alice), amount);
-        assertEq(USTB.balanceOf(address(usdaMinter)), 0);
-
-        requests = usdaMinter.getRedemptionRequests(alice, address(USTB), 0, 10);
-        assertEq(requests.length, 1);
-        assertEq(requests[0].amount, amount);
-        assertEq(requests[0].claimableAfter, block.timestamp);
-        assertEq(requests[0].claimed, amount);
-
-        requested = usdaMinter.getPendingClaims(address(USTB));
-        claimable = usdaMinter.claimableTokens(alice, address(USTB));
-
-        assertEq(requested, 0);
-        assertEq(claimable, 0);
-    }
-
-    function test_claim_early_revert() public {
+    function test_usdaMinter_claim_early_revert() public {
         // ~ config ~
 
         uint256 amount = 10 ether;
@@ -845,18 +768,19 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         // claims with 0 funds to be claimed, revert
         vm.prank(alice);
         vm.expectRevert();
-        usdaMinter.claimTokens(address(USTB), amount);
+        usdaMinter.claimTokens(address(USTB));
 
         deal(address(USTB), address(usdaMinter), amount);
         assertEq(USTB.balanceOf(address(usdaMinter)), amount);
 
         // claims when it's too early, revert
+        assertEq(usdaMinter.claimableTokens(alice, address(USTB)), 0);
         vm.prank(alice);
-        vm.expectRevert();
-        usdaMinter.claimTokens(address(USTB), amount);
+        vm.expectRevert(abi.encodeWithSelector(USDaMinter.NoTokensClaimable.selector));
+        usdaMinter.claimTokens(address(USTB));
     }
 
-    function test_claim_fuzzing(uint256 amount) public {
+    function test_usdaMinter_claim_fuzzing(uint256 amount) public {
         vm.assume(amount > 0 && amount < _maxMintPerBlock);
 
         // ~ config ~
@@ -909,7 +833,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         // ~ Alice claims ~
 
         vm.prank(alice);
-        usdaMinter.claimTokens(address(USTB), amount);
+        usdaMinter.claimTokens(address(USTB));
 
         // ~ Post-state check 2 ~
 
@@ -930,7 +854,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         assertEq(claimable, 0);
     }
 
-    function test_mint_after_rebase_fuzzing(uint256 index) public {
+    function test_usdaMinter_mint_after_rebase_fuzzing(uint256 index) public {
         index = bound(index, 1.000000000000001e18, 2e18);
         vm.assume(index > 1e18 && index < 2e18);
 
@@ -959,7 +883,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         assertApproxEqAbs(djUsdToken.balanceOf(alice), amount, 2);
     }
 
-    function test_requestTokens_after_rebase_noFuzz() public {
+    function test_usdaMinter_requestTokens_after_rebase_noFuzz() public {
         // ~ Config ~
 
         uint256 index = 1.5 ether;
@@ -1037,7 +961,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         assertEq(claimable, newBal);
     }
 
-    function test_requestTokens_after_rebase_fuzzing(uint256 index) public {
+    function test_usdaMinter_requestTokens_after_rebase_fuzzing(uint256 index) public {
         index = bound(index, 1.0000000001e18, 2e18);
         vm.assume(index > 1e18 && index < 2e18);
 
@@ -1112,7 +1036,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         assertEq(claimable, newBal);
     }
 
-    function test_claim_after_rebase_noFuzz() public {
+    function test_usdaMinter_claim_after_rebase_noFuzz() public {
         // ~ Config ~
 
         uint256 index = 1.5 ether;
@@ -1192,7 +1116,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         // ~ Alice claims ~
 
         vm.prank(alice);
-        usdaMinter.claimTokens(address(USTB), newBal);
+        usdaMinter.claimTokens(address(USTB));
 
         // ~ Post-state check 2 ~
 
@@ -1212,7 +1136,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         assertEq(claimable, 0);
     }
 
-    function test_supplyLimit() public {
+    function test_usdaMinter_supplyLimit() public {
         djUsdToken.setSupplyLimit(djUsdToken.totalSupply());
 
         vm.startPrank(bob);
@@ -1222,7 +1146,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         vm.stopPrank();
     }
 
-    function test_withdrawFunds() public {
+    function test_usdaMinter_withdrawFunds() public {
         // ~ Config ~
 
         uint256 amount = 10 * 1e18;
@@ -1244,7 +1168,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         assertEq(USTB.balanceOf(address(custodian)), amount);
     }
 
-    function test_withdrawFunds_partial() public {
+    function test_usdaMinter_withdrawFunds_partial() public {
         // ~ Config ~
 
         uint256 amount = 10 * 1e18;
@@ -1277,7 +1201,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         assertEq(USTB.balanceOf(address(custodian)), amount);
     }
 
-    function test_withdrawFunds_restrictions() public {
+    function test_usdaMinter_withdrawFunds_restrictions() public {
         uint256 amount = 10 ether;
 
         // only custodian
@@ -1299,7 +1223,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         usdaMinter.withdrawFunds(address(USTB), amount);
     }
 
-    function test_setClaimDelay() public {
+    function test_usdaMinter_setClaimDelay() public {
         // ~ Pre-state check ~
 
         assertEq(usdaMinter.claimDelay(), 5 days);
@@ -1314,7 +1238,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         assertEq(usdaMinter.claimDelay(), 7 days);
     }
 
-    function test_updateCustodian() public {
+    function test_usdaMinter_updateCustodian() public {
         // ~ Pre-state check ~
 
         assertEq(usdaMinter.custodian(), address(custodian));
@@ -1329,7 +1253,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         assertEq(usdaMinter.custodian(), owner);
     }
 
-    function test_restoreAsset() public {
+    function test_usdaMinter_restoreAsset() public {
         // ~ Pre-state check ~
 
         assertEq(usdaMinter.isSupportedAsset(address(USTB)), true);
@@ -1388,7 +1312,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         assertEq(allAssets[2], address(USDTToken));
     }
 
-    function test_getRedemptionRequests() public {
+    function test_usdaMinter_getRedemptionRequests() public {
         // ~ Config ~
 
         uint256 mintAmount = 1_000 * 1e18;
@@ -1437,7 +1361,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         assertEq(requests.length, 5);
     }
 
-    function test_modifyWhitelist() public {
+    function test_usdaMinter_modifyWhitelist() public {
         // ~ Pre-state check ~
 
         assertEq(usdaMinter.isWhitelisted(bob), true);
@@ -1452,7 +1376,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         assertEq(usdaMinter.isWhitelisted(bob), false);
     }
 
-    function test_modifyWhitelist_restrictions() public {
+    function test_usdaMinter_modifyWhitelist_restrictions() public {
         // only whitelister
         vm.prank(bob);
         vm.expectRevert(abi.encodeWithSelector(USDaMinter.NotWhitelister.selector, bob));
@@ -1469,7 +1393,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         usdaMinter.modifyWhitelist(bob, true);
     }
 
-    function test_coverageRatio() public {
+    function test_usdaMinter_coverageRatio() public {
         // ~ Pre-state check ~
 
         assertEq(usdaMinter.coverageRatio(), 1 * 1e18);
@@ -1484,7 +1408,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         assertEq(usdaMinter.coverageRatio(), .1 * 1e18);
     }
 
-    function test_coverageRatio_restrictions() public {
+    function test_usdaMinter_coverageRatio_restrictions() public {
         // only admin
         vm.prank(bob);
         vm.expectRevert(abi.encodeWithSelector(USDaMinter.NotAdmin.selector, bob));
@@ -1501,7 +1425,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         usdaMinter.setCoverageRatio(1 * 1e18);
     }
 
-    function test_updateAdmin() public {
+    function test_usdaMinter_updateAdmin() public {
         // ~ Pre-state check ~
 
         assertEq(usdaMinter.admin(), admin);
@@ -1516,7 +1440,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         assertEq(usdaMinter.admin(), bob);
     }
 
-    function test_updateAdmin_restrictions() public {
+    function test_usdaMinter_updateAdmin_restrictions() public {
         // only owner
         vm.prank(bob);
         vm.expectRevert();
@@ -1533,7 +1457,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         usdaMinter.updateAdmin(admin);
     }
 
-    function test_updateWhitelister() public {
+    function test_usdaMinter_updateWhitelister() public {
         // ~ Pre-state check ~
 
         assertEq(usdaMinter.whitelister(), whitelister);
@@ -1548,7 +1472,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         assertEq(usdaMinter.whitelister(), bob);
     }
 
-    function test_updateWhitelister_restrictions() public {
+    function test_usdaMinter_updateWhitelister_restrictions() public {
         // only owner
         vm.prank(bob);
         vm.expectRevert();
@@ -1564,4 +1488,8 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         vm.expectRevert(abi.encodeWithSelector(CommonErrors.ValueUnchanged.selector));
         usdaMinter.updateWhitelister(whitelister);
     }
+
+    function test_usdaMinter_claimable_coverageRatioSub1() public {}
+
+    function test_usdaMinter_claimTokens_coverageRatioSub1() public {}
 }
