@@ -956,7 +956,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
             }
         }
 
-        return (amountPreRatio, amountBeingClaimed);
+        return (amountRequested, amountBeingClaimed);
     }
 
     /**
