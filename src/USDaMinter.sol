@@ -12,6 +12,7 @@ import {ReentrancyGuardUpgradeable} from "@openzeppelin/contracts-upgradeable/ut
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {Time} from "@openzeppelin/contracts/utils/types/Time.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import {Checkpoints} from "@openzeppelin/contracts/utils/structs/Checkpoints.sol";
 
 // tangible imports
 import {RebaseTokenMath} from "@tangible/contracts/libraries/RebaseTokenMath.sol";
@@ -47,6 +48,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
     using EnumerableSet for EnumerableSet.AddressSet;
     using SafeCast for *;
     using SafeERC20 for IERC20;
+    using Checkpoints for Checkpoints.Trace208;
 
     struct AssetInfo {
         address oracle;
@@ -62,6 +64,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
 
     /// @custom:storage-location erc7201:arcana.storage.USDaMinter
     struct USDaMinterStorage {
+        Checkpoints.Trace208 coverageRatio;
         EnumerableSet.AddressSet assets;
         mapping(address asset => AssetInfo) assetInfos;
         mapping(address asset => uint256) pendingClaims;
@@ -69,7 +72,6 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
         mapping(address user => mapping(address asset => uint256[])) redemptionRequestsByAsset;
         mapping(address user => RedemptionRequest[]) redemptionRequests;
         mapping(address user => bool) isWhitelisted;
-        uint256 coverageRatio;
         address custodian;
         address admin;
         address whitelister;
@@ -225,21 +227,21 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * the constructor logic for upgradeable contracts.
      * @param initialOwner The address that will be granted ownership of the contract, capable of performing
      * administrative actions.
-     * @param admin The address that has the ability to extend timestamp endTimes of redemption requests.
-     * @param whitelister The address capable of whitelisting EOAs, granting them the ability to mint, request redeems, and claim.
+     * @param initialAdmin The address that has the ability to extend timestamp endTimes of redemption requests.
+     * @param initialWhitelister The address capable of whitelisting EOAs, granting them the ability to mint, request redeems, and claim.
      * @param initialClaimDelay The initial delay time (in seconds) before which a redemption request becomes claimable.
      * This is a security measure to prevent immediate claims post-request.
      */
-    function initialize(address initialOwner, address admin, address whitelister, uint48 initialClaimDelay) public initializer {
+    function initialize(address initialOwner, address initialAdmin, address initialWhitelister, uint48 initialClaimDelay) public initializer {
         __Ownable_init(initialOwner);
         __ReentrancyGuard_init();
         __UUPSUpgradeable_init();
 
         USDaMinterStorage storage $ = _getUSDaMinterStorage();
-        $.admin = admin;
-        $.whitelister = whitelister;
+        $.admin = initialAdmin;
+        $.whitelister = initialWhitelister;
         $.claimDelay = initialClaimDelay;
-        $.coverageRatio = 1e18;
+        $.coverageRatio.push(clock(), 1e18);
         $.isWhitelisted[initialOwner] = true;
     }
 
@@ -264,11 +266,11 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * to fund 100% of requests, this ratio would be set to sub-1e18 until the protocol goes back to 100%.
      * @param ratio New ratio.
      */
-    function setCoverageRatio(uint256 ratio) external onlyAdmin {
+    function setCoverageRatio(uint256 ratio) external onlyAdmin { // TODO: Test
         ratio.requireLessThanOrEqualToUint256(1e18);
+        latestCoverageRatio().requireDifferentUint256(ratio);
         USDaMinterStorage storage $ = _getUSDaMinterStorage();
-        $.coverageRatio.requireDifferentUint256(ratio);
-        $.coverageRatio = ratio;
+        $.coverageRatio.push(clock(), uint208(ratio));
         emit CoverageRatioUpdated(ratio);
     }
 
@@ -531,12 +533,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
         validAsset(asset, true)
         returns (uint256 amount)
     {
-        USDaMinterStorage storage $ = _getUSDaMinterStorage();
-        uint256 ratio = $.coverageRatio;
-
         uint256 claimable = _calculateClaimableTokens(user, asset);
-        if (ratio < 1e18) claimable = claimable * ratio / 1e18; // TODO: Test
-
         uint256 available = IERC20(asset).balanceOf(address(this));
         return available < claimable ? available : claimable;
     }
@@ -551,35 +548,34 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * It is vital that callers ensure the accuracy and appropriateness of the indices used to prevent errors.
      * @param asset The address of the supported asset to be claimed.
      * @custom:error InsufficientFunds The requested amount exceeds the claimable amount.
+     * @custom:error NoTokensClaimable There are no tokens that can be claimed.
      * @custom:event TokensClaimed The address of the user who claimed, the asset address, and the amount claimed.
      */
     function claimTokens(address asset) external validAsset(asset, true) onlyWhitelisted {
         USDaMinterStorage storage $ = _getUSDaMinterStorage();
         address user = msg.sender;
 
-        uint256 amount = _calculateClaimableTokens(user, asset);
-        if (amount == 0) revert NoTokensClaimable();
-
-        uint256 toClaim = amount * $.coverageRatio / 1e18;
-        toClaim.requireSufficientFunds(IERC20(asset).balanceOf(address(this)));
-
         RedemptionRequest[] storage userRequests = $.redemptionRequests[user];
         uint256[] storage userRequestsByAsset = $.redemptionRequestsByAsset[user][asset];
         mapping(address asset => uint256) storage firstUnclaimedIndex = $.firstUnclaimedIndex[user];
+        Checkpoints.Trace208 storage ratio = $.coverageRatio;
 
-        uint256 remainingToClaim = _claimTokens(asset, amount, userRequests, userRequestsByAsset, firstUnclaimedIndex);
+        (uint256 amountRequested, uint256 amountToClaim) = _claimTokens(
+            asset,
+            userRequests,
+            userRequestsByAsset,
+            firstUnclaimedIndex,
+            ratio
+        );
 
-        if (remainingToClaim != 0) {
-            unchecked {
-                revert InsufficientFunds(amount, amount - remainingToClaim);
-            }
-        }
+        if (amountToClaim == 0) revert NoTokensClaimable();
 
-        IERC20(asset).safeTransfer(user, toClaim);
+        amountToClaim.requireSufficientFunds(IERC20(asset).balanceOf(address(this)));
 
-        $.pendingClaims[asset] -= amount;
+        IERC20(asset).safeTransfer(user, amountToClaim);
+        $.pendingClaims[asset] -= amountRequested;
 
-        emit TokensClaimed(user, asset, amount, toClaim);
+        emit TokensClaimed(user, asset, amountRequested, amountToClaim);
     }
 
     /**
@@ -667,15 +663,6 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      */
     function claimDelay() external view returns (uint48) {
         return _getUSDaMinterStorage().claimDelay;
-    }
-
-    /**
-     * @notice Returns the coverage ratio.
-     * @dev The coverage ratio would only be set to sub-1 in the event the amount of collateral collected wasnt enough
-     * to fund all requests.
-     */
-    function coverageRatio() external view returns (uint256) {
-        return _getUSDaMinterStorage().coverageRatio;
     }
 
     /**
@@ -855,6 +842,15 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
     }
 
     /**
+     * @notice Returns the current coverage ratio.
+     * @dev The coverage ratio would only be set to sub-1 in the event the amount of collateral collected wasnt enough
+     * to fund all requests.
+     */
+    function latestCoverageRatio() public view returns (uint256) {
+        return uint256(_getUSDaMinterStorage().coverageRatio.upperLookupRecent(clock()));
+    }
+
+    /**
      * @notice Retrieves the amount of a supported asset that is required to fulfill pending redemption requests.
      * @dev This function calculates the total amount of the specified asset that is needed to fulfill all pending
      * redemption requests. It considers the total amount of pending claims for the asset and subtracts the current
@@ -899,16 +895,18 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
         while (i < numRequests) {
             RedemptionRequest storage request =
                 _unsafeRedemptionRequestByAssetAccess(userRequestsByAsset, userRequests, i);
+
             if (clock() >= request.claimableAfter) {
-                uint256 remainingAmount;
+                uint256 amountClaimable;
                 unchecked {
-                    remainingAmount = request.amount - request.claimed;
+                    amountClaimable = request.amount * $.coverageRatio.upperLookupRecent(request.claimableAfter) / 1e18;
                 }
-                amount += remainingAmount;
+                amount += amountClaimable;
             } else {
                 // Once we hit a request that's not yet claimable, we can break out of the loop early
                 break;
             }
+
             unchecked {
                 ++i;
             }
@@ -921,19 +919,19 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * This function is called during the public `claimTokens` function execution and ensures that claims are processed
      * in accordance with the set claimable timestamps and available amounts.
      * @param asset The address of the asset being claimed.
-     * @param remainingToClaim The total amount the user is attempting to claim.
      * @param userRequests Array of all redemption requests made by the user.
      * @param userRequestsByAsset Array of redemption requests made by the user for the specific asset.
      * @param firstUnclaimedIndex Mapping of the first unclaimed index for quick access during claims.
-     * @return remainingToClaim The remaining amount to be claimed if not all requests could be fully satisfied.
+     * @return amountRequested -> Amount of asset that was being requested in total.
+     * @return amountBeingClaimed -> Amount of asset that is allowed to be claimed given coverage ratio.
      */
     function _claimTokens(
         address asset,
-        uint256 remainingToClaim,
         RedemptionRequest[] storage userRequests,
         uint256[] storage userRequestsByAsset,
-        mapping(address asset => uint256) storage firstUnclaimedIndex
-    ) internal returns (uint256) {
+        mapping(address asset => uint256) storage firstUnclaimedIndex,
+        Checkpoints.Trace208 storage ratio
+    ) internal returns (uint256 amountRequested, uint256 amountBeingClaimed) {
         uint256 numRequests = userRequestsByAsset.length;
         uint256 i = firstUnclaimedIndex[asset];
 
@@ -941,13 +939,14 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
             RedemptionRequest storage userRequest =
                 _unsafeRedemptionRequestByAssetAccess(userRequestsByAsset, userRequests, i);
             if (clock() >= userRequest.claimableAfter) {
-                uint256 remainingClaimable;
-                (remainingToClaim, remainingClaimable) = _updateClaim(userRequest, remainingToClaim);
-                if (remainingToClaim == 0) {
-                    unchecked {
-                        firstUnclaimedIndex[asset] = remainingClaimable == 0 ? i + 1 : i;
-                    }
-                    break;
+                unchecked {
+                    uint256 amountClaimable = userRequest.amount * ratio.upperLookupRecent(userRequest.claimableAfter) / 1e18;
+                    userRequest.claimed = amountClaimable;
+
+                    amountRequested += userRequest.amount;
+                    amountBeingClaimed += amountClaimable;
+
+                    firstUnclaimedIndex[asset] = i + 1;
                 }
             } else {
                 break;
@@ -957,41 +956,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
             }
         }
 
-        return remainingToClaim;
-    }
-
-    /**
-     * @dev Updates the state of redemption requests for a user during the claiming process. This function is called by
-     * `_claimTokens` to adjust the amount claimed on each redemption request.
-     * It ensures that each request is updated correctly and provides the remaining claimable amount for further
-     * processing.
-     * @param userRequest The storage pointer to the user's redemption request.
-     * @param amount The amount to claim from the request.
-     * @return remainingToClaim The remaining amount to claim after the current operation.
-     * @return remainingClaimable The remaining claimable amount after the current operation.
-     */
-    function _updateClaim(RedemptionRequest storage userRequest, uint256 amount) internal returns (uint256, uint256) {
-        uint256 requested = userRequest.amount;
-        uint256 remainingClaimable;
-        unchecked {
-            remainingClaimable = requested - userRequest.claimed;
-        }
-        if (remainingClaimable < amount) {
-            userRequest.claimed = requested;
-            unchecked {
-                amount -= remainingClaimable;
-                remainingClaimable = 0;
-            }
-        } else {
-            uint256 claimed;
-            unchecked {
-                claimed = userRequest.claimed + amount;
-                remainingClaimable = requested - claimed;
-            }
-            userRequest.claimed = claimed;
-            amount = 0;
-        }
-        return (amount, remainingClaimable);
+        return (amountPreRatio, amountBeingClaimed);
     }
 
     /**

@@ -130,7 +130,7 @@ contract CustodianManagerTest is BaseSetup {
         assertEq(usdaMinter.requiredTokens(address(unrealUSTB)), amount);
 
         _deal(address(unrealUSTB), address(usdaMinter), usdaMinter.requiredTokens(address(unrealUSTB)) + amount);
-        uint256 preBal = unrealUSTB.balanceOf(address(usdaMinter));
+        //uint256 preBal = unrealUSTB.balanceOf(address(usdaMinter));
 
         // ~ Pre-state check ~
 

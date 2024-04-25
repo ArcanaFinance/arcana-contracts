@@ -57,7 +57,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         assertEq(newUSDaMinter.admin(), admin);
         assertEq(newUSDaMinter.whitelister(), whitelister);
         assertEq(newUSDaMinter.claimDelay(), 5 days);
-        assertEq(newUSDaMinter.coverageRatio(), 1e18);
+        assertEq(newUSDaMinter.latestCoverageRatio(), 1e18);
     }
 
     function test_usdaMinter_isUpgradeable() public {
@@ -440,6 +440,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         requests = usdaMinter.getRedemptionRequests(alice, address(USTB), 0, 10);
         assertEq(requests.length, 1);
         assertEq(requests[0].amount, amount1);
+        assertEq(requests[0].asset, address(USTB));
         assertEq(requests[0].claimableAfter, request1 + 5 days);
         assertEq(requests[0].claimed, 0);
 
@@ -468,9 +469,11 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         requests = usdaMinter.getRedemptionRequests(alice, address(USTB), 0, 10);
         assertEq(requests.length, 2);
         assertEq(requests[0].amount, amount1);
+        assertEq(requests[0].asset, address(USTB));
         assertEq(requests[0].claimableAfter, request1 + 5 days);
         assertEq(requests[0].claimed, 0);
         assertEq(requests[1].amount, amount2);
+        assertEq(requests[1].asset, address(USTB));
         assertEq(requests[1].claimableAfter, request2 + 5 days);
         assertEq(requests[1].claimed, 0);
 
@@ -1396,16 +1399,17 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
     function test_usdaMinter_coverageRatio() public {
         // ~ Pre-state check ~
 
-        assertEq(usdaMinter.coverageRatio(), 1 * 1e18);
+        assertEq(usdaMinter.latestCoverageRatio(), 1 * 1e18);
 
         // ~ Execute setCoverageRatio ~
 
+        skip(10);
         vm.prank(admin);
         usdaMinter.setCoverageRatio(.1 * 1e18);
 
         // ~ Post-state check ~
 
-        assertEq(usdaMinter.coverageRatio(), .1 * 1e18);
+        assertEq(usdaMinter.latestCoverageRatio(), .1 * 1e18);
     }
 
     function test_usdaMinter_coverageRatio_restrictions() public {
@@ -1489,7 +1493,380 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         usdaMinter.updateWhitelister(whitelister);
     }
 
-    function test_usdaMinter_claimable_coverageRatioSub1() public {}
+    function test_usdaMinter_claimable_coverageRatioSub1() public {
+        // ~ config ~
 
-    function test_usdaMinter_claimTokens_coverageRatioSub1() public {}
+        uint256 amount = 10 ether;
+        uint256 ratio = .9 ether; // 90%
+
+        vm.prank(address(usdaMinter));
+        djUsdToken.mint(alice, amount);
+        deal(address(USTB), address(usdaMinter), amount);
+
+        // ~ Pre-state check ~
+
+        assertEq(djUsdToken.balanceOf(alice), amount);
+        assertEq(USTB.balanceOf(alice), 0);
+        assertEq(USTB.balanceOf(address(usdaMinter)), amount);
+
+        USDaMinter.RedemptionRequest[] memory requests = usdaMinter.getRedemptionRequests(alice, address(USTB), 0, 10);
+        assertEq(requests.length, 0);
+
+        // ~ Alice executes requestTokens ~
+
+        vm.startPrank(alice);
+        djUsdToken.approve(address(usdaMinter), amount);
+        usdaMinter.requestTokens(address(USTB), amount);
+        vm.stopPrank();
+
+        // Warp to post-claimDelay and query claimable
+        vm.warp(block.timestamp + usdaMinter.claimDelay());
+        uint256 requested = usdaMinter.getPendingClaims(address(USTB));
+        uint256 claimable = usdaMinter.claimableTokens(alice, address(USTB));
+        assertEq(requested, amount);
+        assertEq(claimable, amount);
+
+        // ~ Update coverage ratio ~
+
+        vm.prank(admin);
+        usdaMinter.setCoverageRatio(ratio);
+
+        // ~ Post-state check ~
+
+        requested = usdaMinter.getPendingClaims(address(USTB));
+        claimable = usdaMinter.claimableTokens(alice, address(USTB));
+        assertEq(requested, amount);
+        assertLt(claimable, amount);
+        assertEq(claimable, amount * ratio / 1e18);
+    }
+
+    function test_usdaMinter_claimTokens_coverageRatioSub1() public {
+        // ~ config ~
+
+        uint256 amount = 10 ether;
+        uint256 ratio = .9 ether; // 90%
+
+        vm.prank(address(usdaMinter));
+        djUsdToken.mint(alice, amount);
+        deal(address(USTB), address(usdaMinter), amount);
+
+        // ~ Pre-state check ~
+
+        assertEq(djUsdToken.balanceOf(alice), amount);
+        assertEq(USTB.balanceOf(alice), 0);
+        assertEq(USTB.balanceOf(address(usdaMinter)), amount);
+
+        USDaMinter.RedemptionRequest[] memory requests = usdaMinter.getRedemptionRequests(alice, address(USTB), 0, 10);
+        assertEq(requests.length, 0);
+
+        // ~ Alice executes requestTokens ~
+
+        vm.startPrank(alice);
+        djUsdToken.approve(address(usdaMinter), amount);
+        usdaMinter.requestTokens(address(USTB), amount);
+        vm.stopPrank();
+
+        // ~ Post-state check 1 ~
+
+        assertEq(djUsdToken.balanceOf(alice), 0);
+        assertEq(USTB.balanceOf(alice), 0);
+        assertEq(USTB.balanceOf(address(usdaMinter)), amount);
+
+        requests = usdaMinter.getRedemptionRequests(alice, address(USTB), 0, 10);
+        assertEq(requests.length, 1);
+        assertEq(requests[0].amount, amount);
+        assertEq(requests[0].claimableAfter, block.timestamp + 5 days);
+        assertEq(requests[0].claimed, 0);
+
+        uint256 requested = usdaMinter.getPendingClaims(address(USTB));
+        uint256 claimable = usdaMinter.claimableTokens(alice, address(USTB));
+
+        assertEq(requested, amount);
+        assertEq(claimable, 0);
+
+        // ~ Update coverage ratio ~
+
+        vm.prank(admin);
+        usdaMinter.setCoverageRatio(ratio);
+
+        uint256 amountAfterRatio = amount * ratio / 1e18;
+
+        // ~ Warp to post-claimDelay and query claimable ~
+
+        vm.warp(block.timestamp + usdaMinter.claimDelay());
+
+        requested = usdaMinter.getPendingClaims(address(USTB));
+        claimable = usdaMinter.claimableTokens(alice, address(USTB));
+
+        assertEq(requested, amount);
+        assertLt(claimable, amount);
+        assertEq(claimable, amountAfterRatio);
+
+        // ~ Alice claims ~
+
+        vm.prank(alice);
+        usdaMinter.claimTokens(address(USTB));
+
+        // ~ Post-state check 2 ~
+
+        assertEq(djUsdToken.balanceOf(alice), 0);
+        assertEq(USTB.balanceOf(alice), amountAfterRatio);
+        assertEq(USTB.balanceOf(address(usdaMinter)), amount - amountAfterRatio);
+
+        requests = usdaMinter.getRedemptionRequests(alice, address(USTB), 0, 10);
+        assertEq(requests.length, 1);
+        assertEq(requests[0].amount, amount);
+        assertEq(requests[0].claimableAfter, block.timestamp);
+        assertEq(requests[0].claimed, amount * ratio / 1e18);
+
+        requested = usdaMinter.getPendingClaims(address(USTB));
+        claimable = usdaMinter.claimableTokens(alice, address(USTB));
+
+        assertEq(requested, 0);
+        assertEq(claimable, 0);
+    }
+
+    function test_usdaMinter_claimTokens_coverageRatioSub1_fuzzing(uint256 ratio) public {
+        ratio = bound(ratio, .01 ether, .9999 ether); // 1% -> 99.99%
+
+        // ~ config ~
+
+        uint256 amount = 10 ether;
+
+        vm.prank(address(usdaMinter));
+        djUsdToken.mint(alice, amount);
+        deal(address(USTB), address(usdaMinter), amount);
+
+        // ~ Pre-state check ~
+
+        assertEq(djUsdToken.balanceOf(alice), amount);
+        assertEq(USTB.balanceOf(alice), 0);
+        assertEq(USTB.balanceOf(address(usdaMinter)), amount);
+
+        USDaMinter.RedemptionRequest[] memory requests = usdaMinter.getRedemptionRequests(alice, address(USTB), 0, 10);
+        assertEq(requests.length, 0);
+
+        // ~ Alice executes requestTokens ~
+
+        vm.startPrank(alice);
+        djUsdToken.approve(address(usdaMinter), amount);
+        usdaMinter.requestTokens(address(USTB), amount);
+        vm.stopPrank();
+
+        // ~ Post-state check 1 ~
+
+        assertEq(djUsdToken.balanceOf(alice), 0);
+        assertEq(USTB.balanceOf(alice), 0);
+        assertEq(USTB.balanceOf(address(usdaMinter)), amount);
+
+        requests = usdaMinter.getRedemptionRequests(alice, address(USTB), 0, 10);
+        assertEq(requests.length, 1);
+        assertEq(requests[0].amount, amount);
+        assertEq(requests[0].claimableAfter, block.timestamp + 5 days);
+        assertEq(requests[0].claimed, 0);
+
+        uint256 requested = usdaMinter.getPendingClaims(address(USTB));
+        uint256 claimable = usdaMinter.claimableTokens(alice, address(USTB));
+
+        assertEq(requested, amount);
+        assertEq(claimable, 0);
+
+        // ~ Update coverage ratio ~
+
+        vm.prank(admin);
+        usdaMinter.setCoverageRatio(ratio);
+
+        uint256 amountAfterRatio = amount * ratio / 1e18;
+
+        // ~ Warp to post-claimDelay and query claimable ~
+
+        vm.warp(block.timestamp + usdaMinter.claimDelay());
+
+        requested = usdaMinter.getPendingClaims(address(USTB));
+        claimable = usdaMinter.claimableTokens(alice, address(USTB));
+
+        assertEq(requested, amount);
+        assertLt(claimable, amount);
+        assertEq(claimable, amountAfterRatio);
+
+        // ~ Alice claims ~
+
+        vm.prank(alice);
+        usdaMinter.claimTokens(address(USTB));
+
+        // ~ Post-state check 2 ~
+
+        assertEq(djUsdToken.balanceOf(alice), 0);
+        assertEq(USTB.balanceOf(alice), amountAfterRatio);
+        assertEq(USTB.balanceOf(address(usdaMinter)), amount - amountAfterRatio);
+
+        requests = usdaMinter.getRedemptionRequests(alice, address(USTB), 0, 10);
+        assertEq(requests.length, 1);
+        assertEq(requests[0].amount, amount);
+        assertEq(requests[0].claimableAfter, block.timestamp);
+        assertEq(requests[0].claimed, amount * ratio / 1e18);
+
+        requested = usdaMinter.getPendingClaims(address(USTB));
+        claimable = usdaMinter.claimableTokens(alice, address(USTB));
+
+        assertEq(requested, 0);
+        assertEq(claimable, 0);
+    }
+
+    function test_usdaMinter_claimTokens_coverageRatioSub1_multiple() public {
+        // ~ config ~
+
+        uint256 amount = 10 ether;
+
+        vm.prank(address(usdaMinter));
+        djUsdToken.mint(alice, amount*2);
+        deal(address(USTB), address(usdaMinter), amount*2);
+
+        // ~ Pre-state check ~
+
+        assertEq(djUsdToken.balanceOf(alice), amount*2);
+        assertEq(USTB.balanceOf(alice), 0);
+        assertEq(USTB.balanceOf(address(usdaMinter)), amount*2);
+
+        USDaMinter.RedemptionRequest[] memory requests = usdaMinter.getRedemptionRequests(alice, address(USTB), 0, 10);
+        assertEq(requests.length, 0);
+
+        // ~ Alice executes requestTokens ~
+
+        vm.startPrank(alice);
+        djUsdToken.approve(address(usdaMinter), amount);
+        usdaMinter.requestTokens(address(USTB), amount);
+        vm.stopPrank();
+
+        // ~ Post-state check 1 ~
+
+        assertEq(djUsdToken.balanceOf(alice), amount);
+        assertEq(USTB.balanceOf(alice), 0);
+        assertEq(USTB.balanceOf(address(usdaMinter)), amount*2);
+
+        requests = usdaMinter.getRedemptionRequests(alice, address(USTB), 0, 10);
+        assertEq(requests.length, 1);
+        assertEq(requests[0].amount, amount);
+        assertEq(requests[0].claimableAfter, block.timestamp + 5 days);
+        assertEq(requests[0].claimed, 0);
+
+        uint256 requested = usdaMinter.getPendingClaims(address(USTB));
+        uint256 claimable = usdaMinter.claimableTokens(alice, address(USTB));
+
+        assertEq(requested, amount);
+        assertEq(claimable, 0);
+
+        // ~ Update coverage ratio ~
+
+        vm.prank(admin);
+        usdaMinter.setCoverageRatio(.9 ether);
+        assertEq(usdaMinter.latestCoverageRatio(), .9 ether);
+
+        uint256 ratio = usdaMinter.latestCoverageRatio();
+        uint256 amountAfterRatio = amount * ratio / 1e18;
+
+        // ~ Warp to post-claimDelay and query claimable ~
+
+        vm.warp(block.timestamp + usdaMinter.claimDelay());
+
+        requested = usdaMinter.getPendingClaims(address(USTB));
+        claimable = usdaMinter.claimableTokens(alice, address(USTB));
+
+        assertEq(requested, amount);
+        assertLt(claimable, amount);
+        assertEq(claimable, amountAfterRatio);
+
+        // ~ Alice claims ~
+
+        vm.prank(alice);
+        usdaMinter.claimTokens(address(USTB));
+
+        // ~ Post-state check 2 ~
+
+        assertEq(djUsdToken.balanceOf(alice), amount);
+        assertEq(USTB.balanceOf(alice), amountAfterRatio);
+        assertEq(USTB.balanceOf(address(usdaMinter)), amount*2 - amountAfterRatio);
+
+        requests = usdaMinter.getRedemptionRequests(alice, address(USTB), 0, 10);
+        assertEq(requests.length, 1);
+        assertEq(requests[0].amount, amount);
+        assertEq(requests[0].claimableAfter, block.timestamp);
+        assertEq(requests[0].claimed, amount * ratio / 1e18);
+
+        requested = usdaMinter.getPendingClaims(address(USTB));
+        claimable = usdaMinter.claimableTokens(alice, address(USTB));
+
+        assertEq(requested, 0);
+        assertEq(claimable, 0);
+
+        // ~ alice requests another claim ~
+
+        vm.startPrank(alice);
+        djUsdToken.approve(address(usdaMinter), amount);
+        usdaMinter.requestTokens(address(USTB), amount);
+        vm.stopPrank();
+
+        // ~ Post-state check 3 ~
+
+        assertEq(djUsdToken.balanceOf(alice), 0);
+        assertEq(USTB.balanceOf(alice), amountAfterRatio);
+        assertEq(USTB.balanceOf(address(usdaMinter)), amount*2 - amountAfterRatio);
+
+        requests = usdaMinter.getRedemptionRequests(alice, address(USTB), 0, 10);
+        assertEq(requests.length, 2);
+        assertEq(requests[0].amount, amount);
+        assertEq(requests[0].claimableAfter, block.timestamp);
+        assertEq(requests[0].claimed, amount * ratio / 1e18);
+        assertEq(requests[1].amount, amount);
+        assertEq(requests[1].claimableAfter, block.timestamp + 5 days);
+        assertEq(requests[1].claimed, 0);
+
+        requested = usdaMinter.getPendingClaims(address(USTB));
+        claimable = usdaMinter.claimableTokens(alice, address(USTB));
+
+        assertEq(requested, amount);
+        assertEq(claimable, 0);
+
+        // ~ Update coverage ratio ~
+
+        vm.prank(admin);
+        usdaMinter.setCoverageRatio(1 ether);
+        assertEq(usdaMinter.latestCoverageRatio(), 1 ether);
+
+        // ~ Warp to post-claimDelay and query claimable ~
+
+        vm.warp(block.timestamp + usdaMinter.claimDelay());
+
+        requested = usdaMinter.getPendingClaims(address(USTB));
+        claimable = usdaMinter.claimableTokens(alice, address(USTB));
+
+        assertEq(requested, amount);
+        assertEq(claimable, amount);
+
+        // ~ Alice claims ~
+
+        vm.prank(alice);
+        usdaMinter.claimTokens(address(USTB));
+
+        // ~ Post-state check 4 ~
+
+        assertEq(djUsdToken.balanceOf(alice), 0);
+        assertEq(USTB.balanceOf(alice), amount + amountAfterRatio);
+        assertEq(USTB.balanceOf(address(usdaMinter)), amount - amountAfterRatio);
+
+        requests = usdaMinter.getRedemptionRequests(alice, address(USTB), 0, 10);
+        assertEq(requests.length, 2);
+        assertEq(requests[0].amount, amount);
+        assertLt(requests[0].claimableAfter, block.timestamp);
+        assertEq(requests[0].claimed, amount * ratio / 1e18);
+        assertEq(requests[1].amount, amount);
+        assertEq(requests[1].claimableAfter, block.timestamp);
+        assertEq(requests[1].claimed, amount);
+
+        requested = usdaMinter.getPendingClaims(address(USTB));
+        claimable = usdaMinter.claimableTokens(alice, address(USTB));
+
+        assertEq(requested, 0);
+        assertEq(claimable, 0);
+    }
 }
