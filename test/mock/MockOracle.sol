@@ -10,13 +10,13 @@ contract MockOracle is IOracle {
     using Math for uint256;
 
     uint256 public constant PRICE_PRECISION = 1e18;
+    uint256 private _staticPrice;
 
     address public immutable token;
 
     bool private immutable _scaleUp;
     uint256 private immutable _scalePrecision;
     uint256 private immutable _tokenPrecision;
-    uint256 private immutable _staticPrice;
 
     /**
      * @notice Constructs the StaticPriceOracle contract.
@@ -44,6 +44,18 @@ contract MockOracle is IOracle {
      * @return amount The calculated amount of the token.
      */
     function amountOf(uint256 value, Math.Rounding rounding) external view returns (uint256 amount) {
+        amount = value.mulDiv(_tokenPrecision, _latestPrice(), rounding);
+    }
+
+    /**
+     * @notice Converts a value in the oracle's quote currency to an amount of the token, while ignoring maxAge.
+     * @dev Calculates the amount of token equivalent to the given value based on the static price, disregarding age
+     * constraints.
+     * @param value The value to convert.
+     * @param rounding The rounding direction (up or down).
+     * @return amount The calculated amount of the token.
+     */
+    function amountOf(uint256 value, uint256, Math.Rounding rounding) external view returns (uint256 amount) {
         amount = value.mulDiv(_tokenPrecision, _latestPrice(), rounding);
     }
 
@@ -92,6 +104,18 @@ contract MockOracle is IOracle {
      * @return value The calculated value in the quote currency.
      */
     function valueOf(uint256 amount, Math.Rounding rounding) external view returns (uint256 value) {
+        value = _valueOf(amount, _latestPrice(), rounding);
+    }
+
+    /**
+     * @notice Converts an amount in the oracle's asset to a value in the base currency, while ignoring maxAge.
+     * @dev Computes the value in the quote currency for a given amount, based on the static price, disregarding age
+     * constraints.
+     * @param amount The amount of the oracle's asset to convert.
+     * @param rounding The rounding direction (up or down).
+     * @return value The calculated value in the base currency.
+     */
+    function valueOf(uint256 amount, uint256, Math.Rounding rounding) external view returns (uint256 value) {
         value = _valueOf(amount, _latestPrice(), rounding);
     }
 

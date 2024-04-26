@@ -223,4 +223,8 @@ contract BaseSetup is Test, IUSDaDefinitions {
         gelato = vm.addr(gelatoPrivateKey);
         mainCustodian = vm.addr(mainCustodianPrivateKey);
     }
+
+    function _changeOraclePrice(address oracle, uint256 price) internal {
+        vm.store(oracle, 0, bytes32(price));
+    }
 }

@@ -72,6 +72,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
         mapping(address user => mapping(address asset => uint256[])) redemptionRequestsByAsset;
         mapping(address user => RedemptionRequest[]) redemptionRequests;
         mapping(address user => bool) isWhitelisted;
+        uint256 maxAge;
         address custodian;
         address admin;
         address whitelister;
@@ -97,6 +98,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
     event AssetRestored(address indexed asset);
     event ClaimDelayUpdated(uint48 claimDelay);
     event CoverageRatioUpdated(uint256 ratio);
+    event MaxAgeUpdated(uint256 newMaxAge);
     event CustodianUpdated(address indexed custodian);
     event AdminUpdated(address indexed admin);
     event WhitelisterUpdated(address indexed whitelister);
@@ -105,7 +107,12 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
     event Mint(address indexed user, address indexed asset, uint256 amount, uint256 received);
     event RebaseDisabled(address indexed asset);
     event TokensRequested(
-        address indexed user, address indexed asset, uint256 indexed index, uint256 amount, uint256 claimableAfter
+        address indexed user,
+        address indexed asset,
+        uint256 indexed index,
+        uint256 amountUSDa,
+        uint256 amountCollateral,
+        uint256 claimableAfter
     );
     event TokenRequestUpdated(
         address indexed user,
@@ -243,6 +250,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
         $.claimDelay = initialClaimDelay;
         $.coverageRatio.push(clock(), 1e18);
         $.isWhitelisted[initialOwner] = true;
+        $.maxAge = 1 hours;
     }
 
     /**
@@ -253,7 +261,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * meaningful.
      * @param delay The new claim delay in seconds. Must be different from the current delay to be set successfully.
      */
-    function setClaimDelay(uint48 delay) external onlyOwner {
+    function setClaimDelay(uint48 delay) external nonReentrant onlyOwner {
         USDaMinterStorage storage $ = _getUSDaMinterStorage();
         $.claimDelay.requireDifferentUint48(delay);
         $.claimDelay = delay;
@@ -266,12 +274,24 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * to fund 100% of requests, this ratio would be set to sub-1e18 until the protocol goes back to 100%.
      * @param ratio New ratio.
      */
-    function setCoverageRatio(uint256 ratio) external onlyAdmin { // TODO: Test
+    function setCoverageRatio(uint256 ratio) external nonReentrant onlyAdmin { // TODO: Test
         ratio.requireLessThanOrEqualToUint256(1e18);
         latestCoverageRatio().requireDifferentUint256(ratio);
         USDaMinterStorage storage $ = _getUSDaMinterStorage();
         $.coverageRatio.push(clock(), uint208(ratio));
         emit CoverageRatioUpdated(ratio);
+    }
+
+    /**
+     * @notice This method allows the owner to update the maxAge
+     * @dev The maxAge is the amount of time we will continue to take an oracle's price before we deem it "stale".
+     * @param newMaxAge New max age for oracle prices.
+     */
+    function setMaxAge(uint256 newMaxAge) external onlyOwner {
+        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        $.maxAge.requireDifferentUint256(newMaxAge);
+        $.maxAge = newMaxAge;
+        emit MaxAgeUpdated(newMaxAge);
     }
 
     /**
@@ -284,7 +304,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * @custom:error NoFundsWithdrawable Thrown if there are no funds to be withdrawn or amount exceeds withdrawable.
      * @custom:event CustodyTransfer Amount of asset transferred to what custodian.
      */
-    function withdrawFunds(address asset, uint256 amount) external onlyCustodian {
+    function withdrawFunds(address asset, uint256 amount) external nonReentrant onlyCustodian {
         USDaMinterStorage storage $ = _getUSDaMinterStorage();
         uint256 required = $.pendingClaims[asset];
         uint256 bal = IERC20(asset).balanceOf(address(this));
@@ -473,7 +493,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
         amountIn = _pullAssets(user, asset, amountIn);
 
         uint256 balanceBefore = USDa.balanceOf(user);
-        USDa.mint(user, IOracle($.assetInfos[asset].oracle).valueOf(amountIn, Math.Rounding.Floor));
+        USDa.mint(user, IOracle($.assetInfos[asset].oracle).valueOf(amountIn, $.maxAge, Math.Rounding.Floor));
 
         unchecked {
             amountOut = USDa.balanceOf(user) - balanceBefore;
@@ -502,17 +522,18 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
         USDaMinterStorage storage $ = _getUSDaMinterStorage();
         address user = msg.sender;
         USDa.burnFrom(user, amount);
-        $.pendingClaims[asset] += amount;
+        uint256 amountAsset = IOracle(_getUSDaMinterStorage().assetInfos[asset].oracle).amountOf(amount, $.maxAge, Math.Rounding.Floor);
+        $.pendingClaims[asset] += amountAsset;
         uint48 claimableAfter = clock() + $.claimDelay;
         RedemptionRequest[] storage userRequests = $.redemptionRequests[user];
         uint256[] storage userRequestsByAsset = $.redemptionRequestsByAsset[user][asset];
-        userRequests.push(RedemptionRequest({asset: asset, amount: amount, claimableAfter: claimableAfter, claimed: 0}));
+        userRequests.push(RedemptionRequest({asset: asset, amount: amountAsset, claimableAfter: claimableAfter, claimed: 0}));
         uint256 index;
         unchecked {
             index = (userRequests.length - 1).toUint32();
         }
         userRequestsByAsset.push(index);
-        emit TokensRequested(user, asset, index, amount, claimableAfter);
+        emit TokensRequested(user, asset, index, amount, amountAsset, claimableAfter);
     }
 
     /**
@@ -551,7 +572,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * @custom:error NoTokensClaimable There are no tokens that can be claimed.
      * @custom:event TokensClaimed The address of the user who claimed, the asset address, and the amount claimed.
      */
-    function claimTokens(address asset) external validAsset(asset, true) onlyWhitelisted {
+    function claimTokens(address asset) external nonReentrant validAsset(asset, true) onlyWhitelisted {
         USDaMinterStorage storage $ = _getUSDaMinterStorage();
         address user = msg.sender;
 
@@ -839,6 +860,34 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
             }
         }
         assets = IOracle(_getUSDaMinterStorage().assetInfos[asset].oracle).valueOf(amountIn, Math.Rounding.Floor);
+    }
+
+    /**
+     * @notice Provides a quote of assets a user would receive if they used a specified amountIn of USDa to
+     * redeem assets.
+     * @dev Accounts for the user's rebase opt-out status. If opted out, a 1:1 ratio is used. Otherwise, rebase
+     * adjustments apply.
+     * @param asset The address of the supported asset to calculate the quote for.
+     * @param from The account whose opt-out status to check.
+     * @param amountIn The amount of USDa being used to redeem collateral.
+     * @return collateral The amount of collateral `from` would receive if they redeemed with `amountIn` of USDa.
+     */
+    function quoteRedeem(address asset, address from, uint256 amountIn)
+        external
+        view
+        validAsset(asset, false)
+        returns (uint256 collateral)
+    {
+        (bool success, bytes memory data) = address(USDa).staticcall(abi.encodeCall(IRebaseToken.optedOut, (from)));
+        if (success) {
+            bool isOptedOut = abi.decode(data, (bool));
+            if (!isOptedOut) {
+                uint256 rebaseIndex = IRebaseToken(address(USDa)).rebaseIndex();
+                uint256 usdaShares = RebaseTokenMath.toShares(amountIn, rebaseIndex);
+                amountIn = RebaseTokenMath.toTokens(usdaShares, rebaseIndex);
+            }
+        }
+        collateral = IOracle(_getUSDaMinterStorage().assetInfos[asset].oracle).amountOf(amountIn, Math.Rounding.Floor);
     }
 
     /**

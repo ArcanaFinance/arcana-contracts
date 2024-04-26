@@ -221,6 +221,8 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         USDaMinter.RedemptionRequest[] memory requests = usdaMinter.getRedemptionRequests(alice, address(USTB), 0, 10);
         assertEq(requests.length, 0);
 
+        assertEq(usdaMinter.quoteRedeem(address(USTB), alice, amount), amount);
+
         // ~ Alice executes requestTokens ~
 
         vm.startPrank(alice);
@@ -355,6 +357,8 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
 
         USDaMinter.RedemptionRequest[] memory requests = usdaMinter.getRedemptionRequests(alice, address(USTB), 0, 10);
         assertEq(requests.length, 0);
+
+        assertEq(usdaMinter.quoteRedeem(address(USTB), alice, amount), amount);
 
         // ~ Alice executes requestTokens ~
 
@@ -917,6 +921,8 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         assertGt(newBal, amount);
         assertApproxEqAbs(djUsdToken.balanceOf(alice), newBal, 0);
         deal(address(USTB), address(usdaMinter), newBal);
+
+        assertEq(usdaMinter.quoteRedeem(address(USTB), alice, newBal), newBal);
 
         // ~ Alice executes requestTokens ~
 
@@ -1868,5 +1874,31 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
 
         assertEq(requested, 0);
         assertEq(claimable, 0);
+    }
+
+    function test_usdaMinter_quoteMint() public {
+        uint256 amountIn = 1_000 * 1e18;
+        uint256 newPrice = 1.2 * 1e18;
+
+        assertEq(usdaMinter.quoteMint(address(USTB), bob, amountIn), amountIn);
+        assertEq(USTBOracle.latestPrice(), 1 * 1e18);
+
+        _changeOraclePrice(address(USTBOracle), newPrice);
+
+        assertEq(usdaMinter.quoteMint(address(USTB), bob, amountIn), amountIn * newPrice / 1e18);
+        assertEq(USTBOracle.latestPrice(), 1.2 * 1e18);
+    }
+
+    function test_usdaMinter_quoteRedeem() public {
+        uint256 amountIn = 1_000 * 1e18;
+        uint256 newPrice = 1.2 * 1e18;
+
+        assertEq(usdaMinter.quoteRedeem(address(USTB), bob, amountIn), amountIn);
+        assertEq(USTBOracle.latestPrice(), 1 * 1e18);
+
+        _changeOraclePrice(address(USTBOracle), newPrice);
+
+        assertEq(usdaMinter.quoteRedeem(address(USTB), bob, amountIn), amountIn * 1e18 / newPrice);
+        assertEq(USTBOracle.latestPrice(), 1.2 * 1e18);
     }
 }
