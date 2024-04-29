@@ -11,6 +11,7 @@ import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.s
 import {USDa} from "../../src/USDa.sol";
 import {IUSDa} from "../../src/interfaces/IUSDa.sol";
 import {USDaMinter} from "../../src/USDaMinter.sol";
+import {CustodianManager} from "../../src/CustodianManager.sol";
 import {USDaTaxManager} from "../../src/USDaTaxManager.sol";
 import {USDaFeeCollector} from "../../src/USDaFeeCollector.sol";
 import {USDaPointsBoostVault} from "../../src/USDaPointsBoostingVault.sol";
@@ -20,13 +21,13 @@ import "../../test/utils/Constants.sol";
 
 /**
     @dev To run:
-        forge script script/deploy/DeployToUnreal.s.sol:DeployToUnreal --broadcast --legacy \
-        --gas-estimate-multiplier 200 \
-        --verify --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
+    forge script script/deploy/DeployToUnreal.s.sol:DeployToUnreal --broadcast --legacy \
+    --gas-estimate-multiplier 200 \
+    --verify --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
 
     @dev To verify manually:
-        forge verify-contract <CONTRACT_ADDRESS> --chain-id 18233 --watch \
-        src/Contract.sol:Contract --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
+    forge verify-contract <CONTRACT_ADDRESS> --chain-id 18233 --watch \
+    src/Contract.sol:Contract --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
  */
 
 /**
@@ -59,7 +60,7 @@ contract DeployToUnreal is DeployUtility {
 
         address[] memory distributors = new address[](2);
         distributors[0] = UNREAL_REVENUE_DISTRIBUTOR;
-        distributors[1] = adminAddress; // TODO: Djinn Escrow
+        distributors[1] = adminAddress; // TODO: Djinn Escrow or Insurance Fund?
 
         uint256[] memory ratios = new uint256[](2);
         ratios[0] = 1;
@@ -69,8 +70,7 @@ contract DeployToUnreal is DeployUtility {
         USDa djUsdToken = new USDa(UNREAL_CHAINID, UNREAL_LZ_ENDPOINT_V2);
         ERC1967Proxy djUsdTokenProxy = new ERC1967Proxy(
             address(djUsdToken),
-            abi.encodeWithSelector(
-                USDa.initialize.selector,
+            abi.encodeWithSelector(USDa.initialize.selector,
                 adminAddress,
                 adminAddress // TODO: RebaseManager
             )
@@ -87,9 +87,25 @@ contract DeployToUnreal is DeployUtility {
         USDaMinter djUsdMintingContract = new USDaMinter(IUSDa(address(djUsdToken)));
         ERC1967Proxy arcanaMintingProxy = new ERC1967Proxy(
             address(djUsdMintingContract),
-            abi.encodeWithSelector(USDaMinter.initialize.selector, adminAddress, 5 days)
+            abi.encodeWithSelector(USDaMinter.initialize.selector,
+                adminAddress,
+                UNREAL_JARON,
+                adminAddress, // TODO: Whitelister -> Gelato task?
+                5 days
+            )
         );
         djUsdMintingContract = USDaMinter(payable(address(arcanaMintingProxy)));
+
+        // Deploy CustodianManager
+        CustodianManager custodian = new CustodianManager(address(djUsdMintingContract));
+        ERC1967Proxy custodianProxy = new ERC1967Proxy(
+            address(custodian),
+            abi.encodeWithSelector(CustodianManager.initialize.selector,
+                adminAddress,
+                UNREAL_JARON
+            )
+        );
+        custodian = CustodianManager(address(custodianProxy));
 
         // Deploy USDa Vault
         USDaPointsBoostVault djUsdVault = new USDaPointsBoostVault(address(djUsdToken));
@@ -98,7 +114,7 @@ contract DeployToUnreal is DeployUtility {
         // Config
         // ------
 
-        djUsdMintingContract.updateCustodian(UNREAL_CUSTODIAN);
+        djUsdMintingContract.updateCustodian(address(custodian));
 
         djUsdMintingContract.addSupportedAsset(UNREAL_USTB, UNREAL_USTB_ORACLE);
 
@@ -114,6 +130,7 @@ contract DeployToUnreal is DeployUtility {
 
         _saveDeploymentAddress("USDa", address(djUsdToken));
         _saveDeploymentAddress("USDaMinter", address(djUsdMintingContract));
+        _saveDeploymentAddress("CustodianManager", address(custodian));
         _saveDeploymentAddress("USDaTaxManager", address(taxManager));
         _saveDeploymentAddress("USDaFeeCollector", address(feeCollector));
         _saveDeploymentAddress("USDaPointsBoostVault", address(djUsdVault));
