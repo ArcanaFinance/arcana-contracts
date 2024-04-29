@@ -7,28 +7,28 @@ import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/U
 
 // local interfaces
 import {ITaxManager} from "./interfaces/ITaxManager.sol";
-import {IDJUSDDefinitions} from "./interfaces/IDJUSDDefinitions.sol";
+import {IUSDaDefinitions} from "./interfaces/IUSDaDefinitions.sol";
 
 // local imports
 import {LayerZeroRebaseTokenUpgradeable} from "@tangible/contracts/tokens/LayerZeroRebaseTokenUpgradeable.sol";
 import {CrossChainToken} from "@tangible/contracts/tokens/CrossChainToken.sol";
 
 /**
- * @title DJUSD
- * @notice DJUSD Stable Coin Contract
+ * @title USDa
+ * @notice USDa Stable Coin Contract
  * @dev This contract extends the functionality of `LayerZeroRebaseTokenUpgradeable` to support rebasing and cross-chain
  * bridging of this token.
  */
-contract DJUSD is LayerZeroRebaseTokenUpgradeable, UUPSUpgradeable, IDJUSDDefinitions {
+contract USDa is LayerZeroRebaseTokenUpgradeable, UUPSUpgradeable, IUSDaDefinitions {
     // ~ Variables ~
 
-    /// @dev Stores the address of the `DJUSDMinting` contract.
+    /// @dev Stores the address of the `USDaMinter` contract.
     address public minter;
     /// @dev Stores the address of the Rebase Manager which calls `setRebaseIndex`.
     address public rebaseManager;
     /// @dev Stores the total supply limit. Total Supply cannot exceed this amount.
     uint256 public supplyLimit;
-    /// @dev Stores DJUSDTaxManager contract address.
+    /// @dev Stores USDaTaxManager contract address.
     address public taxManager;
 
     // ~ Constructor ~
@@ -55,15 +55,20 @@ contract DJUSD is LayerZeroRebaseTokenUpgradeable, UUPSUpgradeable, IDJUSDDefini
         if (_admin == address(0)) revert ZeroAddressException();
         if (_rebaseManager == address(0)) revert ZeroAddressException();
 
-        __LayerZeroRebaseToken_init(_admin, "DJUSD", "DJUSD");
+        __LayerZeroRebaseToken_init(_admin, "USDa", "USDa");
         _setRebaseIndex(1 ether, 1);
         rebaseManager = _rebaseManager;
     }
 
     // ~ External Methods ~
 
+    /**
+     * @notice This method allows the rebaseManager to set the rebaseIndex.
+     * @param newIndex The new rebaseIndex.
+     */
     function setRebaseIndex(uint256 newIndex, uint256 nonce) external {
         if (msg.sender != rebaseManager && msg.sender != taxManager) revert NotAuthorized(msg.sender);
+        if (newIndex == 0) revert ZeroRebaseIndex();
         uint256 currentIndex = rebaseIndex();
 
         if (taxManager == address(0) || msg.sender == taxManager) {
@@ -85,7 +90,7 @@ contract DJUSD is LayerZeroRebaseTokenUpgradeable, UUPSUpgradeable, IDJUSDDefini
     }
 
     /**
-     * @notice Allows owner to set a ceiling on DJUSD total supply to throttle minting.
+     * @notice Allows owner to set a ceiling on USDa total supply to throttle minting.
      */
     function setSupplyLimit(uint256 limit) external onlyOwner {
         require(limit >= totalSupply(), "Cannot set limit less than totalSupply");
@@ -120,7 +125,7 @@ contract DJUSD is LayerZeroRebaseTokenUpgradeable, UUPSUpgradeable, IDJUSDDefini
     }
 
     /**
-     * @notice Allows the `minter` to mint more DJUSD tokens to a specified `to` address.
+     * @notice Allows the `minter` to mint more USDa tokens to a specified `to` address.
      */
     function mint(address to, uint256 amount) external {
         if (msg.sender != minter && msg.sender != taxManager) revert OnlyMinter();

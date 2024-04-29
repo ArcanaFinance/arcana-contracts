@@ -10,13 +10,13 @@ import {stdStorage, StdStorage, Test} from "forge-std/Test.sol";
 import {SigUtils} from "../utils/SigUtils.sol";
 import {Vm} from "forge-std/Vm.sol";
 
-import {DJUSD} from "../../src/DJUSD.sol";
-import {DJUSDTaxManager} from "../../src/DJUSDTaxManager.sol";
+import {USDa} from "../../src/USDa.sol";
+import {USDaTaxManager} from "../../src/USDaTaxManager.sol";
 import {BaseSetup} from "../BaseSetup.sol";
 
-contract DJUSDTest is Test, BaseSetup {
-    DJUSD internal _djUsdToken;
-    DJUSDTaxManager internal _taxManager;
+contract USDaTest is Test, BaseSetup {
+    USDa internal _djUsdToken;
+    USDaTaxManager internal _taxManager;
 
     //address internal constant owner = address(bytes20(bytes("owner")));
     address internal constant _newOwner = address(bytes20(bytes("new owner")));
@@ -40,17 +40,13 @@ contract DJUSDTest is Test, BaseSetup {
         vm.label(_newRebaseManager, "newRebaseManager");
         vm.label(_layerZeroEndpoint, "layerZeroEndpoint");
 
-        _djUsdToken = new DJUSD(31337, _layerZeroEndpoint);
+        _djUsdToken = new USDa(31337, _layerZeroEndpoint);
         ERC1967Proxy _djUsdTokenProxy = new ERC1967Proxy(
-            address(_djUsdToken),
-            abi.encodeWithSelector(DJUSD.initialize.selector,
-                owner,
-                _rebaseManager
-            )
+            address(_djUsdToken), abi.encodeWithSelector(USDa.initialize.selector, owner, _rebaseManager)
         );
-        _djUsdToken = DJUSD(address(_djUsdTokenProxy));
+        _djUsdToken = USDa(address(_djUsdTokenProxy));
 
-        _taxManager = new DJUSDTaxManager(owner, address(_djUsdToken), _feeCollector);
+        _taxManager = new USDaTaxManager(owner, address(_djUsdToken), _feeCollector);
 
         vm.prank(owner);
         _djUsdToken.setMinter(_minter);
@@ -74,11 +70,11 @@ contract DJUSDTest is Test, BaseSetup {
         uint256 mainChainId = block.chainid;
         uint256 sideChainId = mainChainId + 1;
 
-        DJUSD instance1 = new DJUSD(mainChainId, address(1));
+        USDa instance1 = new USDa(mainChainId, address(1));
 
         vm.chainId(sideChainId);
 
-        DJUSD instance2 = new DJUSD(mainChainId, address(1));
+        USDa instance2 = new USDa(mainChainId, address(1));
 
         bytes32 slot = keccak256(abi.encode(uint256(keccak256("openzeppelin.storage.Initializable")) - 1))
             & ~bytes32(uint256(0xff));
@@ -86,18 +82,18 @@ contract DJUSDTest is Test, BaseSetup {
         vm.store(address(instance2), slot, 0);
 
         instance1.initialize(address(2), address(3));
-        assertEq(_djUsdToken.name(), "DJUSD");
-        assertEq(_djUsdToken.symbol(), "DJUSD");
+        assertEq(_djUsdToken.name(), "USDa");
+        assertEq(_djUsdToken.symbol(), "USDa");
         assertEq(_djUsdToken.rebaseIndex(), 1 ether);
 
         instance2.initialize(address(2), address(3));
-        assertEq(_djUsdToken.name(), "DJUSD");
-        assertEq(_djUsdToken.symbol(), "DJUSD");
+        assertEq(_djUsdToken.name(), "USDa");
+        assertEq(_djUsdToken.symbol(), "USDa");
         assertEq(_djUsdToken.rebaseIndex(), 1 ether);
     }
 
     function test_djUsdToken_isUpgradeable() public {
-        DJUSD newImplementation = new DJUSD(block.chainid, address(1));
+        USDa newImplementation = new USDa(block.chainid, address(1));
 
         bytes32 implementationSlot =
             vm.load(address(_djUsdToken), 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc);
@@ -112,7 +108,7 @@ contract DJUSDTest is Test, BaseSetup {
     }
 
     function test_djUsdToken_isUpgradeable_onlyOwner() public {
-        DJUSD newImplementation = new DJUSD(block.chainid, address(1));
+        USDa newImplementation = new USDa(block.chainid, address(1));
 
         vm.prank(_minter);
         vm.expectRevert();
