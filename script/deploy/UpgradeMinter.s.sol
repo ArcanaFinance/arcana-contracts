@@ -26,11 +26,11 @@ import "../../test/utils/Constants.sol";
 /**
  * @title UpgradeMinter
  * @author Chase Brown
- * @notice This script deploys the RWA ecosystem to Unreal chain.
+ * @notice This script deploys a new implementation contract for USDaMinter and upgrades the current proxy.
  */
 contract UpgradeMinter is DeployUtility {
     USDaMinter public usdaMinter;
-    address public djUsdToken;
+    address public usdaToken;
 
     uint256 public DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
     string public UNREAL_RPC_URL = vm.envString("UNREAL_RPC_URL");
@@ -41,7 +41,7 @@ contract UpgradeMinter is DeployUtility {
         vm.createSelectFork(UNREAL_RPC_URL);
         _setUp("unreal");
         usdaMinter = USDaMinter(_loadDeploymentAddress("USDaMinter"));
-        djUsdToken = _loadDeploymentAddress("USDa");
+        usdaToken = _loadDeploymentAddress("USDa");
     }
 
     // ~ Script ~
@@ -49,7 +49,7 @@ contract UpgradeMinter is DeployUtility {
     function run() public {
         vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
 
-        USDaMinter newDjUsdMinter = new USDaMinter(IUSDa(djUsdToken));
+        USDaMinter newDjUsdMinter = new USDaMinter(IUSDa(usdaToken));
         usdaMinter.upgradeToAndCall(address(newDjUsdMinter), "");
         
         vm.stopBroadcast();

@@ -10,6 +10,7 @@ import {SigUtils} from "../utils/SigUtils.sol";
 import {Vm} from "forge-std/Vm.sol";
 
 import {USDa} from "../../src/USDa.sol";
+import {IUSDaDefinitions} from "../../src/interfaces/IUSDaDefinitions.sol";
 import {USDaTaxManager} from "../../src/USDaTaxManager.sol";
 import {BaseSetup} from "../BaseSetup.sol";
 import {LZEndpointMock} from "../mock/LZEndpointMock.sol";
@@ -78,6 +79,13 @@ contract USDaRebaseTest is Test, BaseSetup {
         _djUsdToken.setRebaseIndex(2 ether, 1);
         assertGt(_djUsdToken.rebaseIndex(), 1 ether);
         assertGt(_djUsdToken.balanceOf(_feeCollector), 0);
+    }
+
+    function test_rebase_setRebaseIndex_restrictions() public {
+        // rebaseIndex can't be 0
+        vm.startPrank(_rebaseManager);
+        vm.expectRevert(abi.encodeWithSelector(IUSDaDefinitions.ZeroRebaseIndex.selector));
+        _djUsdToken.setRebaseIndex(0, 1);
     }
 
     function test_rebase_setRebaseIndex_consecutive() public {

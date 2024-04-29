@@ -2,9 +2,15 @@
 
 ## Overview
 
+TODO
+
 ### What is Arcana?
 
+TODO
+
 ### What is USDa?
+
+TODO
 
 ## Technical
 
@@ -19,14 +25,14 @@
 
 ### Tests
 
-- [USDaTest](./test/tests/USDa.t.sol) - TODO
-- [USDaRebaseTest](./test/tests/USDa.Rebase.t.sol) - TODO
-- [USDaLzAppTest](./test/tests/USDa.LzApp.t.sol) - TODO
-- [USDaVaultTest](./test/tests/USDa.Vault.t.sol) - TODO
-- [USDaFeeCollectorTest](./test/tests/USDaFeeCollector.t.sol) - TODO
-- [CustodianManagerTest](./test/tests/CustodianManager.t.sol) - TODO
-- [USDaMinterCoreTest](./test/tests/USDaMinter.t.sol) - TODO
-- [USDaMinterUSTBIntegrationTest](./test/tests/USDaMinter.USTB.t.sol) - TODO
+- [USDaTest](./test/tests/USDa.t.sol) - Core unit tests for USDa basic functionality.
+- [USDaRebaseTest](./test/tests/USDa.Rebase.t.sol) - Contains unit tests for rebase-based functionality for USDa.
+- [USDaLzAppTest](./test/tests/USDa.LzApp.t.sol) - Contains unit tests for LayerZero App setters.
+- [USDaVaultTest](./test/tests/USDa.Vault.t.sol) - Unit Tests for USDaPointsBoostVault contract interactions.
+- [USDaFeeCollectorTest](./test/tests/USDaFeeCollector.t.sol) - Unit Tests for USDaFeeCollector contract interactions.
+- [CustodianManagerTest](./test/tests/CustodianManager.t.sol) - Unit Tests for CustodianManager contract interactions.
+- [USDaMinterCoreTest](./test/tests/USDaMinter.t.sol) - Core unit tests for USDaMinter contract functionality.
+- [USDaMinterUSTBIntegrationTest](./test/tests/USDaMinter.USTB.t.sol) - Contains integration tests for USDaMinter when USTB is the collateral token.
 
 ## Local How-To's
 

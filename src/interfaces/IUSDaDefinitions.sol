@@ -4,7 +4,7 @@ pragma solidity ^0.8.19;
 interface IUSDaDefinitions {
     // ~ Events ~
 
-    /// @notice This event is fired when the minter changes
+    /// @notice This event is fired when the minter changes.
     event MinterUpdated(address indexed newMinter, address indexed oldMinter);
     /// @notice This event is emitted when the rebase manager is updated.
     event RebaseIndexManagerUpdated(address indexed manager);
@@ -17,12 +17,14 @@ interface IUSDaDefinitions {
 
     /// @notice Error emitted when totalSupply exceeds `supplyLimit`.
     error SupplyLimitExceeded();
-    /// @notice Zero address not allowed
+    /// @notice Zero address not allowed.
     error ZeroAddressException();
-    /// @notice It's not possible to renounce the ownership
+    /// @notice It's not possible to renounce the ownership.
     error CantRenounceOwnership();
-    /// @notice Only the minter role can perform an action
+    /// @notice Only the minter role can perform an action.
     error OnlyMinter();
-    /// @notice Emitted when msg.sender is not authorized
+    /// @notice Emitted when msg.sender is not authorized.
     error NotAuthorized(address account);
+    /// @notice Emitted when the new rebaseIndex is being set to 0.
+    error ZeroRebaseIndex();
 }
