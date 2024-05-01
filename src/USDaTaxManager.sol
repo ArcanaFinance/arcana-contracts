@@ -13,7 +13,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
  */
 contract USDaTaxManager is Ownable {
     /// @dev Stores the contract reference to USDa.
-    USDa public immutable djUsd;
+    USDa public immutable usda;
     /// @dev Stores the % of each rebase that is taxed.
     uint256 public taxRate = 0.1e18;
     /// @dev Stores the address in which newly minted tokens are sent to.
@@ -35,7 +35,7 @@ contract USDaTaxManager is Ownable {
      */
     constructor(address _admin, address _usda, address _feeCollector) Ownable(_admin) {
         if (_usda == address(0) || _feeCollector == address(0)) revert ZeroAddressException();
-        djUsd = USDa(_usda);
+        usda = USDa(_usda);
         feeCollector = _feeCollector;
     }
 
@@ -47,8 +47,8 @@ contract USDaTaxManager is Ownable {
      * @param nextIndex The new rebaseIndex used to calculate the new total supply.
      */
     function collectOnRebase(uint256 currentIndex, uint256 nextIndex) external {
-        require(msg.sender == address(djUsd), "NA");
-        uint256 supply = djUsd.totalSupply();
+        require(msg.sender == address(usda), "NA");
+        uint256 supply = usda.totalSupply();
         uint256 totalSupplyShares = (supply * 1e18) / currentIndex;
         uint256 newSupply = supply * nextIndex / currentIndex;
         uint256 mintAmount;
@@ -64,9 +64,9 @@ contract USDaTaxManager is Ownable {
                 nextIndex = newSupply * 1e18 / totalSupplyShares;
             }
         }
-        djUsd.setRebaseIndex(nextIndex, 1);
+        usda.setRebaseIndex(nextIndex, 1);
         if (mintAmount != 0) {
-            djUsd.mint(feeCollector, mintAmount);
+            usda.mint(feeCollector, mintAmount);
         }
     }
 

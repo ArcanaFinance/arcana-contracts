@@ -274,7 +274,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * to fund 100% of requests, this ratio would be set to sub-1e18 until the protocol goes back to 100%.
      * @param ratio New ratio.
      */
-    function setCoverageRatio(uint256 ratio) external nonReentrant onlyAdmin { // TODO: Test
+    function setCoverageRatio(uint256 ratio) external nonReentrant onlyAdmin {
         ratio.requireLessThanOrEqualToUint256(1e18);
         latestCoverageRatio().requireDifferentUint256(ratio);
         USDaMinterStorage storage $ = _getUSDaMinterStorage();
@@ -566,7 +566,6 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * and the claim delay has elapsed.
      * Uses `_unsafeRedemptionRequestByAssetAccess` to access redemption requests directly in storage, optimizing gas
      * usage.
-     * It is vital that callers ensure the accuracy and appropriateness of the indices used to prevent errors.
      * @param asset The address of the supported asset to be claimed.
      * @custom:error InsufficientFunds The requested amount exceeds the claimable amount.
      * @custom:error NoTokensClaimable There are no tokens that can be claimed.

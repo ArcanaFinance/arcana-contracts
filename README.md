@@ -2,15 +2,11 @@
 
 ## Overview
 
-TODO
+The Arcana protocol is an ecosystem of smart contracts that allow investors to partake in a yield generation method that leverages futures trading on centralized exchanges. Investors can mint USDa via the USDaMinter contract in exchange for stablecoins. The stablecoins will be used by the protocol to generate yield by funding liquidity for CEX futures trading and USDa holders will receive yield via rebasing. 
 
-### What is Arcana?
+10% of profits from rebases are taken by the protocol via the USDaTaxManager which is called upon only when a rebase occurs. The rest of the profit goes to USDa holders. USDa holders can use their USDa to redeem stablecoins from the protocol through the USDaMinter contract.
 
-TODO
-
-### What is USDa?
-
-TODO
+The redeem flow is a 2-step process. Users will need to call USDaMinter::requestRedeem which will burn their USDa and emit an event that is picked up by an off chain element to start the movement of stablecoins to fulfill that redemption. Redeemers will need to wait 5-7 days (depending on the claimDelay assigned on the USDaMinter contract). After the delay has been completed, the redeemer may return and execute claimTokens to claim their redemption.
 
 ## Technical
 
