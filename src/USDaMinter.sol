@@ -93,7 +93,8 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
         }
     }
 
-    event AssetAdded(address indexed asset, address oracle);
+    event AssetAdded(address indexed asset, address indexed oracle);
+    event OracleUpdated(address indexed asset, address indexed oracle);
     event AssetRemoved(address indexed asset);
     event AssetRestored(address indexed asset);
     event ClaimDelayUpdated(uint48 claimDelay);
@@ -200,6 +201,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * @param includeRemoved If true, the modifier allows the asset to be marked as removed in the list of assets.
      */
     modifier validAsset(address asset, bool includeRemoved) {
+        asset.requireNonZeroAddress();
         USDaMinterStorage storage $ = _getUSDaMinterStorage();
         if (!$.assets.contains(asset) || (!includeRemoved && $.assetInfos[asset].removed)) {
             revert NotSupportedAsset(asset);
@@ -355,7 +357,6 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * safety measure for assets that implement a rebase mechanism.
      * @param asset The address of the asset to add. Must be a contract address implementing the IERC20 interface.
      * @param oracle The address of the oracle contract that provides the asset's price feed.
-     * @custom:error InvalidZeroAddress The asset address is the zero address.
      * @custom:error InvalidAddress The asset address is the same as the USDa address.
      * @custom:error ValueUnchanged The asset is already supported.
      * @custom:event AssetAdded The address of the asset that was added.
@@ -376,6 +377,23 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
             emit RebaseDisabled(asset);
         }
         emit AssetAdded(asset, oracle);
+    }
+
+    /**
+     * @notice Updates the oracle address for a supported asset.
+     * @dev The asset must already be a supported asset. This will only update the oracle used to quote mints and
+     * redemptions for that asset.
+     * @param asset The address of the supported asset.
+     * @param newOracle The address of the new oracle contract that provides the asset's price feed.
+     * @custom:error ValueUnchanged The asset is already supported.
+     * @custom:event OracleUpdated The address of the asset that was added.
+     */
+    function modifyOracleForAsset(address asset, address newOracle) external onlyOwner validAsset(asset, true) {
+        newOracle.requireNonZeroAddress();
+        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        newOracle.requireDifferentAddress($.assetInfos[asset].oracle);
+        $.assetInfos[asset].oracle = newOracle;
+        emit OracleUpdated(asset, newOracle);
     }
 
     /**
@@ -854,6 +872,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
         validAsset(asset, false)
         returns (uint256 assets)
     {
+        USDaMinterStorage storage $ = _getUSDaMinterStorage();
         (bool success, bytes memory data) = asset.staticcall(abi.encodeCall(IRebaseToken.optedOut, (from)));
         if (success) {
             bool isOptedOut = abi.decode(data, (bool));
@@ -863,7 +882,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
                 amountIn = RebaseTokenMath.toTokens(usdaShares, rebaseIndex);
             }
         }
-        assets = IOracle(_getUSDaMinterStorage().assetInfos[asset].oracle).valueOf(amountIn, Math.Rounding.Floor);
+        assets = IOracle(_getUSDaMinterStorage().assetInfos[asset].oracle).valueOf(amountIn, $.maxAge, Math.Rounding.Floor);
     }
 
     /**
@@ -882,6 +901,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
         validAsset(asset, false)
         returns (uint256 collateral)
     {
+        USDaMinterStorage storage $ = _getUSDaMinterStorage();
         (bool success, bytes memory data) = address(USDa).staticcall(abi.encodeCall(IRebaseToken.optedOut, (from)));
         if (success) {
             bool isOptedOut = abi.decode(data, (bool));
@@ -891,7 +911,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
                 amountIn = RebaseTokenMath.toTokens(usdaShares, rebaseIndex);
             }
         }
-        collateral = IOracle(_getUSDaMinterStorage().assetInfos[asset].oracle).amountOf(amountIn, Math.Rounding.Floor);
+        collateral = IOracle(_getUSDaMinterStorage().assetInfos[asset].oracle).amountOf(amountIn, $.maxAge, Math.Rounding.Floor);
     }
 
     /**

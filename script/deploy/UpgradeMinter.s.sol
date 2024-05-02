@@ -14,13 +14,13 @@ import "../../test/utils/Constants.sol";
 
 /**
     @dev To run:
-        forge script script/deploy/UpgradeMinter.s.sol:UpgradeMinter --broadcast --legacy \
-        --gas-estimate-multiplier 200 \
-        --verify --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
+    forge script script/deploy/UpgradeMinter.s.sol:UpgradeMinter --broadcast --legacy \
+    --gas-estimate-multiplier 200 \
+    --verify --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
 
     @dev To verify manually:
-        forge verify-contract <CONTRACT_ADDRESS> --chain-id 18233 --watch \
-        src/Contract.sol:Contract --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
+    forge verify-contract <CONTRACT_ADDRESS> --chain-id 18233 --watch \
+    src/Contract.sol:Contract --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
  */
 
 /**
@@ -51,7 +51,7 @@ contract UpgradeMinter is DeployUtility {
 
         USDaMinter newDjUsdMinter = new USDaMinter(IUSDa(usdaToken));
         usdaMinter.upgradeToAndCall(address(newDjUsdMinter), "");
-        
+
         vm.stopBroadcast();
     }
 }
