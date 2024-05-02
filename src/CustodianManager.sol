@@ -50,6 +50,7 @@ contract CustodianManager is OwnableUpgradeable, UUPSUpgradeable { // TODO: NatS
      * @param _usdaMinter Contract address for USDaMinter.
      */
     constructor(address _usdaMinter) {
+        _usdaMinter.requireNonZeroAddress();
         usdaMinter = USDaMinter(_usdaMinter);
     }
 
@@ -59,6 +60,9 @@ contract CustodianManager is OwnableUpgradeable, UUPSUpgradeable { // TODO: NatS
      * @param initialCustodian Initial custodian address.
      */
     function initialize(address initialOwner, address initialCustodian) public initializer {
+        initialOwner.requireNonZeroAddress();
+        initialCustodian.requireNonZeroAddress();
+
         __Ownable_init(initialOwner);
         __UUPSUpgradeable_init();
 

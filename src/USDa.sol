@@ -74,7 +74,7 @@ contract USDa is LayerZeroRebaseTokenUpgradeable, UUPSUpgradeable, IUSDaDefiniti
         if (taxManager == address(0) || msg.sender == taxManager) {
             _setRebaseIndex(newIndex, nonce);
         } else {
-            ITaxManager(taxManager).collectOnRebase(currentIndex, newIndex);
+            ITaxManager(taxManager).collectOnRebase(currentIndex, newIndex, nonce);
         }
     }
 

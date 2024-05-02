@@ -31,8 +31,8 @@ contract USDaFeeCollector is Ownable {
      * @notice Initializes USDaFeeCollector.
      * @param _admin Initial Owner of contract.
      * @param _usda Address of USDa contract.
-     * @param _distributors Address of RevenueDistributor contract.
-     * @param _ratios Address where Djinn rewards are sent.
+     * @param _distributors Array of addresses that will receive USDa royalties.
+     * @param _ratios Array of ratios for calculating percentage of royalties go to each distributor.
      */
     constructor(address _admin, address _usda, address[] memory _distributors, uint256[] memory _ratios)
         Ownable(_admin)

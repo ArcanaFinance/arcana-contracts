@@ -46,7 +46,7 @@ contract USDaTaxManager is Ownable {
      * @param currentIndex The current rebaseIndex of USDa.
      * @param nextIndex The new rebaseIndex used to calculate the new total supply.
      */
-    function collectOnRebase(uint256 currentIndex, uint256 nextIndex) external {
+    function collectOnRebase(uint256 currentIndex, uint256 nextIndex, uint256 nonce) external {
         require(msg.sender == address(usda), "NA");
         uint256 supply = usda.totalSupply();
         uint256 totalSupplyShares = (supply * 1e18) / currentIndex;
@@ -64,7 +64,7 @@ contract USDaTaxManager is Ownable {
                 nextIndex = newSupply * 1e18 / totalSupplyShares;
             }
         }
-        usda.setRebaseIndex(nextIndex, 1);
+        usda.setRebaseIndex(nextIndex, nonce);
         if (mintAmount != 0) {
             usda.mint(feeCollector, mintAmount);
         }

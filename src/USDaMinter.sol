@@ -220,6 +220,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * @custom:oz-upgrades-unsafe-allow constructor
      */
     constructor(IUSDa usda) {
+        address(usda).requireNonZeroAddress();
         USDa = usda;
         _disableInitializers();
     }
@@ -240,6 +241,10 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * This is a security measure to prevent immediate claims post-request.
      */
     function initialize(address initialOwner, address initialAdmin, address initialWhitelister, uint48 initialClaimDelay) public initializer {
+        initialOwner.requireNonZeroAddress();
+        initialAdmin.requireNonZeroAddress();
+        initialWhitelister.requireNonZeroAddress();
+
         __Ownable_init(initialOwner);
         __ReentrancyGuard_init();
         __UUPSUpgradeable_init();
@@ -610,7 +615,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * @param index The index of the redemption request in the user's general array of requests.
      * @param newClaimableAfter The new timestamp after which the redemption request can be claimed. Must be later than
      * the current claimable after timestamp.
-     * @custom:error NotCustodian Thrown if the caller is not the designated custodian.
+     * @custom:error NotAdmin Thrown if the caller is not the designated custodian.
      * @custom:error ValueBelowMinimum Thrown if the new claimable after timestamp is not later than the existing one.
      * @custom:event TokenRequestUpdated Logs the update of the claimable after timestamp, providing the old and new
      * timestamps.
