@@ -53,7 +53,7 @@ contract MintUSDa is DeployUtility {
     function run() public {
         vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
 
-        uint256 amountIn = 10 ether; // TODO
+        uint256 amountIn = 1000 ether; // TODO
 
         uint256 getQuote = usdaMinter.quoteMint(UNREAL_USTB, adminAddress, amountIn);
 

@@ -66,7 +66,7 @@ contract USDaMinterUSTBIntegrationTest is BaseSetup {
     }
 
     function test_USTB_init_state() public {
-        assertNotEq(djUsdToken.taxManager(), address(0));
+        assertNotEq(usdaToken.taxManager(), address(0));
 
         address[] memory assets = usdaMinter.getActiveAssets();
         assertEq(assets.length, 1);
@@ -90,8 +90,8 @@ contract USDaMinterUSTBIntegrationTest is BaseSetup {
 
         assertEq(unrealUSTB.balanceOf(bob), preBal - amount);
         assertApproxEqAbs(unrealUSTB.balanceOf(address(usdaMinter)), amount, 1);
-        assertApproxEqAbs(djUsdToken.balanceOf(bob), amount, 1);
-        assertApproxEqAbs(djUsdToken.balanceOf(bob), quoted, 1);
+        assertApproxEqAbs(usdaToken.balanceOf(bob), amount, 1);
+        assertApproxEqAbs(usdaToken.balanceOf(bob), quoted, 1);
     }
 
     function test_USTB_mint_fuzzing(uint256 amount) public {
@@ -110,8 +110,8 @@ contract USDaMinterUSTBIntegrationTest is BaseSetup {
 
         assertApproxEqAbs(unrealUSTB.balanceOf(bob), preBal - amount, 2);
         assertApproxEqAbs(unrealUSTB.balanceOf(address(usdaMinter)), amount, 2);
-        assertApproxEqAbs(djUsdToken.balanceOf(bob), amount, 2);
-        assertApproxEqAbs(djUsdToken.balanceOf(bob), quoted, 2);
+        assertApproxEqAbs(usdaToken.balanceOf(bob), amount, 2);
+        assertApproxEqAbs(usdaToken.balanceOf(bob), quoted, 2);
     }
 
     function test_USTB_mint_optedOut_fuzzing(uint256 amount) public {
@@ -133,8 +133,8 @@ contract USDaMinterUSTBIntegrationTest is BaseSetup {
 
         assertApproxEqAbs(unrealUSTB.balanceOf(bob), preBal - amount, 2);
         assertApproxEqAbs(unrealUSTB.balanceOf(address(usdaMinter)), amount, 2);
-        assertApproxEqAbs(djUsdToken.balanceOf(bob), amount, 2);
-        assertApproxEqAbs(djUsdToken.balanceOf(bob), quoted, 2);
+        assertApproxEqAbs(usdaToken.balanceOf(bob), amount, 2);
+        assertApproxEqAbs(usdaToken.balanceOf(bob), quoted, 2);
     }
 
     function test_USTB_requestTokens_to_alice_noFuzz() public {
@@ -143,12 +143,12 @@ contract USDaMinterUSTBIntegrationTest is BaseSetup {
         uint256 amount = 10 ether;
 
         vm.prank(address(usdaMinter));
-        djUsdToken.mint(alice, amount);
+        usdaToken.mint(alice, amount);
         _deal(address(unrealUSTB), address(usdaMinter), amount);
 
         // ~ Pre-state check ~
 
-        assertEq(djUsdToken.balanceOf(alice), amount);
+        assertEq(usdaToken.balanceOf(alice), amount);
         assertEq(unrealUSTB.balanceOf(alice), 0);
         assertEq(unrealUSTB.balanceOf(address(usdaMinter)), amount);
 
@@ -159,7 +159,7 @@ contract USDaMinterUSTBIntegrationTest is BaseSetup {
         // ~ Alice executes requestTokens ~
 
         vm.startPrank(alice);
-        djUsdToken.approve(address(usdaMinter), amount);
+        usdaToken.approve(address(usdaMinter), amount);
         usdaMinter.requestTokens(address(unrealUSTB), amount);
         vm.stopPrank();
 
@@ -204,12 +204,12 @@ contract USDaMinterUSTBIntegrationTest is BaseSetup {
         // ~ config ~
 
         vm.prank(address(usdaMinter));
-        djUsdToken.mint(alice, amount);
+        usdaToken.mint(alice, amount);
         _deal(address(unrealUSTB), address(usdaMinter), amount);
 
         // ~ Pre-state check ~
 
-        assertEq(djUsdToken.balanceOf(alice), amount);
+        assertEq(usdaToken.balanceOf(alice), amount);
         assertEq(unrealUSTB.balanceOf(alice), 0);
         assertEq(unrealUSTB.balanceOf(address(usdaMinter)), amount);
 
@@ -220,13 +220,13 @@ contract USDaMinterUSTBIntegrationTest is BaseSetup {
         // ~ Alice executes requestTokens ~
 
         vm.startPrank(alice);
-        djUsdToken.approve(address(usdaMinter), amount);
+        usdaToken.approve(address(usdaMinter), amount);
         usdaMinter.requestTokens(address(unrealUSTB), amount);
         vm.stopPrank();
 
         // ~ Post-state check ~
 
-        assertEq(djUsdToken.balanceOf(alice), 0);
+        assertEq(usdaToken.balanceOf(alice), 0);
         assertEq(unrealUSTB.balanceOf(alice), 0);
         assertEq(unrealUSTB.balanceOf(address(usdaMinter)), amount);
 
@@ -272,12 +272,12 @@ contract USDaMinterUSTBIntegrationTest is BaseSetup {
         uint256 amount2 = amountToMint - amount1;
 
         vm.prank(address(usdaMinter));
-        djUsdToken.mint(alice, amountToMint);
+        usdaToken.mint(alice, amountToMint);
         _deal(address(unrealUSTB), address(usdaMinter), amountToMint);
 
         // ~ Pre-state check ~
 
-        assertEq(djUsdToken.balanceOf(alice), amount1 + amount2);
+        assertEq(usdaToken.balanceOf(alice), amount1 + amount2);
         assertEq(unrealUSTB.balanceOf(alice), 0);
         assertEq(unrealUSTB.balanceOf(address(usdaMinter)), amount1 + amount2);
 
@@ -288,7 +288,7 @@ contract USDaMinterUSTBIntegrationTest is BaseSetup {
         // ~ Alice executes requestTokens 1 ~
 
         vm.startPrank(alice);
-        djUsdToken.approve(address(usdaMinter), amount1);
+        usdaToken.approve(address(usdaMinter), amount1);
         usdaMinter.requestTokens(address(unrealUSTB), amount1);
         vm.stopPrank();
 
@@ -296,7 +296,7 @@ contract USDaMinterUSTBIntegrationTest is BaseSetup {
 
         // ~ Post-state check 1 ~
 
-        assertEq(djUsdToken.balanceOf(alice), amount2);
+        assertEq(usdaToken.balanceOf(alice), amount2);
         assertEq(unrealUSTB.balanceOf(alice), 0);
 
         requests = usdaMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
@@ -316,7 +316,7 @@ contract USDaMinterUSTBIntegrationTest is BaseSetup {
         vm.warp(block.timestamp + 1);
 
         vm.startPrank(alice);
-        djUsdToken.approve(address(usdaMinter), amount2);
+        usdaToken.approve(address(usdaMinter), amount2);
         usdaMinter.requestTokens(address(unrealUSTB), amount2);
         vm.stopPrank();
 
@@ -324,7 +324,7 @@ contract USDaMinterUSTBIntegrationTest is BaseSetup {
 
         // ~ Post-state check 2 ~
 
-        assertEq(djUsdToken.balanceOf(alice), 0);
+        assertEq(usdaToken.balanceOf(alice), 0);
         assertEq(unrealUSTB.balanceOf(alice), 0);
 
         requests = usdaMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
@@ -369,12 +369,12 @@ contract USDaMinterUSTBIntegrationTest is BaseSetup {
         uint256 amount = 10 ether;
 
         vm.prank(address(usdaMinter));
-        djUsdToken.mint(alice, amount);
+        usdaToken.mint(alice, amount);
         _deal(address(unrealUSTB), address(usdaMinter), amount);
 
         // ~ Pre-state check ~
 
-        assertEq(djUsdToken.balanceOf(alice), amount);
+        assertEq(usdaToken.balanceOf(alice), amount);
         assertEq(unrealUSTB.balanceOf(alice), 0);
         assertEq(unrealUSTB.balanceOf(address(usdaMinter)), amount);
 
@@ -385,13 +385,13 @@ contract USDaMinterUSTBIntegrationTest is BaseSetup {
         // ~ Alice executes requestTokens ~
 
         vm.startPrank(alice);
-        djUsdToken.approve(address(usdaMinter), amount);
+        usdaToken.approve(address(usdaMinter), amount);
         usdaMinter.requestTokens(address(unrealUSTB), amount);
         vm.stopPrank();
 
         // ~ Post-state check 1 ~
 
-        assertEq(djUsdToken.balanceOf(alice), 0);
+        assertEq(usdaToken.balanceOf(alice), 0);
         assertEq(unrealUSTB.balanceOf(alice), 0);
         assertEq(unrealUSTB.balanceOf(address(usdaMinter)), amount);
 
@@ -426,7 +426,7 @@ contract USDaMinterUSTBIntegrationTest is BaseSetup {
 
         // ~ Post-state check 2 ~
 
-        assertEq(djUsdToken.balanceOf(alice), 0);
+        assertEq(usdaToken.balanceOf(alice), 0);
         assertApproxEqAbs(unrealUSTB.balanceOf(alice), amount, 1);
         assertApproxEqAbs(unrealUSTB.balanceOf(address(usdaMinter)), preBal - amount, 1);
 
@@ -449,25 +449,25 @@ contract USDaMinterUSTBIntegrationTest is BaseSetup {
         // ~ config ~
 
         vm.prank(address(usdaMinter));
-        djUsdToken.mint(alice, amount);
+        usdaToken.mint(alice, amount);
         _deal(address(unrealUSTB), address(usdaMinter), amount);
 
         // ~ Pre-state check ~
 
-        assertEq(djUsdToken.balanceOf(alice), amount);
+        assertEq(usdaToken.balanceOf(alice), amount);
         assertEq(unrealUSTB.balanceOf(alice), 0);
         assertEq(unrealUSTB.balanceOf(address(usdaMinter)), amount);
 
         // ~ Alice executes requestTokens ~
 
         vm.startPrank(alice);
-        djUsdToken.approve(address(usdaMinter), amount);
+        usdaToken.approve(address(usdaMinter), amount);
         usdaMinter.requestTokens(address(unrealUSTB), amount);
         vm.stopPrank();
 
         // ~ Post-state check 1 ~
 
-        assertEq(djUsdToken.balanceOf(alice), 0);
+        assertEq(usdaToken.balanceOf(alice), 0);
         assertEq(unrealUSTB.balanceOf(alice), 0);
         assertEq(unrealUSTB.balanceOf(address(usdaMinter)), amount);
 
@@ -503,7 +503,7 @@ contract USDaMinterUSTBIntegrationTest is BaseSetup {
 
         // ~ Post-state check 2 ~
 
-        assertEq(djUsdToken.balanceOf(alice), 0);
+        assertEq(usdaToken.balanceOf(alice), 0);
         assertApproxEqAbs(unrealUSTB.balanceOf(alice), amount, 2);
         assertApproxEqAbs(unrealUSTB.balanceOf(address(usdaMinter)), preBal - amount, 2);
 
@@ -525,15 +525,15 @@ contract USDaMinterUSTBIntegrationTest is BaseSetup {
         vm.assume(index > 1e18 && index < 2e18);
 
         vm.prank(address(usdaMinter));
-        djUsdToken.mint(bob, 1 ether);
+        usdaToken.mint(bob, 1 ether);
 
-        uint256 preTotalSupply = djUsdToken.totalSupply();
-        uint256 foreshadowTS = (((preTotalSupply * 1e18) / djUsdToken.rebaseIndex()) * index) / 1e18;
+        uint256 preTotalSupply = usdaToken.totalSupply();
+        uint256 foreshadowTS = (((preTotalSupply * 1e18) / usdaToken.rebaseIndex()) * index) / 1e18;
 
         vm.prank(rebaseManager);
-        djUsdToken.setRebaseIndex(index, 1);
+        usdaToken.setRebaseIndex(index, 1);
 
-        assertApproxEqAbs(djUsdToken.totalSupply(), foreshadowTS, 100);
+        assertApproxEqAbs(usdaToken.totalSupply(), foreshadowTS, 100);
 
         uint256 amount = 10 ether;
         _deal(address(unrealUSTB), alice, amount);
@@ -550,7 +550,7 @@ contract USDaMinterUSTBIntegrationTest is BaseSetup {
 
         assertEq(unrealUSTB.balanceOf(alice), preBal - amount);
         assertApproxEqAbs(unrealUSTB.balanceOf(address(usdaMinter)), amount, 1);
-        assertApproxEqAbs(djUsdToken.balanceOf(alice), amount, 3);
+        assertApproxEqAbs(usdaToken.balanceOf(alice), amount, 3);
     }
 
     function test_USTB_requestTokens_after_rebase_noFuzz() public {
@@ -571,34 +571,34 @@ contract USDaMinterUSTBIntegrationTest is BaseSetup {
 
         assertEq(unrealUSTB.balanceOf(alice), preBal - amount);
         assertApproxEqAbs(unrealUSTB.balanceOf(address(usdaMinter)), amount, 1);
-        assertApproxEqAbs(djUsdToken.balanceOf(alice), amount, 1);
+        assertApproxEqAbs(usdaToken.balanceOf(alice), amount, 1);
 
-        uint256 preTotalSupply = djUsdToken.totalSupply();
+        uint256 preTotalSupply = usdaToken.totalSupply();
         uint256 foreshadowTS = (preTotalSupply * index) / 1e18;
 
         // ~ update rebaseIndex on USDa ~
 
         vm.prank(rebaseManager);
-        djUsdToken.setRebaseIndex(index, 1);
+        usdaToken.setRebaseIndex(index, 1);
 
-        assertApproxEqAbs(djUsdToken.totalSupply(), foreshadowTS, 5);
-        uint256 newBal = (amount * djUsdToken.rebaseIndex()) / 1e18;
+        assertApproxEqAbs(usdaToken.totalSupply(), foreshadowTS, 5);
+        uint256 newBal = (amount * usdaToken.rebaseIndex()) / 1e18;
         assertGt(newBal, amount);
-        assertApproxEqAbs(djUsdToken.balanceOf(alice), newBal, 2);
+        assertApproxEqAbs(usdaToken.balanceOf(alice), newBal, 2);
         _deal(address(unrealUSTB), address(usdaMinter), newBal);
 
-        newBal = djUsdToken.balanceOf(alice);
+        newBal = usdaToken.balanceOf(alice);
 
         // ~ Alice executes requestTokens ~
 
         vm.startPrank(alice);
-        djUsdToken.approve(address(usdaMinter), newBal);
+        usdaToken.approve(address(usdaMinter), newBal);
         usdaMinter.requestTokens(address(unrealUSTB), newBal);
         vm.stopPrank();
 
         // ~ Post-state check ~
 
-        assertEq(djUsdToken.balanceOf(alice), 0);
+        assertEq(usdaToken.balanceOf(alice), 0);
         assertEq(unrealUSTB.balanceOf(alice), preBal - amount);
 
         USDaMinter.RedemptionRequest[] memory requests =
@@ -652,32 +652,32 @@ contract USDaMinterUSTBIntegrationTest is BaseSetup {
 
         assertEq(unrealUSTB.balanceOf(alice), preBal - amount);
         assertApproxEqAbs(unrealUSTB.balanceOf(address(usdaMinter)), amount, 1);
-        assertApproxEqAbs(djUsdToken.balanceOf(alice), amount, 1);
+        assertApproxEqAbs(usdaToken.balanceOf(alice), amount, 1);
 
-        uint256 preTotalSupply = djUsdToken.totalSupply();
+        uint256 preTotalSupply = usdaToken.totalSupply();
         uint256 foreshadowTS = (preTotalSupply * index) / 1e18;
 
         // setRebaseIndex
         vm.prank(rebaseManager);
-        djUsdToken.setRebaseIndex(index, 1);
+        usdaToken.setRebaseIndex(index, 1);
 
-        assertApproxEqAbs(djUsdToken.totalSupply(), foreshadowTS, 100);
-        uint256 newBal = amount * djUsdToken.rebaseIndex() / 1e18;
+        assertApproxEqAbs(usdaToken.totalSupply(), foreshadowTS, 100);
+        uint256 newBal = amount * usdaToken.rebaseIndex() / 1e18;
         assertGt(newBal, amount);
-        assertApproxEqAbs(djUsdToken.balanceOf(alice), newBal, 2);
+        assertApproxEqAbs(usdaToken.balanceOf(alice), newBal, 2);
         _deal(address(unrealUSTB), address(usdaMinter), newBal);
 
-        newBal = djUsdToken.balanceOf(alice);
+        newBal = usdaToken.balanceOf(alice);
 
         // taker
         vm.startPrank(alice);
-        djUsdToken.approve(address(usdaMinter), newBal);
+        usdaToken.approve(address(usdaMinter), newBal);
         usdaMinter.requestTokens(address(unrealUSTB), newBal);
         vm.stopPrank();
 
         // ~ Post-state check ~
 
-        assertEq(djUsdToken.balanceOf(alice), 0);
+        assertEq(usdaToken.balanceOf(alice), 0);
         assertEq(unrealUSTB.balanceOf(alice), preBal - amount);
 
         USDaMinter.RedemptionRequest[] memory requests =
@@ -732,34 +732,34 @@ contract USDaMinterUSTBIntegrationTest is BaseSetup {
 
         assertEq(unrealUSTB.balanceOf(alice), 0);
         assertApproxEqAbs(unrealUSTB.balanceOf(address(usdaMinter)), amount, 1);
-        assertApproxEqAbs(djUsdToken.balanceOf(alice), amount, 1);
+        assertApproxEqAbs(usdaToken.balanceOf(alice), amount, 1);
 
-        uint256 preTotalSupply = djUsdToken.totalSupply();
+        uint256 preTotalSupply = usdaToken.totalSupply();
         uint256 foreshadowTS = (preTotalSupply * index) / 1e18;
 
         // ~ update rebaseIndex on USDa ~
 
         vm.prank(rebaseManager);
-        djUsdToken.setRebaseIndex(index, 1);
+        usdaToken.setRebaseIndex(index, 1);
 
-        assertApproxEqAbs(djUsdToken.totalSupply(), foreshadowTS, 5);
-        uint256 newBal = (preTotalSupply * djUsdToken.rebaseIndex()) / 1e18;
+        assertApproxEqAbs(usdaToken.totalSupply(), foreshadowTS, 5);
+        uint256 newBal = (preTotalSupply * usdaToken.rebaseIndex()) / 1e18;
         assertGt(newBal, amount);
-        assertApproxEqAbs(djUsdToken.balanceOf(alice), newBal, 2);
+        assertApproxEqAbs(usdaToken.balanceOf(alice), newBal, 2);
         _deal(address(unrealUSTB), address(usdaMinter), newBal);
 
-        newBal = djUsdToken.balanceOf(alice);
+        newBal = usdaToken.balanceOf(alice);
 
         // ~ Alice executes requestTokens ~
 
         vm.startPrank(alice);
-        djUsdToken.approve(address(usdaMinter), newBal);
+        usdaToken.approve(address(usdaMinter), newBal);
         usdaMinter.requestTokens(address(unrealUSTB), newBal);
         vm.stopPrank();
 
         // ~ Post-state check ~
 
-        assertEq(djUsdToken.balanceOf(alice), 0);
+        assertEq(usdaToken.balanceOf(alice), 0);
         assertEq(unrealUSTB.balanceOf(alice), 0);
         assertEq(unrealUSTB.balanceOf(address(usdaMinter)), newBal);
 
@@ -793,7 +793,7 @@ contract USDaMinterUSTBIntegrationTest is BaseSetup {
 
         // ~ Post-state check 2 ~
 
-        assertEq(djUsdToken.balanceOf(alice), 0);
+        assertEq(usdaToken.balanceOf(alice), 0);
         assertApproxEqAbs(unrealUSTB.balanceOf(alice), newBal, 1);
 
         requests = usdaMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);

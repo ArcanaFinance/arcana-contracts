@@ -47,7 +47,7 @@ contract UpgradeUSDa is DeployUtility {
     function run() public {
         vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
 
-        USDa newUSDa = new USDa(UNREAL_CHAINID, UNREAL_LZ_ENDPOINT_V2);
+        USDa newUSDa = new USDa(UNREAL_CHAINID, UNREAL_LZ_ENDPOINT_V1);
         usdaToken.upgradeToAndCall(address(newUSDa), "");
 
         vm.stopBroadcast();

@@ -873,13 +873,17 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
         returns (uint256 assets)
     {
         USDaMinterStorage storage $ = _getUSDaMinterStorage();
-        (bool success, bytes memory data) = asset.staticcall(abi.encodeCall(IRebaseToken.optedOut, (from)));
+        (bool success, bytes memory data) = asset.staticcall(abi.encodeCall(IRebaseToken.optedOut, (address(this))));
         if (success) {
             bool isOptedOut = abi.decode(data, (bool));
             if (!isOptedOut) {
-                uint256 rebaseIndex = IRebaseToken(asset).rebaseIndex();
-                uint256 usdaShares = RebaseTokenMath.toShares(amountIn, rebaseIndex);
-                amountIn = RebaseTokenMath.toTokens(usdaShares, rebaseIndex);
+                (,data) = asset.staticcall(abi.encodeCall(IRebaseToken.optedOut, (from)));
+                isOptedOut = abi.decode(data, (bool));
+                if (!isOptedOut) {
+                    uint256 rebaseIndex = IRebaseToken(asset).rebaseIndex();
+                    uint256 usdaShares = RebaseTokenMath.toShares(amountIn, rebaseIndex);
+                    amountIn = RebaseTokenMath.toTokens(usdaShares, rebaseIndex);
+                }
             }
         }
         assets = IOracle(_getUSDaMinterStorage().assetInfos[asset].oracle).valueOf(amountIn, $.maxAge, Math.Rounding.Floor);

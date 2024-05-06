@@ -52,7 +52,7 @@ contract USDaFeeCollector is Ownable {
      * stored in the `distributors` array.
      */
     function distributeUSDa() external {
-        uint256 contractBalance = getDjUsdBalance();
+        uint256 contractBalance = getUsdaBalance();
         uint256 len = distributors.length;
         uint256 totalRatio;
 
@@ -108,7 +108,7 @@ contract USDaFeeCollector is Ownable {
     /**
      * @notice Returns the contract's balance of USDa token.
      */
-    function getDjUsdBalance() public view returns (uint256) {
+    function getUsdaBalance() public view returns (uint256) {
         return IERC20(USDa).balanceOf(address(this));
     }
 }

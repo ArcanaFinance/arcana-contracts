@@ -97,22 +97,22 @@ contract CustodianManagerTest is BaseSetup {
         uint256 amount = 1_000 * 1e18;
 
         vm.prank(address(usdaMinter));
-        djUsdToken.mint(address(usdaMinter), amount);
+        usdaToken.mint(address(usdaMinter), amount);
 
         // ~ Pre-state check ~
 
-        assertEq(djUsdToken.balanceOf(address(mainCustodian)), 0);
-        assertEq(djUsdToken.balanceOf(address(usdaMinter)), amount);
+        assertEq(usdaToken.balanceOf(address(mainCustodian)), 0);
+        assertEq(usdaToken.balanceOf(address(usdaMinter)), amount);
 
         // ~ Execute withdrawFunds ~
 
         vm.prank(owner);
-        custodian.withdrawFunds(address(djUsdToken), amount);
+        custodian.withdrawFunds(address(usdaToken), amount);
 
         // ~ Post-state check ~
 
-        assertEq(djUsdToken.balanceOf(address(mainCustodian)), amount);
-        assertEq(djUsdToken.balanceOf(address(usdaMinter)), 0);
+        assertEq(usdaToken.balanceOf(address(mainCustodian)), amount);
+        assertEq(usdaToken.balanceOf(address(usdaMinter)), 0);
     }
 
     function test_custodian_withdrawFunds_requiredNotZero() public {
@@ -122,9 +122,9 @@ contract CustodianManagerTest is BaseSetup {
 
         // bob goes to mint then request tokens
         vm.prank(address(usdaMinter));
-        djUsdToken.mint(bob, amount);
+        usdaToken.mint(bob, amount);
         vm.startPrank(bob);
-        djUsdToken.approve(address(usdaMinter), amount);
+        usdaToken.approve(address(usdaMinter), amount);
         usdaMinter.requestTokens(address(unrealUSTB), amount);
         vm.stopPrank();
         assertEq(usdaMinter.requiredTokens(address(unrealUSTB)), amount);
@@ -178,16 +178,16 @@ contract CustodianManagerTest is BaseSetup {
 
         uint256 amount = 1_000 * 1e18;
         vm.prank(address(usdaMinter));
-        djUsdToken.mint(address(custodian), amount);
+        usdaToken.mint(address(custodian), amount);
 
         // only owner can call withdrawFunds
         vm.prank(bob);
         vm.expectRevert();
-        custodian.withdrawFunds(address(djUsdToken), amount);
+        custodian.withdrawFunds(address(usdaToken), amount);
 
         // can't withdraw more than what is in contract's balance
         vm.prank(owner);
         vm.expectRevert();
-        custodian.withdrawFunds(address(djUsdToken), amount + 1);
+        custodian.withdrawFunds(address(usdaToken), amount + 1);
     }
 }

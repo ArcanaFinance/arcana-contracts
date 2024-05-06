@@ -33,7 +33,7 @@ import "../../test/utils/Constants.sol";
 /**
  * @title DeployToUnreal
  * @author Chase Brown
- * @notice This script deploys the RWA ecosystem to Unreal chain.
+ * @notice This script deploys the USDa ecosystem to Unreal chain.
  */
 contract DeployToUnreal is DeployUtility {
     // ~ Variables ~
@@ -60,33 +60,33 @@ contract DeployToUnreal is DeployUtility {
 
         address[] memory distributors = new address[](2);
         distributors[0] = UNREAL_REVENUE_DISTRIBUTOR;
-        distributors[1] = adminAddress; // TODO: Djinn Escrow or Insurance Fund?
+        distributors[1] = adminAddress; // TODO: $ARCANA Escrow or Insurance Fund?
 
         uint256[] memory ratios = new uint256[](2);
         ratios[0] = 1;
         ratios[1] = 1;
 
         // Deploy USDa token
-        USDa djUsdToken = new USDa(UNREAL_CHAINID, UNREAL_LZ_ENDPOINT_V2);
-        ERC1967Proxy djUsdTokenProxy = new ERC1967Proxy(
-            address(djUsdToken),
+        USDa usdaToken = new USDa(UNREAL_CHAINID, UNREAL_LZ_ENDPOINT_V1);
+        ERC1967Proxy usdaTokenProxy = new ERC1967Proxy(
+            address(usdaToken),
             abi.encodeWithSelector(USDa.initialize.selector,
                 adminAddress,
                 adminAddress // TODO: RebaseManager
             )
         );
-        djUsdToken = USDa(address(djUsdTokenProxy));
+        usdaToken = USDa(address(usdaTokenProxy));
 
         // Deploy FeeCollector
-        USDaFeeCollector feeCollector = new USDaFeeCollector(adminAddress, address(djUsdToken), distributors, ratios);
+        USDaFeeCollector feeCollector = new USDaFeeCollector(adminAddress, address(usdaToken), distributors, ratios);
 
         // Deploy taxManager
-        USDaTaxManager taxManager = new USDaTaxManager(adminAddress, address(djUsdToken), address(feeCollector));
+        USDaTaxManager taxManager = new USDaTaxManager(adminAddress, address(usdaToken), address(feeCollector));
 
         // Deploy USDaMinter contract.
-        USDaMinter djUsdMintingContract = new USDaMinter(IUSDa(address(djUsdToken)));
+        USDaMinter usdaMinter = new USDaMinter(IUSDa(address(usdaToken)));
         ERC1967Proxy arcanaMintingProxy = new ERC1967Proxy(
-            address(djUsdMintingContract),
+            address(usdaMinter),
             abi.encodeWithSelector(USDaMinter.initialize.selector,
                 adminAddress,
                 UNREAL_JARON,
@@ -94,10 +94,10 @@ contract DeployToUnreal is DeployUtility {
                 5 days
             )
         );
-        djUsdMintingContract = USDaMinter(payable(address(arcanaMintingProxy)));
+        usdaMinter = USDaMinter(payable(address(arcanaMintingProxy)));
 
         // Deploy CustodianManager
-        CustodianManager custodian = new CustodianManager(address(djUsdMintingContract));
+        CustodianManager custodian = new CustodianManager(address(usdaMinter));
         ERC1967Proxy custodianProxy = new ERC1967Proxy(
             address(custodian),
             abi.encodeWithSelector(CustodianManager.initialize.selector,
@@ -108,32 +108,32 @@ contract DeployToUnreal is DeployUtility {
         custodian = CustodianManager(address(custodianProxy));
 
         // Deploy USDa Vault
-        USDaPointsBoostVault djUsdVault = new USDaPointsBoostVault(address(djUsdToken));
+        USDaPointsBoostVault usdaVault = new USDaPointsBoostVault(address(usdaToken));
 
         // ------
         // Config
         // ------
 
-        djUsdMintingContract.updateCustodian(address(custodian));
+        usdaMinter.updateCustodian(address(custodian));
 
-        djUsdMintingContract.addSupportedAsset(UNREAL_USTB, UNREAL_USTB_ORACLE);
+        usdaMinter.addSupportedAsset(UNREAL_USTB, UNREAL_USTB_ORACLE);
 
-        djUsdToken.setMinter(address(djUsdMintingContract));
+        usdaToken.setMinter(address(usdaMinter));
 
-        djUsdToken.setSupplyLimit(1_000 * 1e18);
+        usdaToken.setSupplyLimit(1_000 * 1e18);
 
-        djUsdToken.setTaxManager(address(taxManager));
+        usdaToken.setTaxManager(address(taxManager));
 
         // --------------
         // Save Addresses
         // --------------
 
-        _saveDeploymentAddress("USDa", address(djUsdToken));
-        _saveDeploymentAddress("USDaMinter", address(djUsdMintingContract));
+        _saveDeploymentAddress("USDa", address(usdaToken));
+        _saveDeploymentAddress("USDaMinter", address(usdaMinter));
         _saveDeploymentAddress("CustodianManager", address(custodian));
         _saveDeploymentAddress("USDaTaxManager", address(taxManager));
         _saveDeploymentAddress("USDaFeeCollector", address(feeCollector));
-        _saveDeploymentAddress("USDaPointsBoostVault", address(djUsdVault));
+        _saveDeploymentAddress("USDaPointsBoostVault", address(usdaVault));
 
         vm.stopBroadcast();
     }

@@ -29,7 +29,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
     }
 
     function test_init_state() public {
-        assertNotEq(djUsdToken.taxManager(), address(0));
+        assertNotEq(usdaToken.taxManager(), address(0));
 
         address[] memory assets = usdaMinter.getActiveAssets();
         assertEq(assets.length, 3);
@@ -41,7 +41,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
     }
 
     function test_usdaMinter_initializer() public {
-        USDaMinter newUSDaMinter = new USDaMinter(IUSDa(address(djUsdToken)));
+        USDaMinter newUSDaMinter = new USDaMinter(IUSDa(address(usdaToken)));
         ERC1967Proxy newUSDaMinterProxy = new ERC1967Proxy(
             address(newUSDaMinter),
             abi.encodeWithSelector(USDaMinter.initialize.selector,
@@ -61,7 +61,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
     }
 
     function test_usdaMinter_isUpgradeable() public {
-        USDaMinter newImplementation = new USDaMinter(IUSDa(address(djUsdToken)));
+        USDaMinter newImplementation = new USDaMinter(IUSDa(address(usdaToken)));
 
         bytes32 implementationSlot =
             vm.load(address(usdaMinter), 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc);
@@ -76,7 +76,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
     }
 
     function test_usdaMinter_isUpgradeable_onlyOwner() public {
-        USDaMinter newImplementation = new USDaMinter(IUSDa(address(djUsdToken)));
+        USDaMinter newImplementation = new USDaMinter(IUSDa(address(usdaToken)));
 
         vm.prank(minter);
         vm.expectRevert();
@@ -161,7 +161,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
     function test_usdaMinter_cannotAdd_USDa_revert() public {
         vm.prank(owner);
         vm.expectRevert();
-        usdaMinter.addSupportedAsset(address(djUsdToken), address(1));
+        usdaMinter.addSupportedAsset(address(usdaToken), address(1));
     }
 
     function test_usdaMinter_receive_eth() public {
@@ -185,7 +185,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
 
         assertEq(USTB.balanceOf(bob), 0);
         assertEq(USTB.balanceOf(address(usdaMinter)), amount);
-        assertEq(djUsdToken.balanceOf(bob), amount);
+        assertEq(usdaToken.balanceOf(bob), amount);
     }
 
     function test_usdaMinter_mint_fuzzing(uint256 amount) public {
@@ -200,7 +200,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
 
         assertEq(USTB.balanceOf(bob), 0);
         assertEq(USTB.balanceOf(address(usdaMinter)), amount);
-        assertEq(djUsdToken.balanceOf(bob), amount);
+        assertEq(usdaToken.balanceOf(bob), amount);
     }
 
     function test_usdaMinter_requestTokens_noFuzz() public {
@@ -209,12 +209,12 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         uint256 amount = 10 ether;
 
         vm.prank(address(usdaMinter));
-        djUsdToken.mint(alice, amount);
+        usdaToken.mint(alice, amount);
         deal(address(USTB), address(usdaMinter), amount);
 
         // ~ Pre-state check ~
 
-        assertEq(djUsdToken.balanceOf(alice), amount);
+        assertEq(usdaToken.balanceOf(alice), amount);
         assertEq(USTB.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(address(usdaMinter)), amount);
 
@@ -226,13 +226,13 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         // ~ Alice executes requestTokens ~
 
         vm.startPrank(alice);
-        djUsdToken.approve(address(usdaMinter), amount);
+        usdaToken.approve(address(usdaMinter), amount);
         usdaMinter.requestTokens(address(USTB), amount);
         vm.stopPrank();
 
         // ~ Post-state check ~
 
-        assertEq(djUsdToken.balanceOf(alice), 0);
+        assertEq(usdaToken.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(address(usdaMinter)), amount);
 
@@ -277,12 +277,12 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         uint256 newDelay = 10 days;
 
         vm.prank(address(usdaMinter));
-        djUsdToken.mint(alice, amount);
+        usdaToken.mint(alice, amount);
         deal(address(USTB), address(usdaMinter), amount);
 
         // ~ Pre-state check ~
 
-        assertEq(djUsdToken.balanceOf(alice), amount);
+        assertEq(usdaToken.balanceOf(alice), amount);
         assertEq(USTB.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(address(usdaMinter)), amount);
 
@@ -292,13 +292,13 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         // ~ Alice executes requestTokens ~
 
         vm.startPrank(alice);
-        djUsdToken.approve(address(usdaMinter), amount);
+        usdaToken.approve(address(usdaMinter), amount);
         usdaMinter.requestTokens(address(USTB), amount);
         vm.stopPrank();
 
         // ~ Post-state check ~
 
-        assertEq(djUsdToken.balanceOf(alice), 0);
+        assertEq(usdaToken.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(address(usdaMinter)), amount);
 
@@ -346,12 +346,12 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         // ~ config ~
 
         vm.prank(address(usdaMinter));
-        djUsdToken.mint(alice, amount);
+        usdaToken.mint(alice, amount);
         deal(address(USTB), address(usdaMinter), amount);
 
         // ~ Pre-state check ~
 
-        assertEq(djUsdToken.balanceOf(alice), amount);
+        assertEq(usdaToken.balanceOf(alice), amount);
         assertEq(USTB.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(address(usdaMinter)), amount);
 
@@ -363,13 +363,13 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         // ~ Alice executes requestTokens ~
 
         vm.startPrank(alice);
-        djUsdToken.approve(address(usdaMinter), amount);
+        usdaToken.approve(address(usdaMinter), amount);
         usdaMinter.requestTokens(address(USTB), amount);
         vm.stopPrank();
 
         // ~ Post-state check ~
 
-        assertEq(djUsdToken.balanceOf(alice), 0);
+        assertEq(usdaToken.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(address(usdaMinter)), amount);
 
@@ -415,12 +415,12 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         uint256 amount2 = amountToMint - amount1;
 
         vm.prank(address(usdaMinter));
-        djUsdToken.mint(alice, amountToMint);
+        usdaToken.mint(alice, amountToMint);
         deal(address(USTB), address(usdaMinter), amountToMint);
 
         // ~ Pre-state check ~
 
-        assertEq(djUsdToken.balanceOf(alice), amount1 + amount2);
+        assertEq(usdaToken.balanceOf(alice), amount1 + amount2);
         assertEq(USTB.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(address(usdaMinter)), amount1 + amount2);
 
@@ -430,7 +430,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         // ~ Alice executes requestTokens 1 ~
 
         vm.startPrank(alice);
-        djUsdToken.approve(address(usdaMinter), amount1);
+        usdaToken.approve(address(usdaMinter), amount1);
         usdaMinter.requestTokens(address(USTB), amount1);
         vm.stopPrank();
 
@@ -438,7 +438,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
 
         // ~ Post-state check 1 ~
 
-        assertEq(djUsdToken.balanceOf(alice), amount2);
+        assertEq(usdaToken.balanceOf(alice), amount2);
         assertEq(USTB.balanceOf(alice), 0);
 
         requests = usdaMinter.getRedemptionRequests(alice, address(USTB), 0, 10);
@@ -459,7 +459,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         vm.warp(block.timestamp + 1);
 
         vm.startPrank(alice);
-        djUsdToken.approve(address(usdaMinter), amount2);
+        usdaToken.approve(address(usdaMinter), amount2);
         usdaMinter.requestTokens(address(USTB), amount2);
         vm.stopPrank();
 
@@ -467,7 +467,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
 
         // ~ Post-state check 2 ~
 
-        assertEq(djUsdToken.balanceOf(alice), 0);
+        assertEq(usdaToken.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(alice), 0);
 
         requests = usdaMinter.getRedemptionRequests(alice, address(USTB), 0, 10);
@@ -514,13 +514,13 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         uint256 amount = 10 ether;
 
         vm.prank(address(usdaMinter));
-        djUsdToken.mint(alice, amount * 2);
+        usdaToken.mint(alice, amount * 2);
         deal(address(USTB), address(usdaMinter), amount);
         deal(address(USDCToken), address(usdaMinter), amount);
 
         // ~ Pre-state check ~
 
-        assertEq(djUsdToken.balanceOf(alice), amount * 2);
+        assertEq(usdaToken.balanceOf(alice), amount * 2);
 
         USDaMinter.RedemptionRequest[] memory requests = usdaMinter.getRedemptionRequests(alice, address(USTB), 0, 10);
         assertEq(requests.length, 0);
@@ -531,16 +531,16 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         // ~ Alice executes requestTokens ~
 
         vm.startPrank(alice);
-        djUsdToken.approve(address(usdaMinter), amount);
+        usdaToken.approve(address(usdaMinter), amount);
         usdaMinter.requestTokens(address(USTB), amount);
 
-        djUsdToken.approve(address(usdaMinter), amount);
+        usdaToken.approve(address(usdaMinter), amount);
         usdaMinter.requestTokens(address(USDCToken), amount);
         vm.stopPrank();
 
         // ~ Post-state check 1 ~
 
-        assertEq(djUsdToken.balanceOf(alice), 0);
+        assertEq(usdaToken.balanceOf(alice), 0);
 
         requests = usdaMinter.getRedemptionRequests(alice, address(USTB), 0, 10);
         assertEq(requests.length, 1);
@@ -652,12 +652,12 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         uint256 amount = 10 ether;
 
         vm.prank(address(usdaMinter));
-        djUsdToken.mint(alice, amount);
+        usdaToken.mint(alice, amount);
         deal(address(USTB), address(usdaMinter), amount);
 
         // ~ Pre-state check ~
 
-        assertEq(djUsdToken.balanceOf(alice), amount);
+        assertEq(usdaToken.balanceOf(alice), amount);
         assertEq(USTB.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(address(usdaMinter)), amount);
 
@@ -667,13 +667,13 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         // ~ Alice executes requestTokens ~
 
         vm.startPrank(alice);
-        djUsdToken.approve(address(usdaMinter), amount);
+        usdaToken.approve(address(usdaMinter), amount);
         usdaMinter.requestTokens(address(USTB), amount);
         vm.stopPrank();
 
         // ~ Post-state check 1 ~
 
-        assertEq(djUsdToken.balanceOf(alice), 0);
+        assertEq(usdaToken.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(address(usdaMinter)), amount);
 
@@ -706,7 +706,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
 
         // ~ Post-state check 2 ~
 
-        assertEq(djUsdToken.balanceOf(alice), 0);
+        assertEq(usdaToken.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(alice), amount);
         assertEq(USTB.balanceOf(address(usdaMinter)), 0);
 
@@ -729,23 +729,23 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         uint256 amount = 10 ether;
 
         vm.prank(address(usdaMinter));
-        djUsdToken.mint(alice, amount);
+        usdaToken.mint(alice, amount);
 
         // ~ Pre-state check ~
 
-        assertEq(djUsdToken.balanceOf(alice), amount);
+        assertEq(usdaToken.balanceOf(alice), amount);
         assertEq(USTB.balanceOf(alice), 0);
 
         // ~ Alice executes requestTokens ~
 
         vm.startPrank(alice);
-        djUsdToken.approve(address(usdaMinter), amount);
+        usdaToken.approve(address(usdaMinter), amount);
         usdaMinter.requestTokens(address(USTB), amount);
         vm.stopPrank();
 
         // ~ Post-state check 1 ~
 
-        assertEq(djUsdToken.balanceOf(alice), 0);
+        assertEq(usdaToken.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(alice), 0);
 
         USDaMinter.RedemptionRequest[] memory requests = usdaMinter.getRedemptionRequests(alice, address(USTB), 0, 10);
@@ -793,25 +793,25 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         // ~ config ~
 
         vm.prank(address(usdaMinter));
-        djUsdToken.mint(alice, amount);
+        usdaToken.mint(alice, amount);
         deal(address(USTB), address(usdaMinter), amount);
 
         // ~ Pre-state check ~
 
-        assertEq(djUsdToken.balanceOf(alice), amount);
+        assertEq(usdaToken.balanceOf(alice), amount);
         assertEq(USTB.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(address(usdaMinter)), amount);
 
         // ~ Alice executes requestTokens ~
 
         vm.startPrank(alice);
-        djUsdToken.approve(address(usdaMinter), amount);
+        usdaToken.approve(address(usdaMinter), amount);
         usdaMinter.requestTokens(address(USTB), amount);
         vm.stopPrank();
 
         // ~ Post-state check 1 ~
 
-        assertEq(djUsdToken.balanceOf(alice), 0);
+        assertEq(usdaToken.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(address(usdaMinter)), amount);
 
@@ -844,7 +844,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
 
         // ~ Post-state check 2 ~
 
-        assertEq(djUsdToken.balanceOf(alice), 0);
+        assertEq(usdaToken.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(alice), amount);
         assertEq(USTB.balanceOf(address(usdaMinter)), 0);
 
@@ -866,15 +866,15 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         vm.assume(index > 1e18 && index < 2e18);
 
         vm.prank(address(usdaMinter));
-        djUsdToken.mint(bob, 1 ether);
+        usdaToken.mint(bob, 1 ether);
 
-        uint256 preTotalSupply = djUsdToken.totalSupply();
-        uint256 foreshadowTS = (((preTotalSupply * 1e18) / djUsdToken.rebaseIndex()) * index) / 1e18;
+        uint256 preTotalSupply = usdaToken.totalSupply();
+        uint256 foreshadowTS = (((preTotalSupply * 1e18) / usdaToken.rebaseIndex()) * index) / 1e18;
 
         vm.prank(rebaseManager);
-        djUsdToken.setRebaseIndex(index, 1);
+        usdaToken.setRebaseIndex(index, 1);
 
-        assertApproxEqAbs(djUsdToken.totalSupply(), foreshadowTS, 100);
+        assertApproxEqAbs(usdaToken.totalSupply(), foreshadowTS, 100);
 
         uint256 amount = 10 ether;
         deal(address(USTB), alice, amount);
@@ -887,7 +887,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
 
         assertEq(USTB.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(address(usdaMinter)), amount);
-        assertApproxEqAbs(djUsdToken.balanceOf(alice), amount, 2);
+        assertApproxEqAbs(usdaToken.balanceOf(alice), amount, 2);
     }
 
     function test_usdaMinter_requestTokens_after_rebase_noFuzz() public {
@@ -906,20 +906,20 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
 
         assertEq(USTB.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(address(usdaMinter)), amount);
-        assertApproxEqAbs(djUsdToken.balanceOf(alice), amount, 0);
+        assertApproxEqAbs(usdaToken.balanceOf(alice), amount, 0);
 
-        uint256 preTotalSupply = djUsdToken.totalSupply();
+        uint256 preTotalSupply = usdaToken.totalSupply();
         uint256 foreshadowTS = (preTotalSupply * index) / 1e18;
 
         // ~ update rebaseIndex on USDa ~
 
         vm.prank(rebaseManager);
-        djUsdToken.setRebaseIndex(index, 1);
+        usdaToken.setRebaseIndex(index, 1);
 
-        assertApproxEqAbs(djUsdToken.totalSupply(), foreshadowTS, 5);
-        uint256 newBal = (amount * djUsdToken.rebaseIndex()) / 1e18;
+        assertApproxEqAbs(usdaToken.totalSupply(), foreshadowTS, 5);
+        uint256 newBal = (amount * usdaToken.rebaseIndex()) / 1e18;
         assertGt(newBal, amount);
-        assertApproxEqAbs(djUsdToken.balanceOf(alice), newBal, 0);
+        assertApproxEqAbs(usdaToken.balanceOf(alice), newBal, 0);
         deal(address(USTB), address(usdaMinter), newBal);
 
         assertEq(usdaMinter.quoteRedeem(address(USTB), alice, newBal), newBal);
@@ -927,13 +927,13 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         // ~ Alice executes requestTokens ~
 
         vm.startPrank(alice);
-        djUsdToken.approve(address(usdaMinter), newBal);
+        usdaToken.approve(address(usdaMinter), newBal);
         usdaMinter.requestTokens(address(USTB), newBal);
         vm.stopPrank();
 
         // ~ Post-state check ~
 
-        assertEq(djUsdToken.balanceOf(alice), 0);
+        assertEq(usdaToken.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(address(usdaMinter)), newBal);
 
@@ -985,30 +985,30 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
 
         assertEq(USTB.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(address(usdaMinter)), amount);
-        assertApproxEqAbs(djUsdToken.balanceOf(alice), amount, 0);
+        assertApproxEqAbs(usdaToken.balanceOf(alice), amount, 0);
 
-        uint256 preTotalSupply = djUsdToken.totalSupply();
+        uint256 preTotalSupply = usdaToken.totalSupply();
         uint256 foreshadowTS = (preTotalSupply * index) / 1e18;
 
         // setRebaseIndex
         vm.prank(rebaseManager);
-        djUsdToken.setRebaseIndex(index, 1);
+        usdaToken.setRebaseIndex(index, 1);
 
-        assertApproxEqAbs(djUsdToken.totalSupply(), foreshadowTS, 100);
-        uint256 newBal = amount * djUsdToken.rebaseIndex() / 1e18;
+        assertApproxEqAbs(usdaToken.totalSupply(), foreshadowTS, 100);
+        uint256 newBal = amount * usdaToken.rebaseIndex() / 1e18;
         assertGt(newBal, amount);
-        assertApproxEqAbs(djUsdToken.balanceOf(alice), newBal, 0);
+        assertApproxEqAbs(usdaToken.balanceOf(alice), newBal, 0);
         deal(address(USTB), address(usdaMinter), newBal);
 
         // taker
         vm.startPrank(alice);
-        djUsdToken.approve(address(usdaMinter), newBal);
+        usdaToken.approve(address(usdaMinter), newBal);
         usdaMinter.requestTokens(address(USTB), newBal);
         vm.stopPrank();
 
         // ~ Post-state check ~
 
-        assertEq(djUsdToken.balanceOf(alice), 0);
+        assertEq(usdaToken.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(address(usdaMinter)), newBal);
 
@@ -1061,32 +1061,32 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
 
         assertEq(USTB.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(address(usdaMinter)), amount);
-        assertApproxEqAbs(djUsdToken.balanceOf(alice), amount, 0);
+        assertApproxEqAbs(usdaToken.balanceOf(alice), amount, 0);
 
-        uint256 preTotalSupply = djUsdToken.totalSupply();
+        uint256 preTotalSupply = usdaToken.totalSupply();
         uint256 foreshadowTS = (preTotalSupply * index) / 1e18;
 
         // ~ update rebaseIndex on USDa ~
 
         vm.prank(rebaseManager);
-        djUsdToken.setRebaseIndex(index, 1);
+        usdaToken.setRebaseIndex(index, 1);
 
-        assertApproxEqAbs(djUsdToken.totalSupply(), foreshadowTS, 5);
-        uint256 newBal = (amount * djUsdToken.rebaseIndex()) / 1e18;
+        assertApproxEqAbs(usdaToken.totalSupply(), foreshadowTS, 5);
+        uint256 newBal = (amount * usdaToken.rebaseIndex()) / 1e18;
         assertGt(newBal, amount);
-        assertApproxEqAbs(djUsdToken.balanceOf(alice), newBal, 0);
+        assertApproxEqAbs(usdaToken.balanceOf(alice), newBal, 0);
         deal(address(USTB), address(usdaMinter), newBal);
 
         // ~ Alice executes requestTokens ~
 
         vm.startPrank(alice);
-        djUsdToken.approve(address(usdaMinter), newBal);
+        usdaToken.approve(address(usdaMinter), newBal);
         usdaMinter.requestTokens(address(USTB), newBal);
         vm.stopPrank();
 
         // ~ Post-state check ~
 
-        assertEq(djUsdToken.balanceOf(alice), 0);
+        assertEq(usdaToken.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(address(usdaMinter)), newBal);
 
@@ -1129,7 +1129,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
 
         // ~ Post-state check 2 ~
 
-        assertEq(djUsdToken.balanceOf(alice), 0);
+        assertEq(usdaToken.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(alice), newBal);
         assertEq(USTB.balanceOf(address(usdaMinter)), 0);
 
@@ -1146,7 +1146,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
     }
 
     function test_usdaMinter_supplyLimit() public {
-        djUsdToken.setSupplyLimit(djUsdToken.totalSupply());
+        usdaToken.setSupplyLimit(usdaToken.totalSupply());
 
         vm.startPrank(bob);
         USTB.approve(address(usdaMinter), _amountToDeposit);
@@ -1219,9 +1219,9 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         usdaMinter.withdrawFunds(address(USTB), amount);
 
         vm.prank(address(usdaMinter));
-        djUsdToken.mint(bob, amount);
+        usdaToken.mint(bob, amount);
         vm.startPrank(bob);
-        djUsdToken.approve(address(usdaMinter), amount);
+        usdaToken.approve(address(usdaMinter), amount);
         usdaMinter.requestTokens(address(USTB), amount);
         vm.stopPrank();
         assertEq(usdaMinter.requiredTokens(address(USTB)), amount);
@@ -1329,7 +1329,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
 
         // mint USDa to an actor
         vm.prank(address(usdaMinter));
-        djUsdToken.mint(alice, mintAmount * numMints * 2);
+        usdaToken.mint(alice, mintAmount * numMints * 2);
 
         // ~ Pre-state check ~
 
@@ -1341,7 +1341,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         for (uint256 i; i < numMints; ++i) {
             // requests for USTB
             vm.startPrank(alice);
-            djUsdToken.approve(address(usdaMinter), mintAmount);
+            usdaToken.approve(address(usdaMinter), mintAmount);
             usdaMinter.requestTokens(address(USTB), mintAmount);
             vm.stopPrank();
         }
@@ -1356,7 +1356,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         for (uint256 i; i < numMints; ++i) {
             // requests for USDC
             vm.startPrank(alice);
-            djUsdToken.approve(address(usdaMinter), mintAmount);
+            usdaToken.approve(address(usdaMinter), mintAmount);
             usdaMinter.requestTokens(address(USDCToken), mintAmount);
             vm.stopPrank();
         }
@@ -1506,12 +1506,12 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         uint256 ratio = .9 ether; // 90%
 
         vm.prank(address(usdaMinter));
-        djUsdToken.mint(alice, amount);
+        usdaToken.mint(alice, amount);
         deal(address(USTB), address(usdaMinter), amount);
 
         // ~ Pre-state check ~
 
-        assertEq(djUsdToken.balanceOf(alice), amount);
+        assertEq(usdaToken.balanceOf(alice), amount);
         assertEq(USTB.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(address(usdaMinter)), amount);
 
@@ -1521,7 +1521,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         // ~ Alice executes requestTokens ~
 
         vm.startPrank(alice);
-        djUsdToken.approve(address(usdaMinter), amount);
+        usdaToken.approve(address(usdaMinter), amount);
         usdaMinter.requestTokens(address(USTB), amount);
         vm.stopPrank();
 
@@ -1553,12 +1553,12 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         uint256 ratio = .9 ether; // 90%
 
         vm.prank(address(usdaMinter));
-        djUsdToken.mint(alice, amount);
+        usdaToken.mint(alice, amount);
         deal(address(USTB), address(usdaMinter), amount);
 
         // ~ Pre-state check ~
 
-        assertEq(djUsdToken.balanceOf(alice), amount);
+        assertEq(usdaToken.balanceOf(alice), amount);
         assertEq(USTB.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(address(usdaMinter)), amount);
 
@@ -1568,13 +1568,13 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         // ~ Alice executes requestTokens ~
 
         vm.startPrank(alice);
-        djUsdToken.approve(address(usdaMinter), amount);
+        usdaToken.approve(address(usdaMinter), amount);
         usdaMinter.requestTokens(address(USTB), amount);
         vm.stopPrank();
 
         // ~ Post-state check 1 ~
 
-        assertEq(djUsdToken.balanceOf(alice), 0);
+        assertEq(usdaToken.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(address(usdaMinter)), amount);
 
@@ -1615,7 +1615,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
 
         // ~ Post-state check 2 ~
 
-        assertEq(djUsdToken.balanceOf(alice), 0);
+        assertEq(usdaToken.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(alice), amountAfterRatio);
         assertEq(USTB.balanceOf(address(usdaMinter)), amount - amountAfterRatio);
 
@@ -1640,12 +1640,12 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         uint256 amount = 10 ether;
 
         vm.prank(address(usdaMinter));
-        djUsdToken.mint(alice, amount);
+        usdaToken.mint(alice, amount);
         deal(address(USTB), address(usdaMinter), amount);
 
         // ~ Pre-state check ~
 
-        assertEq(djUsdToken.balanceOf(alice), amount);
+        assertEq(usdaToken.balanceOf(alice), amount);
         assertEq(USTB.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(address(usdaMinter)), amount);
 
@@ -1655,13 +1655,13 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         // ~ Alice executes requestTokens ~
 
         vm.startPrank(alice);
-        djUsdToken.approve(address(usdaMinter), amount);
+        usdaToken.approve(address(usdaMinter), amount);
         usdaMinter.requestTokens(address(USTB), amount);
         vm.stopPrank();
 
         // ~ Post-state check 1 ~
 
-        assertEq(djUsdToken.balanceOf(alice), 0);
+        assertEq(usdaToken.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(address(usdaMinter)), amount);
 
@@ -1702,7 +1702,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
 
         // ~ Post-state check 2 ~
 
-        assertEq(djUsdToken.balanceOf(alice), 0);
+        assertEq(usdaToken.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(alice), amountAfterRatio);
         assertEq(USTB.balanceOf(address(usdaMinter)), amount - amountAfterRatio);
 
@@ -1725,12 +1725,12 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         uint256 amount = 10 ether;
 
         vm.prank(address(usdaMinter));
-        djUsdToken.mint(alice, amount*2);
+        usdaToken.mint(alice, amount*2);
         deal(address(USTB), address(usdaMinter), amount*2);
 
         // ~ Pre-state check ~
 
-        assertEq(djUsdToken.balanceOf(alice), amount*2);
+        assertEq(usdaToken.balanceOf(alice), amount*2);
         assertEq(USTB.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(address(usdaMinter)), amount*2);
 
@@ -1740,13 +1740,13 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         // ~ Alice executes requestTokens ~
 
         vm.startPrank(alice);
-        djUsdToken.approve(address(usdaMinter), amount);
+        usdaToken.approve(address(usdaMinter), amount);
         usdaMinter.requestTokens(address(USTB), amount);
         vm.stopPrank();
 
         // ~ Post-state check 1 ~
 
-        assertEq(djUsdToken.balanceOf(alice), amount);
+        assertEq(usdaToken.balanceOf(alice), amount);
         assertEq(USTB.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(address(usdaMinter)), amount*2);
 
@@ -1789,7 +1789,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
 
         // ~ Post-state check 2 ~
 
-        assertEq(djUsdToken.balanceOf(alice), amount);
+        assertEq(usdaToken.balanceOf(alice), amount);
         assertEq(USTB.balanceOf(alice), amountAfterRatio);
         assertEq(USTB.balanceOf(address(usdaMinter)), amount*2 - amountAfterRatio);
 
@@ -1808,13 +1808,13 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
         // ~ alice requests another claim ~
 
         vm.startPrank(alice);
-        djUsdToken.approve(address(usdaMinter), amount);
+        usdaToken.approve(address(usdaMinter), amount);
         usdaMinter.requestTokens(address(USTB), amount);
         vm.stopPrank();
 
         // ~ Post-state check 3 ~
 
-        assertEq(djUsdToken.balanceOf(alice), 0);
+        assertEq(usdaToken.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(alice), amountAfterRatio);
         assertEq(USTB.balanceOf(address(usdaMinter)), amount*2 - amountAfterRatio);
 
@@ -1856,7 +1856,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
 
         // ~ Post-state check 4 ~
 
-        assertEq(djUsdToken.balanceOf(alice), 0);
+        assertEq(usdaToken.balanceOf(alice), 0);
         assertEq(USTB.balanceOf(alice), amount + amountAfterRatio);
         assertEq(USTB.balanceOf(address(usdaMinter)), amount - amountAfterRatio);
 

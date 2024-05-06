@@ -16,7 +16,7 @@ import {BaseSetup} from "../BaseSetup.sol";
 import {LZEndpointMock} from "../mock/LZEndpointMock.sol";
 
 contract USDaRebaseTest is Test, BaseSetup {
-    USDa internal _djUsdToken;
+    USDa internal _usdaToken;
     USDaTaxManager internal _taxCollector;
 
     // mock
@@ -39,91 +39,91 @@ contract USDaRebaseTest is Test, BaseSetup {
 
         _lzEndpoint = new LZEndpointMock(uint16(block.chainid));
 
-        _djUsdToken = new USDa(31337, address(_lzEndpoint));
-        ERC1967Proxy _djUsdTokenProxy = new ERC1967Proxy(
-            address(_djUsdToken), abi.encodeWithSelector(USDa.initialize.selector, _owner, _rebaseManager)
+        _usdaToken = new USDa(31337, address(_lzEndpoint));
+        ERC1967Proxy _usdaTokenProxy = new ERC1967Proxy(
+            address(_usdaToken), abi.encodeWithSelector(USDa.initialize.selector, _owner, _rebaseManager)
         );
-        _djUsdToken = USDa(address(_djUsdTokenProxy));
+        _usdaToken = USDa(address(_usdaTokenProxy));
 
-        _taxCollector = new USDaTaxManager(_owner, address(_djUsdToken), _feeCollector);
-
-        vm.prank(_owner);
-        _djUsdToken.setMinter(_minter);
+        _taxCollector = new USDaTaxManager(_owner, address(_usdaToken), _feeCollector);
 
         vm.prank(_owner);
-        _djUsdToken.setSupplyLimit(type(uint256).max);
+        _usdaToken.setMinter(_minter);
 
         vm.prank(_owner);
-        _djUsdToken.setSupplyLimit(type(uint256).max);
+        _usdaToken.setSupplyLimit(type(uint256).max);
 
         vm.prank(_owner);
-        _djUsdToken.setTaxManager(address(_taxCollector));
+        _usdaToken.setSupplyLimit(type(uint256).max);
+
+        vm.prank(_owner);
+        _usdaToken.setTaxManager(address(_taxCollector));
     }
 
     function test_rebase_CorrectInitialConfig() public {
-        assertEq(_djUsdToken.owner(), _owner);
-        assertEq(_djUsdToken.minter(), _minter);
-        assertEq(_djUsdToken.rebaseManager(), _rebaseManager);
-        assertEq(address(_djUsdToken.lzEndpoint()), address(_lzEndpoint));
-        assertEq(_djUsdToken.isMainChain(), true);
+        assertEq(_usdaToken.owner(), _owner);
+        assertEq(_usdaToken.minter(), _minter);
+        assertEq(_usdaToken.rebaseManager(), _rebaseManager);
+        assertEq(address(_usdaToken.lzEndpoint()), address(_lzEndpoint));
+        assertEq(_usdaToken.isMainChain(), true);
     }
 
     function test_rebase_setRebaseIndex_single() public {
         vm.prank(_minter);
-        _djUsdToken.mint(_bob, 1 ether);
+        _usdaToken.mint(_bob, 1 ether);
 
-        assertEq(_djUsdToken.rebaseIndex(), 1 ether);
-        assertEq(_djUsdToken.balanceOf(_feeCollector), 0);
+        assertEq(_usdaToken.rebaseIndex(), 1 ether);
+        assertEq(_usdaToken.balanceOf(_feeCollector), 0);
 
         vm.startPrank(_rebaseManager);
-        _djUsdToken.setRebaseIndex(2 ether, 1);
-        assertGt(_djUsdToken.rebaseIndex(), 1 ether);
-        assertGt(_djUsdToken.balanceOf(_feeCollector), 0);
+        _usdaToken.setRebaseIndex(2 ether, 1);
+        assertGt(_usdaToken.rebaseIndex(), 1 ether);
+        assertGt(_usdaToken.balanceOf(_feeCollector), 0);
     }
 
     function test_rebase_setRebaseIndex_restrictions() public {
         // rebaseIndex can't be 0
         vm.startPrank(_rebaseManager);
         vm.expectRevert(abi.encodeWithSelector(IUSDaDefinitions.ZeroRebaseIndex.selector));
-        _djUsdToken.setRebaseIndex(0, 1);
+        _usdaToken.setRebaseIndex(0, 1);
     }
 
     function test_rebase_setRebaseIndex_consecutive() public {
         vm.prank(_minter);
-        _djUsdToken.mint(_bob, 1000 ether);
+        _usdaToken.mint(_bob, 1000 ether);
 
         uint256 index1 = 1.2 ether;
         uint256 index2 = 1.4 ether;
 
         // ~ rebase 1 ~
 
-        assertEq(_djUsdToken.rebaseIndex(), 1 ether);
-        uint256 feeCollectorPreBal = _djUsdToken.balanceOf(_feeCollector);
+        assertEq(_usdaToken.rebaseIndex(), 1 ether);
+        uint256 feeCollectorPreBal = _usdaToken.balanceOf(_feeCollector);
 
-        uint256 preTotalSupply = _djUsdToken.totalSupply();
-        uint256 foreshadowTS1 = (((preTotalSupply * 1e18) / _djUsdToken.rebaseIndex()) * index1) / 1e18;
+        uint256 preTotalSupply = _usdaToken.totalSupply();
+        uint256 foreshadowTS1 = (((preTotalSupply * 1e18) / _usdaToken.rebaseIndex()) * index1) / 1e18;
 
         vm.startPrank(_rebaseManager);
-        _djUsdToken.setRebaseIndex(index1, 1);
-        assertGt(_djUsdToken.rebaseIndex(), 1 ether); // 1.18
+        _usdaToken.setRebaseIndex(index1, 1);
+        assertGt(_usdaToken.rebaseIndex(), 1 ether); // 1.18
 
-        assertApproxEqAbs(_djUsdToken.totalSupply(), foreshadowTS1, 1000);
-        assertGt(_djUsdToken.balanceOf(_feeCollector), feeCollectorPreBal);
+        assertApproxEqAbs(_usdaToken.totalSupply(), foreshadowTS1, 1000);
+        assertGt(_usdaToken.balanceOf(_feeCollector), feeCollectorPreBal);
 
         // ~ rebase 2 ~
 
-        feeCollectorPreBal = _djUsdToken.balanceOf(_feeCollector);
-        uint256 preIndex = _djUsdToken.rebaseIndex();
+        feeCollectorPreBal = _usdaToken.balanceOf(_feeCollector);
+        uint256 preIndex = _usdaToken.rebaseIndex();
 
-        preTotalSupply = _djUsdToken.totalSupply();
-        uint256 foreshadowTS2 = (((preTotalSupply * 1e18) / _djUsdToken.rebaseIndex()) * index2) / 1e18;
+        preTotalSupply = _usdaToken.totalSupply();
+        uint256 foreshadowTS2 = (((preTotalSupply * 1e18) / _usdaToken.rebaseIndex()) * index2) / 1e18;
 
         vm.startPrank(_rebaseManager);
-        _djUsdToken.setRebaseIndex(index2, 1);
-        assertGt(_djUsdToken.rebaseIndex(), preIndex); // 1.378
+        _usdaToken.setRebaseIndex(index2, 1);
+        assertGt(_usdaToken.rebaseIndex(), preIndex); // 1.378
 
-        assertApproxEqAbs(_djUsdToken.totalSupply(), foreshadowTS2, 1000);
-        assertGt(_djUsdToken.balanceOf(_feeCollector), feeCollectorPreBal);
+        assertApproxEqAbs(_usdaToken.totalSupply(), foreshadowTS2, 1000);
+        assertGt(_usdaToken.balanceOf(_feeCollector), feeCollectorPreBal);
     }
 
     function test_rebase_disableRebase() public {
@@ -132,25 +132,25 @@ contract USDaRebaseTest is Test, BaseSetup {
         uint256 amount = 1 ether;
 
         vm.startPrank(_minter);
-        _djUsdToken.mint(_bob, amount);
-        _djUsdToken.mint(_alice, amount);
+        _usdaToken.mint(_bob, amount);
+        _usdaToken.mint(_alice, amount);
         vm.stopPrank();
 
         // ~ Pre-state check ~
 
-        assertEq(_djUsdToken.balanceOf(_bob), amount);
-        assertEq(_djUsdToken.balanceOf(_alice), amount);
+        assertEq(_usdaToken.balanceOf(_bob), amount);
+        assertEq(_usdaToken.balanceOf(_alice), amount);
 
         // ~ Disable rebase for bob  & set rebase ~
 
         vm.startPrank(_rebaseManager);
-        _djUsdToken.disableRebase(_bob, true);
-        _djUsdToken.setRebaseIndex(1.1 ether, 1);
+        _usdaToken.disableRebase(_bob, true);
+        _usdaToken.setRebaseIndex(1.1 ether, 1);
         vm.stopPrank();
 
         // ~ Post-state check ~
 
-        assertEq(_djUsdToken.balanceOf(_bob), amount);
-        assertGt(_djUsdToken.balanceOf(_alice), amount);
+        assertEq(_usdaToken.balanceOf(_bob), amount);
+        assertGt(_usdaToken.balanceOf(_alice), amount);
     }
 }

@@ -15,7 +15,7 @@ import {USDaTaxManager} from "../../src/USDaTaxManager.sol";
 import {BaseSetup} from "../BaseSetup.sol";
 
 contract USDaTest is Test, BaseSetup {
-    USDa internal _djUsdToken;
+    USDa internal _usdaToken;
     USDaTaxManager internal _taxManager;
 
     //address internal constant owner = address(bytes20(bytes("owner")));
@@ -40,30 +40,30 @@ contract USDaTest is Test, BaseSetup {
         vm.label(_newRebaseManager, "newRebaseManager");
         vm.label(_layerZeroEndpoint, "layerZeroEndpoint");
 
-        _djUsdToken = new USDa(31337, _layerZeroEndpoint);
-        ERC1967Proxy _djUsdTokenProxy = new ERC1967Proxy(
-            address(_djUsdToken), abi.encodeWithSelector(USDa.initialize.selector, owner, _rebaseManager)
+        _usdaToken = new USDa(31337, _layerZeroEndpoint);
+        ERC1967Proxy _usdaTokenProxy = new ERC1967Proxy(
+            address(_usdaToken), abi.encodeWithSelector(USDa.initialize.selector, owner, _rebaseManager)
         );
-        _djUsdToken = USDa(address(_djUsdTokenProxy));
+        _usdaToken = USDa(address(_usdaTokenProxy));
 
-        _taxManager = new USDaTaxManager(owner, address(_djUsdToken), _feeCollector);
-
-        vm.prank(owner);
-        _djUsdToken.setMinter(_minter);
+        _taxManager = new USDaTaxManager(owner, address(_usdaToken), _feeCollector);
 
         vm.prank(owner);
-        _djUsdToken.setSupplyLimit(type(uint256).max);
+        _usdaToken.setMinter(_minter);
 
         vm.prank(owner);
-        _djUsdToken.setTaxManager(address(_taxManager));
+        _usdaToken.setSupplyLimit(type(uint256).max);
+
+        vm.prank(owner);
+        _usdaToken.setTaxManager(address(_taxManager));
     }
 
     function test_CorrectInitialConfig() public {
-        assertEq(_djUsdToken.owner(), owner);
-        assertEq(_djUsdToken.minter(), _minter);
-        assertEq(_djUsdToken.rebaseManager(), _rebaseManager);
-        assertEq(address(_djUsdToken.lzEndpoint()), _layerZeroEndpoint);
-        assertEq(_djUsdToken.isMainChain(), true);
+        assertEq(_usdaToken.owner(), owner);
+        assertEq(_usdaToken.minter(), _minter);
+        assertEq(_usdaToken.rebaseManager(), _rebaseManager);
+        assertEq(address(_usdaToken.lzEndpoint()), _layerZeroEndpoint);
+        assertEq(_usdaToken.isMainChain(), true);
     }
 
     function test_initialize() public {
@@ -82,139 +82,139 @@ contract USDaTest is Test, BaseSetup {
         vm.store(address(instance2), slot, 0);
 
         instance1.initialize(address(2), address(3));
-        assertEq(_djUsdToken.name(), "USDa");
-        assertEq(_djUsdToken.symbol(), "USDa");
-        assertEq(_djUsdToken.rebaseIndex(), 1 ether);
+        assertEq(_usdaToken.name(), "USDa");
+        assertEq(_usdaToken.symbol(), "USDa");
+        assertEq(_usdaToken.rebaseIndex(), 1 ether);
 
         instance2.initialize(address(2), address(3));
-        assertEq(_djUsdToken.name(), "USDa");
-        assertEq(_djUsdToken.symbol(), "USDa");
-        assertEq(_djUsdToken.rebaseIndex(), 1 ether);
+        assertEq(_usdaToken.name(), "USDa");
+        assertEq(_usdaToken.symbol(), "USDa");
+        assertEq(_usdaToken.rebaseIndex(), 1 ether);
     }
 
-    function test_djUsdToken_isUpgradeable() public {
+    function test_usdaToken_isUpgradeable() public {
         USDa newImplementation = new USDa(block.chainid, address(1));
 
         bytes32 implementationSlot =
-            vm.load(address(_djUsdToken), 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc);
+            vm.load(address(_usdaToken), 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc);
         assertNotEq(implementationSlot, bytes32(abi.encode(address(newImplementation))));
 
         vm.prank(owner);
-        _djUsdToken.upgradeToAndCall(address(newImplementation), "");
+        _usdaToken.upgradeToAndCall(address(newImplementation), "");
 
         implementationSlot =
-            vm.load(address(_djUsdToken), 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc);
+            vm.load(address(_usdaToken), 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc);
         assertEq(implementationSlot, bytes32(abi.encode(address(newImplementation))));
     }
 
-    function test_djUsdToken_isUpgradeable_onlyOwner() public {
+    function test_usdaToken_isUpgradeable_onlyOwner() public {
         USDa newImplementation = new USDa(block.chainid, address(1));
 
         vm.prank(_minter);
         vm.expectRevert();
-        _djUsdToken.upgradeToAndCall(address(newImplementation), "");
+        _usdaToken.upgradeToAndCall(address(newImplementation), "");
 
         vm.prank(owner);
-        _djUsdToken.upgradeToAndCall(address(newImplementation), "");
+        _usdaToken.upgradeToAndCall(address(newImplementation), "");
     }
 
     function testownershipCannotBeRenounced() public {
         vm.prank(owner);
         vm.expectRevert(CantRenounceOwnershipErr);
-        _djUsdToken.renounceOwnership();
-        assertEq(_djUsdToken.owner(), owner);
-        assertNotEq(_djUsdToken.owner(), address(0));
+        _usdaToken.renounceOwnership();
+        assertEq(_usdaToken.owner(), owner);
+        assertNotEq(_usdaToken.owner(), address(0));
     }
 
     function test_CanTransferOwnership() public {
         vm.prank(owner);
-        _djUsdToken.transferOwnership(_newOwner);
-        assertEq(_djUsdToken.owner(), _newOwner);
+        _usdaToken.transferOwnership(_newOwner);
+        assertEq(_usdaToken.owner(), _newOwner);
     }
 
     function test_NewOwnerCanPerformOwnerActions() public {
         vm.prank(owner);
-        _djUsdToken.transferOwnership(_newOwner);
+        _usdaToken.transferOwnership(_newOwner);
         vm.startPrank(_newOwner);
-        _djUsdToken.setMinter(_newMinter);
+        _usdaToken.setMinter(_newMinter);
         vm.stopPrank();
-        assertEq(_djUsdToken.minter(), _newMinter);
-        assertNotEq(_djUsdToken.minter(), _minter);
+        assertEq(_usdaToken.minter(), _newMinter);
+        assertNotEq(_usdaToken.minter(), _minter);
     }
 
     function test_OnlyOwnerCanSetMinter() public {
         vm.prank(_newOwner);
         vm.expectRevert();
-        _djUsdToken.setMinter(_newMinter);
-        assertEq(_djUsdToken.minter(), _minter);
+        _usdaToken.setMinter(_newMinter);
+        assertEq(_usdaToken.minter(), _minter);
     }
 
     function test_OnlyOwnerCanSetRebaseManager() public {
         vm.prank(_newOwner);
         vm.expectRevert();
-        _djUsdToken.setRebaseManager(_newRebaseManager);
-        assertEq(_djUsdToken.rebaseManager(), _rebaseManager);
+        _usdaToken.setRebaseManager(_newRebaseManager);
+        assertEq(_usdaToken.rebaseManager(), _rebaseManager);
         vm.prank(owner);
-        _djUsdToken.setRebaseManager(_newRebaseManager);
-        assertEq(_djUsdToken.rebaseManager(), _newRebaseManager);
+        _usdaToken.setRebaseManager(_newRebaseManager);
+        assertEq(_usdaToken.rebaseManager(), _newRebaseManager);
     }
 
     function testownerCantMint() public {
         vm.prank(owner);
         vm.expectRevert(OnlyMinterErr);
-        _djUsdToken.mint(_newMinter, 100);
+        _usdaToken.mint(_newMinter, 100);
     }
 
     function test_MinterCanMint() public {
-        assertEq(_djUsdToken.balanceOf(_newMinter), 0);
+        assertEq(_usdaToken.balanceOf(_newMinter), 0);
         vm.prank(_minter);
-        _djUsdToken.mint(_newMinter, 100);
-        assertEq(_djUsdToken.balanceOf(_newMinter), 100);
+        _usdaToken.mint(_newMinter, 100);
+        assertEq(_usdaToken.balanceOf(_newMinter), 100);
     }
 
     function test_MinterCantMintToZeroAddress() public {
         vm.prank(_minter);
         vm.expectRevert();
-        _djUsdToken.mint(address(0), 100);
+        _usdaToken.mint(address(0), 100);
     }
 
     function test_NewMinterCanMint() public {
-        assertEq(_djUsdToken.balanceOf(_newMinter), 0);
+        assertEq(_usdaToken.balanceOf(_newMinter), 0);
         vm.prank(owner);
-        _djUsdToken.setMinter(_newMinter);
+        _usdaToken.setMinter(_newMinter);
         vm.prank(_newMinter);
-        _djUsdToken.mint(_newMinter, 100);
-        assertEq(_djUsdToken.balanceOf(_newMinter), 100);
+        _usdaToken.mint(_newMinter, 100);
+        assertEq(_usdaToken.balanceOf(_newMinter), 100);
     }
 
     function test_OldMinterCantMint() public {
-        assertEq(_djUsdToken.balanceOf(_newMinter), 0);
+        assertEq(_usdaToken.balanceOf(_newMinter), 0);
         vm.prank(owner);
-        _djUsdToken.setMinter(_newMinter);
+        _usdaToken.setMinter(_newMinter);
         vm.prank(_minter);
         vm.expectRevert(OnlyMinterErr);
-        _djUsdToken.mint(_newMinter, 100);
-        assertEq(_djUsdToken.balanceOf(_newMinter), 0);
+        _usdaToken.mint(_newMinter, 100);
+        assertEq(_usdaToken.balanceOf(_newMinter), 0);
     }
 
     function test_OldOwnerCantTransferOwnership() public {
         vm.prank(owner);
-        _djUsdToken.transferOwnership(_newOwner);
+        _usdaToken.transferOwnership(_newOwner);
         vm.prank(_newOwner);
-        assertNotEq(_djUsdToken.owner(), owner);
-        assertEq(_djUsdToken.owner(), _newOwner);
+        assertNotEq(_usdaToken.owner(), owner);
+        assertEq(_usdaToken.owner(), _newOwner);
         vm.prank(owner);
         vm.expectRevert();
-        _djUsdToken.transferOwnership(_newMinter);
-        assertEq(_djUsdToken.owner(), _newOwner);
+        _usdaToken.transferOwnership(_newMinter);
+        assertEq(_usdaToken.owner(), _newOwner);
     }
 
     function test_OldOwnerCantSetMinter() public {
         vm.prank(owner);
-        _djUsdToken.transferOwnership(_newOwner);
-        assertEq(_djUsdToken.owner(), _newOwner);
+        _usdaToken.transferOwnership(_newOwner);
+        assertEq(_usdaToken.owner(), _newOwner);
         vm.expectRevert();
-        _djUsdToken.setMinter(_newMinter);
-        assertEq(_djUsdToken.minter(), _minter);
+        _usdaToken.setMinter(_newMinter);
+        assertEq(_usdaToken.minter(), _minter);
     }
 }

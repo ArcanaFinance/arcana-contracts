@@ -34,7 +34,7 @@ contract USDaFeeCollectorTest is BaseSetup {
     }
 
     function test_feeColector_init_state() public {
-        assertEq(feeCollector.USDa(), address(djUsdToken));
+        assertEq(feeCollector.USDa(), address(usdaToken));
         assertEq(feeCollector.distributors(0), REVENUE_DISTRIBUTOR);
         assertEq(feeCollector.distributors(1), ARCANA_ESCROW);
     }
@@ -44,13 +44,13 @@ contract USDaFeeCollectorTest is BaseSetup {
 
         uint256 amount = 1 ether;
         vm.prank(address(usdaMinter));
-        djUsdToken.mint(address(feeCollector), amount);
+        usdaToken.mint(address(feeCollector), amount);
 
         // ~ Pre-State check ~
 
-        assertEq(djUsdToken.balanceOf(address(feeCollector)), amount);
-        assertEq(djUsdToken.balanceOf(REVENUE_DISTRIBUTOR), 0);
-        assertEq(djUsdToken.balanceOf(ARCANA_ESCROW), 0);
+        assertEq(usdaToken.balanceOf(address(feeCollector)), amount);
+        assertEq(usdaToken.balanceOf(REVENUE_DISTRIBUTOR), 0);
+        assertEq(usdaToken.balanceOf(ARCANA_ESCROW), 0);
 
         // ~ Execute distributeUSDa ~
 
@@ -58,9 +58,9 @@ contract USDaFeeCollectorTest is BaseSetup {
 
         // ~ Pre-State check ~
 
-        assertEq(djUsdToken.balanceOf(address(feeCollector)), 0);
-        assertEq(djUsdToken.balanceOf(REVENUE_DISTRIBUTOR), amount / 2);
-        assertEq(djUsdToken.balanceOf(ARCANA_ESCROW), amount / 2);
+        assertEq(usdaToken.balanceOf(address(feeCollector)), 0);
+        assertEq(usdaToken.balanceOf(REVENUE_DISTRIBUTOR), amount / 2);
+        assertEq(usdaToken.balanceOf(ARCANA_ESCROW), amount / 2);
     }
 
     function test_feeCollector_distributeUSDa_fuzzing(uint256 amount) public {
@@ -69,13 +69,13 @@ contract USDaFeeCollectorTest is BaseSetup {
         // ~ Config ~
 
         vm.prank(address(usdaMinter));
-        djUsdToken.mint(address(feeCollector), amount);
+        usdaToken.mint(address(feeCollector), amount);
 
         // ~ Pre-State check ~
 
-        assertEq(djUsdToken.balanceOf(address(feeCollector)), amount);
-        assertEq(djUsdToken.balanceOf(REVENUE_DISTRIBUTOR), 0);
-        assertEq(djUsdToken.balanceOf(ARCANA_ESCROW), 0);
+        assertEq(usdaToken.balanceOf(address(feeCollector)), amount);
+        assertEq(usdaToken.balanceOf(REVENUE_DISTRIBUTOR), 0);
+        assertEq(usdaToken.balanceOf(ARCANA_ESCROW), 0);
 
         // ~ Execute distributeUSDa ~
 
@@ -83,8 +83,8 @@ contract USDaFeeCollectorTest is BaseSetup {
 
         // ~ Pre-State check ~
 
-        assertApproxEqAbs(djUsdToken.balanceOf(address(feeCollector)), 0, 1);
-        assertEq(djUsdToken.balanceOf(REVENUE_DISTRIBUTOR), amount / 2);
-        assertEq(djUsdToken.balanceOf(ARCANA_ESCROW), amount / 2);
+        assertApproxEqAbs(usdaToken.balanceOf(address(feeCollector)), 0, 1);
+        assertEq(usdaToken.balanceOf(REVENUE_DISTRIBUTOR), amount / 2);
+        assertEq(usdaToken.balanceOf(ARCANA_ESCROW), amount / 2);
     }
 }

@@ -31,10 +31,10 @@ import {Utils} from "./utils/Utils.sol";
 
 contract BaseSetup is Test, IUSDaDefinitions {
     Utils internal utils;
-    USDa internal djUsdToken;
+    USDa internal usdaToken;
     USDaTaxManager internal taxManager;
     USDaFeeCollector internal feeCollector;
-    USDaPointsBoostVault internal djUsdVault;
+    USDaPointsBoostVault internal usdaVault;
     CustodianManager internal custodian;
     LZEndpointMock public layerZeroEndpoint;
     MockToken internal USTB;
@@ -97,7 +97,6 @@ contract BaseSetup is Test, IUSDaDefinitions {
     uint256 internal _slippageRange = 50000000000000000;
     uint256 internal _amountToDeposit = 50 * 10 ** 18;
     uint256 internal _stETHToWithdraw = 30 * 10 ** 18;
-    uint256 internal _djUsdToMint = 8.75 * 10 ** 23;
     uint256 internal _maxMintPerBlock = 10e23;
     uint256 internal _maxRedeemPerBlock = _maxMintPerBlock;
 
@@ -149,17 +148,17 @@ contract BaseSetup is Test, IUSDaDefinitions {
 
         layerZeroEndpoint = new LZEndpointMock(uint16(block.chainid));
 
-        djUsdToken = new USDa(1, address(layerZeroEndpoint));
-        ERC1967Proxy djUsdTokenProxy = new ERC1967Proxy(
-            address(djUsdToken), abi.encodeWithSelector(USDa.initialize.selector, address(this), rebaseManager)
+        usdaToken = new USDa(1, address(layerZeroEndpoint));
+        ERC1967Proxy usdaTokenProxy = new ERC1967Proxy(
+            address(usdaToken), abi.encodeWithSelector(USDa.initialize.selector, address(this), rebaseManager)
         );
-        djUsdToken = USDa(address(djUsdTokenProxy));
+        usdaToken = USDa(address(usdaTokenProxy));
 
-        feeCollector = new USDaFeeCollector(owner, address(djUsdToken), distributors, ratios);
+        feeCollector = new USDaFeeCollector(owner, address(usdaToken), distributors, ratios);
 
-        taxManager = new USDaTaxManager(owner, address(djUsdToken), address(feeCollector));
+        taxManager = new USDaTaxManager(owner, address(usdaToken), address(feeCollector));
 
-        usdaMinter = new USDaMinter(IUSDa(address(djUsdToken)));
+        usdaMinter = new USDaMinter(IUSDa(address(usdaToken)));
         ERC1967Proxy arcanaMintingProxy = new ERC1967Proxy(
             address(usdaMinter),
             abi.encodeWithSelector(USDaMinter.initialize.selector,
@@ -178,7 +177,7 @@ contract BaseSetup is Test, IUSDaDefinitions {
         );
         custodian = CustodianManager(address(custodianProxy));
 
-        djUsdVault = new USDaPointsBoostVault(address(djUsdToken));
+        usdaVault = new USDaPointsBoostVault(address(usdaToken));
 
         // ~ Config ~
 
@@ -199,11 +198,11 @@ contract BaseSetup is Test, IUSDaDefinitions {
         USTB.mint(_amountToDeposit, bob);
         vm.stopPrank();
 
-        djUsdToken.setMinter(address(usdaMinter));
+        usdaToken.setMinter(address(usdaMinter));
 
-        djUsdToken.setSupplyLimit(type(uint256).max);
+        usdaToken.setSupplyLimit(type(uint256).max);
 
-        djUsdToken.setTaxManager(address(taxManager));
+        usdaToken.setTaxManager(address(taxManager));
     }
 
     function _createAddresses() internal {

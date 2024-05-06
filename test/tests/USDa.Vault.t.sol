@@ -20,7 +20,7 @@ contract USDaVaultTest is BaseSetup {
     }
 
     function test_vault_init_state() public {
-        assertEq(djUsdVault.USDa(), address(djUsdToken));
+        assertEq(usdaVault.USDa(), address(usdaToken));
     }
 
     function test_vault_deposit() public {
@@ -28,31 +28,31 @@ contract USDaVaultTest is BaseSetup {
 
         uint256 amount = 10 ether;
         vm.prank(address(usdaMinter));
-        djUsdToken.mint(bob, amount);
+        usdaToken.mint(bob, amount);
 
         // ~ Pre-state check ~
 
-        assertEq(djUsdToken.balanceOf(bob), amount);
-        assertEq(djUsdToken.balanceOf(address(djUsdVault)), 0);
-        assertEq(djUsdVault.balanceOf(bob), 0);
-        assertEq(djUsdVault.totalSupply(), 0);
+        assertEq(usdaToken.balanceOf(bob), amount);
+        assertEq(usdaToken.balanceOf(address(usdaVault)), 0);
+        assertEq(usdaVault.balanceOf(bob), 0);
+        assertEq(usdaVault.totalSupply(), 0);
 
-        uint256 preview = djUsdVault.previewDeposit(bob, amount);
+        uint256 preview = usdaVault.previewDeposit(bob, amount);
 
         // ~ Bob deposits into Vault ~
 
         vm.startPrank(bob);
-        djUsdToken.approve(address(djUsdVault), amount);
-        djUsdVault.deposit(amount, bob);
+        usdaToken.approve(address(usdaVault), amount);
+        usdaVault.deposit(amount, bob);
         vm.stopPrank();
 
         // ~ Post-state check ~
 
-        assertEq(djUsdToken.balanceOf(bob), 0);
-        assertEq(djUsdToken.balanceOf(address(djUsdVault)), amount);
-        assertEq(djUsdToken.balanceOf(address(djUsdVault)), preview);
-        assertEq(djUsdVault.balanceOf(bob), amount);
-        assertEq(djUsdVault.totalSupply(), amount);
+        assertEq(usdaToken.balanceOf(bob), 0);
+        assertEq(usdaToken.balanceOf(address(usdaVault)), amount);
+        assertEq(usdaToken.balanceOf(address(usdaVault)), preview);
+        assertEq(usdaVault.balanceOf(bob), amount);
+        assertEq(usdaVault.totalSupply(), amount);
     }
 
     function test_vault_deposit_fuzzing(uint256 amount, bool disableRebase) public {
@@ -61,64 +61,64 @@ contract USDaVaultTest is BaseSetup {
         // ~ Config ~
 
         vm.prank(address(usdaMinter));
-        djUsdToken.mint(bob, amount);
+        usdaToken.mint(bob, amount);
 
         if (disableRebase) {
             vm.prank(bob);
-            djUsdToken.disableRebase(bob, disableRebase);
+            usdaToken.disableRebase(bob, disableRebase);
         }
 
         // ~ Pre-state check ~
 
-        assertEq(djUsdToken.balanceOf(bob), amount);
-        assertEq(djUsdToken.balanceOf(address(djUsdVault)), 0);
-        assertEq(djUsdVault.balanceOf(bob), 0);
-        assertEq(djUsdVault.totalSupply(), 0);
+        assertEq(usdaToken.balanceOf(bob), amount);
+        assertEq(usdaToken.balanceOf(address(usdaVault)), 0);
+        assertEq(usdaVault.balanceOf(bob), 0);
+        assertEq(usdaVault.totalSupply(), 0);
 
         // ~ Bob deposits into Vault ~
 
         vm.startPrank(bob);
-        djUsdToken.approve(address(djUsdVault), amount);
-        djUsdVault.deposit(amount, bob);
+        usdaToken.approve(address(usdaVault), amount);
+        usdaVault.deposit(amount, bob);
         vm.stopPrank();
 
         // ~ Post-state check ~
 
-        assertEq(djUsdToken.balanceOf(bob), 0);
-        assertEq(djUsdToken.balanceOf(address(djUsdVault)), amount);
-        assertEq(djUsdVault.balanceOf(bob), amount);
-        assertEq(djUsdVault.totalSupply(), amount);
+        assertEq(usdaToken.balanceOf(bob), 0);
+        assertEq(usdaToken.balanceOf(address(usdaVault)), amount);
+        assertEq(usdaVault.balanceOf(bob), amount);
+        assertEq(usdaVault.totalSupply(), amount);
     }
 
     function test_vault_redeem() public {
         // ~ Config ~
 
         uint256 amount = 10 ether;
-        deal(address(djUsdVault), bob, amount);
+        deal(address(usdaVault), bob, amount);
         vm.prank(address(usdaMinter));
-        djUsdToken.mint(address(djUsdVault), amount);
+        usdaToken.mint(address(usdaVault), amount);
 
         // ~ Pre-state check ~
 
-        assertEq(djUsdToken.balanceOf(bob), 0);
-        assertEq(djUsdToken.balanceOf(address(djUsdVault)), amount);
-        assertEq(djUsdVault.balanceOf(bob), amount);
+        assertEq(usdaToken.balanceOf(bob), 0);
+        assertEq(usdaToken.balanceOf(address(usdaVault)), amount);
+        assertEq(usdaVault.balanceOf(bob), amount);
 
-        uint256 preview = djUsdVault.previewRedeem(bob, amount);
+        uint256 preview = usdaVault.previewRedeem(bob, amount);
 
         // ~ Bob deposits into Vault ~
 
         vm.startPrank(bob);
-        djUsdVault.approve(address(djUsdVault), amount);
-        djUsdVault.redeem(amount, bob);
+        usdaVault.approve(address(usdaVault), amount);
+        usdaVault.redeem(amount, bob);
         vm.stopPrank();
 
         // ~ Post-state check ~
 
-        assertEq(djUsdToken.balanceOf(bob), amount);
-        assertEq(djUsdToken.balanceOf(bob), preview);
-        assertEq(djUsdToken.balanceOf(address(djUsdVault)), 0);
-        assertEq(djUsdVault.balanceOf(bob), 0);
+        assertEq(usdaToken.balanceOf(bob), amount);
+        assertEq(usdaToken.balanceOf(bob), preview);
+        assertEq(usdaToken.balanceOf(address(usdaVault)), 0);
+        assertEq(usdaVault.balanceOf(bob), 0);
     }
 
     function test_vault_redeem_fuzzing(uint256 amount, bool disableRebase) public {
@@ -126,36 +126,36 @@ contract USDaVaultTest is BaseSetup {
 
         // ~ Config ~
 
-        deal(address(djUsdVault), bob, amount);
+        deal(address(usdaVault), bob, amount);
         vm.prank(address(usdaMinter));
-        djUsdToken.mint(address(djUsdVault), amount);
+        usdaToken.mint(address(usdaVault), amount);
 
         if (disableRebase) {
             vm.prank(bob);
-            djUsdToken.disableRebase(bob, disableRebase);
+            usdaToken.disableRebase(bob, disableRebase);
         }
 
         // ~ Pre-state check ~
 
-        assertEq(djUsdToken.balanceOf(bob), 0);
-        assertEq(djUsdToken.balanceOf(address(djUsdVault)), amount);
-        assertEq(djUsdVault.balanceOf(bob), amount);
+        assertEq(usdaToken.balanceOf(bob), 0);
+        assertEq(usdaToken.balanceOf(address(usdaVault)), amount);
+        assertEq(usdaVault.balanceOf(bob), amount);
 
-        uint256 preview = djUsdVault.previewRedeem(bob, amount);
+        uint256 preview = usdaVault.previewRedeem(bob, amount);
 
         // ~ Bob deposits into Vault ~
 
         vm.startPrank(bob);
-        djUsdVault.approve(address(djUsdVault), amount);
-        djUsdVault.redeem(amount, bob);
+        usdaVault.approve(address(usdaVault), amount);
+        usdaVault.redeem(amount, bob);
         vm.stopPrank();
 
         // ~ Post-state check ~
 
-        assertEq(djUsdToken.balanceOf(bob), amount);
-        assertEq(djUsdToken.balanceOf(bob), preview);
-        assertEq(djUsdToken.balanceOf(address(djUsdVault)), 0);
-        assertEq(djUsdVault.balanceOf(bob), 0);
+        assertEq(usdaToken.balanceOf(bob), amount);
+        assertEq(usdaToken.balanceOf(bob), preview);
+        assertEq(usdaToken.balanceOf(address(usdaVault)), 0);
+        assertEq(usdaVault.balanceOf(bob), 0);
     }
 
     function test_vault_redeem_postRebase_fuzzing(uint256 rebaseIndex) public {
@@ -164,34 +164,34 @@ contract USDaVaultTest is BaseSetup {
         // ~ Config ~
 
         uint256 amount = 10 ether;
-        deal(address(djUsdVault), bob, amount);
+        deal(address(usdaVault), bob, amount);
         vm.prank(address(usdaMinter));
-        djUsdToken.mint(address(djUsdVault), amount);
+        usdaToken.mint(address(usdaVault), amount);
 
         // ~ Pre-state check ~
 
-        assertEq(djUsdToken.balanceOf(bob), 0);
-        assertEq(djUsdToken.balanceOf(address(djUsdVault)), amount);
-        assertEq(djUsdVault.balanceOf(bob), amount);
+        assertEq(usdaToken.balanceOf(bob), 0);
+        assertEq(usdaToken.balanceOf(address(usdaVault)), amount);
+        assertEq(usdaVault.balanceOf(bob), amount);
 
         // ~ set rebaseIndex ~
 
-        vm.prank(djUsdToken.rebaseManager());
-        djUsdToken.setRebaseIndex(rebaseIndex, 1);
+        vm.prank(usdaToken.rebaseManager());
+        usdaToken.setRebaseIndex(rebaseIndex, 1);
 
         // ~ Bob deposits into Vault ~
 
-        uint256 preview = djUsdVault.previewRedeem(bob, amount);
+        uint256 preview = usdaVault.previewRedeem(bob, amount);
 
         vm.startPrank(bob);
-        djUsdVault.approve(address(djUsdVault), amount);
-        djUsdVault.redeem(amount, bob);
+        usdaVault.approve(address(usdaVault), amount);
+        usdaVault.redeem(amount, bob);
         vm.stopPrank();
 
         // ~ Post-state check ~
 
-        assertEq(djUsdToken.balanceOf(bob), preview);
-        assertApproxEqAbs(djUsdToken.balanceOf(address(djUsdVault)), 0, 2);
-        assertEq(djUsdVault.balanceOf(bob), 0);
+        assertEq(usdaToken.balanceOf(bob), preview);
+        assertApproxEqAbs(usdaToken.balanceOf(address(usdaVault)), 0, 2);
+        assertEq(usdaVault.balanceOf(bob), 0);
     }
 }
