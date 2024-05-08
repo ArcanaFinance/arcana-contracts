@@ -4,6 +4,7 @@ pragma solidity ^0.8.19;
 // oz imports
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 
 // local interfaces
 import {ITaxManager} from "./interfaces/ITaxManager.sol";
@@ -148,6 +149,13 @@ contract USDa is LayerZeroRebaseTokenUpgradeable, UUPSUpgradeable, IUSDaDefiniti
     }
 
     /**
+     * @notice Returns the amount of USDa is held by addresses that are opted out of rebase.
+     */
+    function optedOutTotalSupply() external view returns (uint256) {
+        return ERC20Upgradeable.totalSupply();
+    }
+
+    /**
      * @dev Ownership cannot be renounced.
      */
     function renounceOwnership() public view override onlyOwner {
@@ -163,7 +171,7 @@ contract USDa is LayerZeroRebaseTokenUpgradeable, UUPSUpgradeable, IUSDaDefiniti
 
     /**
      * @notice Overriden from UUPSUpgradeable
-     * @dev Restricts ability to upgrade contract to `DEFAULT_ADMIN_ROLE`
+     * @dev Restricts ability to upgrade contract to owner
      */
     function _authorizeUpgrade(address) internal override onlyOwner {}
 }

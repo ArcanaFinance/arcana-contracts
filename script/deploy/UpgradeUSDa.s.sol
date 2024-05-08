@@ -19,8 +19,8 @@ import "../../test/utils/Constants.sol";
     --verify --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
 
     @dev To verify manually:
-    forge verify-contract <CONTRACT_ADDRESS> --chain-id 18233 --watch \
-    src/Contract.sol:Contract --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
+    forge verify-contract 0x6f8b3261baef4E86f4e8BD66F64Bb4385ac14083 --chain-id 18233 --watch \
+    src/USDa.sol:USDa --verifier blockscout --verifier-url https://unreal.blockscout.com/api
  */
 
 /**

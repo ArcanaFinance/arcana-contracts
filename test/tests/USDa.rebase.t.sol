@@ -138,6 +138,7 @@ contract USDaRebaseTest is Test, BaseSetup {
 
         // ~ Pre-state check ~
 
+        assertEq(_usdaToken.optedOutTotalSupply(), 0);
         assertEq(_usdaToken.balanceOf(_bob), amount);
         assertEq(_usdaToken.balanceOf(_alice), amount);
 
@@ -152,5 +153,6 @@ contract USDaRebaseTest is Test, BaseSetup {
 
         assertEq(_usdaToken.balanceOf(_bob), amount);
         assertGt(_usdaToken.balanceOf(_alice), amount);
+        assertEq(_usdaToken.optedOutTotalSupply(), amount);
     }
 }

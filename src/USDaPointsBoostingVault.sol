@@ -28,6 +28,7 @@ contract USDaPointsBoostVault is ERC20 {
     constructor(address usda) ERC20("USDa Points Token", "PTa") {
         USDa = usda;
         USDaToken(usda).disableRebase(address(this), true);
+        _mint(address(this), type(uint256).max);
     }
 
     /**
@@ -69,7 +70,7 @@ contract USDaPointsBoostVault is ERC20 {
      */
     function deposit(uint256 assets, address recipient) external returns (uint256 shares) {
         shares = _pullUSDa(msg.sender, assets);
-        _mint(recipient, shares);
+        _transfer(address(this), recipient, shares);
         emit Deposit(msg.sender, recipient, assets, shares);
     }
 
@@ -81,7 +82,7 @@ contract USDaPointsBoostVault is ERC20 {
      * @return assets The amount of USDa tokens returned.
      */
     function redeem(uint256 shares, address recipient) external returns (uint256 assets) {
-        _burn(msg.sender, shares);
+        _transfer(msg.sender, address(this), shares);
         assets = _pushUSDa(recipient, shares);
         emit Withdraw(msg.sender, recipient, msg.sender, assets, shares);
     }

@@ -21,6 +21,7 @@ contract USDaVaultTest is BaseSetup {
 
     function test_vault_init_state() public {
         assertEq(usdaVault.USDa(), address(usdaToken));
+        assertEq(usdaVault.totalSupply(), type(uint256).max);
     }
 
     function test_vault_deposit() public {
@@ -35,7 +36,6 @@ contract USDaVaultTest is BaseSetup {
         assertEq(usdaToken.balanceOf(bob), amount);
         assertEq(usdaToken.balanceOf(address(usdaVault)), 0);
         assertEq(usdaVault.balanceOf(bob), 0);
-        assertEq(usdaVault.totalSupply(), 0);
 
         uint256 preview = usdaVault.previewDeposit(bob, amount);
 
@@ -52,7 +52,6 @@ contract USDaVaultTest is BaseSetup {
         assertEq(usdaToken.balanceOf(address(usdaVault)), amount);
         assertEq(usdaToken.balanceOf(address(usdaVault)), preview);
         assertEq(usdaVault.balanceOf(bob), amount);
-        assertEq(usdaVault.totalSupply(), amount);
     }
 
     function test_vault_deposit_fuzzing(uint256 amount, bool disableRebase) public {
@@ -73,7 +72,6 @@ contract USDaVaultTest is BaseSetup {
         assertEq(usdaToken.balanceOf(bob), amount);
         assertEq(usdaToken.balanceOf(address(usdaVault)), 0);
         assertEq(usdaVault.balanceOf(bob), 0);
-        assertEq(usdaVault.totalSupply(), 0);
 
         // ~ Bob deposits into Vault ~
 
@@ -87,7 +85,6 @@ contract USDaVaultTest is BaseSetup {
         assertEq(usdaToken.balanceOf(bob), 0);
         assertEq(usdaToken.balanceOf(address(usdaVault)), amount);
         assertEq(usdaVault.balanceOf(bob), amount);
-        assertEq(usdaVault.totalSupply(), amount);
     }
 
     function test_vault_redeem() public {
@@ -109,7 +106,6 @@ contract USDaVaultTest is BaseSetup {
         // ~ Bob deposits into Vault ~
 
         vm.startPrank(bob);
-        usdaVault.approve(address(usdaVault), amount);
         usdaVault.redeem(amount, bob);
         vm.stopPrank();
 
@@ -146,7 +142,6 @@ contract USDaVaultTest is BaseSetup {
         // ~ Bob deposits into Vault ~
 
         vm.startPrank(bob);
-        usdaVault.approve(address(usdaVault), amount);
         usdaVault.redeem(amount, bob);
         vm.stopPrank();
 
@@ -184,7 +179,6 @@ contract USDaVaultTest is BaseSetup {
         uint256 preview = usdaVault.previewRedeem(bob, amount);
 
         vm.startPrank(bob);
-        usdaVault.approve(address(usdaVault), amount);
         usdaVault.redeem(amount, bob);
         vm.stopPrank();
 

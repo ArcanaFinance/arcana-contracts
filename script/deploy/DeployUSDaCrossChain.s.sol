@@ -91,8 +91,6 @@ contract DeployUSDaCrossChain is DeployUtility {
             }
         }
 
-        // realReceiver.setTrustedRemoteAddress(MUMBAI_CHAINID, abi.encodePacked(address(migrator)));
-
         for (uint256 i; i < len; ++i) {
 
             vm.createSelectFork(allChains[i].rpc_url);
@@ -103,9 +101,8 @@ contract DeployUSDaCrossChain is DeployUtility {
             for (uint256 j; j < len; ++j) {
 
                 // for token in allChains[i] iterate through allChains setting trusted for all other pairs
-
                 if (i != j) {
-                    usdaToken.setTrustedRemote(allChains[j].chainId, abi.encodePacked(address(allChains[j].tokenAddress)));
+                    usdaToken.setTrustedRemoteAddress(allChains[j].chainId, abi.encodePacked(address(allChains[j].tokenAddress)));
                 }
             }
 
