@@ -545,7 +545,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
         USDaMinterStorage storage $ = _getUSDaMinterStorage();
         address user = msg.sender;
         USDa.burnFrom(user, amount);
-        uint256 amountAsset = IOracle(_getUSDaMinterStorage().assetInfos[asset].oracle).amountOf(amount, $.maxAge, Math.Rounding.Floor);
+        uint256 amountAsset = IOracle($.assetInfos[asset].oracle).amountOf(amount, $.maxAge, Math.Rounding.Floor);
         $.pendingClaims[asset] += amountAsset;
         uint48 claimableAfter = clock() + $.claimDelay;
         RedemptionRequest[] storage userRequests = $.redemptionRequests[user];
@@ -886,7 +886,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
                 }
             }
         }
-        assets = IOracle(_getUSDaMinterStorage().assetInfos[asset].oracle).valueOf(amountIn, $.maxAge, Math.Rounding.Floor);
+        assets = IOracle($.assetInfos[asset].oracle).valueOf(amountIn, $.maxAge, Math.Rounding.Floor);
     }
 
     /**
@@ -915,7 +915,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
                 amountIn = RebaseTokenMath.toTokens(usdaShares, rebaseIndex);
             }
         }
-        collateral = IOracle(_getUSDaMinterStorage().assetInfos[asset].oracle).amountOf(amountIn, $.maxAge, Math.Rounding.Floor);
+        collateral = IOracle($.assetInfos[asset].oracle).amountOf(amountIn, $.maxAge, Math.Rounding.Floor);
     }
 
     /**
@@ -969,11 +969,13 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
         uint256 numRequests = userRequestsByAsset.length;
         uint256 i = $.firstUnclaimedIndex[user][asset];
 
+        uint256 timestamp = clock();
+
         while (i < numRequests) {
             RedemptionRequest storage request =
                 _unsafeRedemptionRequestByAssetAccess(userRequestsByAsset, userRequests, i);
 
-            if (clock() >= request.claimableAfter) {
+            if (timestamp >= request.claimableAfter) {
                 uint256 amountClaimable;
                 unchecked {
                     amountClaimable = request.amount * $.coverageRatio.upperLookupRecent(request.claimableAfter) / 1e18;
@@ -1012,10 +1014,12 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
         uint256 numRequests = userRequestsByAsset.length;
         uint256 i = firstUnclaimedIndex[asset];
 
+        uint256 timestamp = clock();
+
         while (i < numRequests) {
             RedemptionRequest storage userRequest =
                 _unsafeRedemptionRequestByAssetAccess(userRequestsByAsset, userRequests, i);
-            if (clock() >= userRequest.claimableAfter) {
+            if (timestamp >= userRequest.claimableAfter) {
                 unchecked {
                     uint256 amountClaimable = userRequest.amount * ratio.upperLookupRecent(userRequest.claimableAfter) / 1e18;
                     userRequest.claimed = amountClaimable;

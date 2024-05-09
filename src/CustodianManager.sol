@@ -19,7 +19,7 @@ import {CommonValidations} from "./libraries/CommonValidations.sol";
  * @notice Custodian contract for USDaMinting.
  * @dev This contract will withdraw from the USDaMinter contract and transfer collateral to the multisig custodian.
  */
-contract CustodianManager is OwnableUpgradeable, UUPSUpgradeable { // TODO: NatSpec
+contract CustodianManager is OwnableUpgradeable, UUPSUpgradeable {
     using SafeERC20 for IERC20;
     using CommonValidations for *;
 
@@ -86,7 +86,7 @@ contract CustodianManager is OwnableUpgradeable, UUPSUpgradeable { // TODO: NatS
         // withdraw from USDaMinter
         uint256 received = _withdrawAssets(asset, amount);
         // transfer to custodian
-        IERC20(asset).transfer(custodian, received);
+        IERC20(asset).safeTransfer(custodian, received);  
 
         emit FundsSentToCustodian(custodian, asset, received);
     }

@@ -27,4 +27,6 @@ interface IUSDaDefinitions {
     error NotAuthorized(address account);
     /// @notice Emitted when the new rebaseIndex is being set to 0.
     error ZeroRebaseIndex();
+    /// @notice Emitted when a new rebaseIndex is not greater than the current rebaseIndex.
+    error InvalidRebaseIndex();
 }

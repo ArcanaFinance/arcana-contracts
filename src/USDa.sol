@@ -71,6 +71,7 @@ contract USDa is LayerZeroRebaseTokenUpgradeable, UUPSUpgradeable, IUSDaDefiniti
         if (msg.sender != rebaseManager && msg.sender != taxManager) revert NotAuthorized(msg.sender);
         if (newIndex == 0) revert ZeroRebaseIndex();
         uint256 currentIndex = rebaseIndex();
+        if (currentIndex > newIndex) revert InvalidRebaseIndex();
 
         if (taxManager == address(0) || msg.sender == taxManager) {
             _setRebaseIndex(newIndex, nonce);
