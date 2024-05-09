@@ -43,12 +43,14 @@ contract USDaTaxManager is Ownable {
      * @notice This method facilitates the taxed rebase of USDa. It calculates the new total supply, given `nextIndex`.
      * It then takes a tax by
      * minting a percentage of the total supply delta and then calculating a new rebaseIndex.
+     * @dev This method does not take into account the amount of tokens that are opted out of rebse. It will calculate
+     * the total Supply delta by only referencing the rebase supply which is directly affected by the new rebaseIndex.
      * @param currentIndex The current rebaseIndex of USDa.
      * @param nextIndex The new rebaseIndex used to calculate the new total supply.
      */
     function collectOnRebase(uint256 currentIndex, uint256 nextIndex, uint256 nonce) external {
         require(msg.sender == address(usda), "NA");
-        uint256 supply = usda.totalSupply();
+        uint256 supply = usda.totalSupply() - usda.optedOutTotalSupply();
         uint256 totalSupplyShares = (supply * 1e18) / currentIndex;
         uint256 newSupply = supply * nextIndex / currentIndex;
         uint256 mintAmount;

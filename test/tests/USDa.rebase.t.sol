@@ -155,4 +155,41 @@ contract USDaRebaseTest is Test, BaseSetup {
         assertGt(_usdaToken.balanceOf(_alice), amount);
         assertEq(_usdaToken.optedOutTotalSupply(), amount);
     }
+
+    function test_rebase_halfOptedOut() public {
+        // ~ Config ~
+
+        uint256 amount = 100 ether;
+        uint256 newRebaseIndex = 1.05 ether;
+
+        vm.startPrank(_minter);
+        _usdaToken.mint(_bob, amount);
+        _usdaToken.mint(_alice, amount);
+        vm.stopPrank();
+
+        uint256 supply = amount * 2;
+        uint256 newSupply = (amount * newRebaseIndex / 1e18) + amount; // 2.1
+        emit log_uint(newSupply);
+
+        // ~ Pre-state check ~
+
+        assertEq(_usdaToken.optedOutTotalSupply(), 0);
+        assertEq(_usdaToken.balanceOf(_bob), amount);
+        assertEq(_usdaToken.balanceOf(_alice), amount);
+        assertEq(_usdaToken.balanceOf(address(_feeCollector)), 0);
+
+        // ~ Disable rebase for bob  & set rebase ~
+
+        vm.startPrank(_rebaseManager);
+        _usdaToken.disableRebase(_bob, true);
+        _usdaToken.setRebaseIndex(newRebaseIndex, 1);
+        vm.stopPrank();
+
+        // ~ Post-state check ~
+
+        assertEq(_usdaToken.balanceOf(_bob), amount);
+        assertGt(_usdaToken.balanceOf(_alice), amount);
+        assertEq(_usdaToken.optedOutTotalSupply(), amount);
+        assertApproxEqAbs(_usdaToken.balanceOf(address(_feeCollector)), (newSupply - supply)*_taxCollector.taxRate()/1e18, 1);
+    }
 }
