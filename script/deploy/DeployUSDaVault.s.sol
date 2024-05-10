@@ -62,7 +62,7 @@ contract DeployUSDaVault is DeployUtility {
         // ----------------
 
         // Deploy USDa Vault
-        USDaPointsBoostVault usdaVault = new USDaPointsBoostVault(usdaToken);
+        USDaPointsBoostVault usdaVault = new USDaPointsBoostVault(adminAddress, usdaToken);
 
         // --------------
         // Save Addresses

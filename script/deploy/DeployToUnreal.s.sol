@@ -108,7 +108,7 @@ contract DeployToUnreal is DeployUtility {
         custodian = CustodianManager(address(custodianProxy));
 
         // Deploy USDa Vault
-        USDaPointsBoostVault usdaVault = new USDaPointsBoostVault(address(usdaToken));
+        USDaPointsBoostVault usdaVault = new USDaPointsBoostVault(adminAddress, address(usdaToken));
 
         // ------
         // Config

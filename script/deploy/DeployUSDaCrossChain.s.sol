@@ -42,6 +42,8 @@ contract DeployUSDaCrossChain is DeployUtility {
 
     NetworkData[] internal allChains;
 
+    bytes32 internal _SALT;
+
     uint256 public DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
     string public UNREAL_RPC_URL = vm.envString("UNREAL_RPC_URL");
     string public SEPOLIA_RPC_URL = vm.envString("SEPOLIA_RPC_URL");
@@ -50,6 +52,9 @@ contract DeployUSDaCrossChain is DeployUtility {
     // ~ Setup ~
     
     function setUp() public {
+        // bytes memory salt = "arcana.deployment";
+        // _SALT = keccak256(bytes.concat(salt, "-20240425"));
+
         _setUp("unreal");
         address unreal_usdaToken = _loadDeploymentAddress("USDa");
 
@@ -111,6 +116,9 @@ contract DeployUSDaCrossChain is DeployUtility {
     }
 
     function _deployUSDaToken(address layerZeroEndpoint) internal returns (address) {
+        //bytes memory bytecode = abi.encodePacked(type(USDa).creationCode);
+        //address USDaAddress = vm.computeCreate2Address(_SALT, keccak256(abi.encodePacked(bytecode, abi.encode(UNREAL_CHAINID, layerZeroEndpoint))));
+        
         USDa usdaToken = new USDa(UNREAL_CHAINID, layerZeroEndpoint);
         ERC1967Proxy usdaTokenProxy = new ERC1967Proxy(
             address(usdaToken),
