@@ -38,8 +38,7 @@ contract UpgradeUSDa is DeployUtility {
 
     function setUp() public {
         vm.createSelectFork(UNREAL_RPC_URL);
-        _setUp("unreal");
-        usdaToken = USDa(_loadDeploymentAddress("USDa"));
+        usdaToken = USDa(_loadDeploymentAddress("unreal", "USDa"));
     }
 
     // ~ Script ~

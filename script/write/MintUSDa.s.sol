@@ -43,9 +43,8 @@ contract MintUSDa is DeployUtility {
 
     function setUp() public {
         vm.createSelectFork(UNREAL_RPC_URL);
-        _setUp("unreal");
-        usdaMinter = USDaMinter(_loadDeploymentAddress("USDaMinter"));
-        usdaToken = _loadDeploymentAddress("USDa");
+        usdaMinter = USDaMinter(_loadDeploymentAddress("unreal", "USDaMinter"));
+        usdaToken = _loadDeploymentAddress("unreal", "USDa");
     }
 
     // ~ Script ~

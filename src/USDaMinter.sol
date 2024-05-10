@@ -221,9 +221,9 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * that the minter will interact with.
      * @custom:oz-upgrades-unsafe-allow constructor
      */
-    constructor(IUSDa usda) {
+    constructor(address usda) {
         address(usda).requireNonZeroAddress();
-        USDa = usda;
+        USDa = IUSDa(usda);
         _disableInitializers();
     }
 

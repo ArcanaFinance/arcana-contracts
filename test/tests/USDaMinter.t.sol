@@ -41,7 +41,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
     }
 
     function test_usdaMinter_initializer() public {
-        USDaMinter newUSDaMinter = new USDaMinter(IUSDa(address(usdaToken)));
+        USDaMinter newUSDaMinter = new USDaMinter(address(usdaToken));
         ERC1967Proxy newUSDaMinterProxy = new ERC1967Proxy(
             address(newUSDaMinter),
             abi.encodeWithSelector(USDaMinter.initialize.selector,
@@ -61,7 +61,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
     }
 
     function test_usdaMinter_isUpgradeable() public {
-        USDaMinter newImplementation = new USDaMinter(IUSDa(address(usdaToken)));
+        USDaMinter newImplementation = new USDaMinter(address(usdaToken));
 
         bytes32 implementationSlot =
             vm.load(address(usdaMinter), 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc);
@@ -76,7 +76,7 @@ contract USDaMinterCoreTest is BaseSetup, CommonErrors {
     }
 
     function test_usdaMinter_isUpgradeable_onlyOwner() public {
-        USDaMinter newImplementation = new USDaMinter(IUSDa(address(usdaToken)));
+        USDaMinter newImplementation = new USDaMinter(address(usdaToken));
 
         vm.prank(minter);
         vm.expectRevert();

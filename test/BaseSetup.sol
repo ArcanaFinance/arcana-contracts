@@ -158,7 +158,7 @@ contract BaseSetup is Test, IUSDaDefinitions {
 
         taxManager = new USDaTaxManager(owner, address(usdaToken), address(feeCollector));
 
-        usdaMinter = new USDaMinter(IUSDa(address(usdaToken)));
+        usdaMinter = new USDaMinter(address(usdaToken));
         ERC1967Proxy arcanaMintingProxy = new ERC1967Proxy(
             address(usdaMinter),
             abi.encodeWithSelector(USDaMinter.initialize.selector,

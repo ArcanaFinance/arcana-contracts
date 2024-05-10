@@ -59,6 +59,7 @@ contract USDa is LayerZeroRebaseTokenUpgradeable, UUPSUpgradeable, IUSDaDefiniti
         __LayerZeroRebaseToken_init(_admin, "USDa", "USDa");
         _setRebaseIndex(1 ether, 1);
         rebaseManager = _rebaseManager;
+        supplyLimit = 500_000 ether;
     }
 
     // ~ External Methods ~

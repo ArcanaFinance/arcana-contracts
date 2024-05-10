@@ -48,8 +48,7 @@ contract DeployUSDaVault is DeployUtility {
 
     function setUp() public {
         vm.createSelectFork(UNREAL_RPC_URL);
-        _setUp("unreal");
-        usdaToken = _loadDeploymentAddress("USDa");
+        usdaToken = _loadDeploymentAddress("unreal", "USDa");
     }
 
     // ~ Script ~
@@ -68,7 +67,7 @@ contract DeployUSDaVault is DeployUtility {
         // Save Addresses
         // --------------
 
-        _saveDeploymentAddress("USDaPointsBoostVault", address(usdaVault));
+        _saveDeploymentAddress("unreal", "USDaPointsBoostVault", address(usdaVault));
 
         vm.stopBroadcast();
     }

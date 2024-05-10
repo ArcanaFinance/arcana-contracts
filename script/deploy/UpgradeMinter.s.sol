@@ -39,9 +39,8 @@ contract UpgradeMinter is DeployUtility {
 
     function setUp() public {
         vm.createSelectFork(UNREAL_RPC_URL);
-        _setUp("unreal");
-        usdaMinter = USDaMinter(_loadDeploymentAddress("USDaMinter"));
-        usdaToken = _loadDeploymentAddress("USDa");
+        usdaMinter = USDaMinter(_loadDeploymentAddress("unreal", "USDaMinter"));
+        usdaToken = _loadDeploymentAddress("unreal", "USDa");
     }
 
     // ~ Script ~
@@ -49,7 +48,7 @@ contract UpgradeMinter is DeployUtility {
     function run() public {
         vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
 
-        USDaMinter newUsdaMinter = new USDaMinter(IUSDa(usdaToken));
+        USDaMinter newUsdaMinter = new USDaMinter(usdaToken);
         usdaMinter.upgradeToAndCall(address(newUsdaMinter), "");
 
         vm.stopBroadcast();

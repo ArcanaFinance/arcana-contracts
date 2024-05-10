@@ -43,9 +43,8 @@ contract RequestTokens is DeployUtility {
 
     function setUp() public {
         vm.createSelectFork(UNREAL_RPC_URL);
-        _setUp("unreal");
-        usdaMinter = USDaMinter(_loadDeploymentAddress("USDaMinter"));
-        usdaToken = USDa(_loadDeploymentAddress("USDa"));
+        usdaMinter = USDaMinter(_loadDeploymentAddress("unreal", "USDaMinter"));
+        usdaToken = USDa(_loadDeploymentAddress("unreal", "USDa"));
     }
 
     // ~ Script ~
@@ -55,7 +54,7 @@ contract RequestTokens is DeployUtility {
 
         uint256 amountIn = usdaToken.balanceOf(adminAddress); // TODO
 
-        uint256 getQuote = usdaMinter.quoteRedeem(UNREAL_USTB, adminAddress, amountIn);
+        //uint256 getQuote = usdaMinter.quoteRedeem(UNREAL_USTB, adminAddress, amountIn);
 
         usdaToken.approve(address(usdaMinter), amountIn);
         usdaMinter.requestTokens(UNREAL_USTB, amountIn);

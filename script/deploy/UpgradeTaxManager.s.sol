@@ -40,9 +40,8 @@ contract UpgradeTaxManager is DeployUtility {
 
     function setUp() public {
         vm.createSelectFork(UNREAL_RPC_URL);
-        _setUp("unreal");
-        usdaToken = USDa(_loadDeploymentAddress("USDa"));
-        feeCollector = _loadDeploymentAddress("USDaFeeCollector");
+        usdaToken = USDa(_loadDeploymentAddress("unreal", "USDa"));
+        feeCollector = _loadDeploymentAddress("unreal", "USDaFeeCollector");
     }
 
     // ~ Script ~
@@ -54,7 +53,7 @@ contract UpgradeTaxManager is DeployUtility {
 
         usdaToken.setTaxManager(address(newTaxManager));
 
-        _saveDeploymentAddress("USDaTaxManager", address(newTaxManager));
+        _saveDeploymentAddress("unreal", "USDaTaxManager", address(newTaxManager));
 
         vm.stopBroadcast();
     }

@@ -42,8 +42,6 @@ contract DeployUSDaCrossChain is DeployUtility {
 
     NetworkData[] internal allChains;
 
-    bytes32 internal _SALT;
-
     uint256 public DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
     string public UNREAL_RPC_URL = vm.envString("UNREAL_RPC_URL");
     string public SEPOLIA_RPC_URL = vm.envString("SEPOLIA_RPC_URL");
@@ -55,11 +53,8 @@ contract DeployUSDaCrossChain is DeployUtility {
         // bytes memory salt = "arcana.deployment";
         // _SALT = keccak256(bytes.concat(salt, "-20240425"));
 
-        _setUp("unreal");
-        address unreal_usdaToken = _loadDeploymentAddress("USDa");
-
-        _setUp("sepolia");
-        address sepolia_usdaToken = _loadDeploymentAddress("USDa");
+        address unreal_usdaToken = _loadDeploymentAddress("unreal", "USDa");
+        address sepolia_usdaToken = _loadDeploymentAddress("sepolia", "USDa");
 
         allChains.push(NetworkData(
             {chainName: "unreal", rpc_url: vm.envString("UNREAL_RPC_URL"), lz_endpoint: UNREAL_LZ_ENDPOINT_V1, chainId: UNREAL_LZ_CHAIN_ID_V1, tokenAddress: unreal_usdaToken}
@@ -83,14 +78,13 @@ contract DeployUSDaCrossChain is DeployUtility {
         for (uint256 i; i < len; ++i) {
             if (allChains[i].tokenAddress == address(0)) {
 
-                _setUp(allChains[i].chainName);
                 vm.createSelectFork(allChains[i].rpc_url);
                 vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
 
                 address newUsdaToken = _deployUSDaToken(allChains[i].lz_endpoint);
                 allChains[i].tokenAddress = newUsdaToken;
 
-                _saveDeploymentAddress("USDa", newUsdaToken);
+                _saveDeploymentAddress(allChains[i].chainName, "USDa", newUsdaToken);
                 vm.stopBroadcast();
 
             }

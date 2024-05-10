@@ -46,7 +46,7 @@ contract DeployToUnreal is DeployUtility {
 
     function setUp() public {
         vm.createSelectFork(UNREAL_RPC_URL);
-        _setUp("unreal");
+        //_setUp("unreal");
     }
 
     // ~ Script ~
@@ -84,7 +84,7 @@ contract DeployToUnreal is DeployUtility {
         USDaTaxManager taxManager = new USDaTaxManager(adminAddress, address(usdaToken), address(feeCollector));
 
         // Deploy USDaMinter contract.
-        USDaMinter usdaMinter = new USDaMinter(IUSDa(address(usdaToken)));
+        USDaMinter usdaMinter = new USDaMinter(address(usdaToken));
         ERC1967Proxy arcanaMintingProxy = new ERC1967Proxy(
             address(usdaMinter),
             abi.encodeWithSelector(USDaMinter.initialize.selector,
@@ -120,20 +120,18 @@ contract DeployToUnreal is DeployUtility {
 
         usdaToken.setMinter(address(usdaMinter));
 
-        usdaToken.setSupplyLimit(1_000 * 1e18);
-
         usdaToken.setTaxManager(address(taxManager));
 
         // --------------
         // Save Addresses
         // --------------
 
-        _saveDeploymentAddress("USDa", address(usdaToken));
-        _saveDeploymentAddress("USDaMinter", address(usdaMinter));
-        _saveDeploymentAddress("CustodianManager", address(custodian));
-        _saveDeploymentAddress("USDaTaxManager", address(taxManager));
-        _saveDeploymentAddress("USDaFeeCollector", address(feeCollector));
-        _saveDeploymentAddress("USDaPointsBoostVault", address(usdaVault));
+        _saveDeploymentAddress("unreal", "USDa", address(usdaToken));
+        _saveDeploymentAddress("unreal", "USDaMinter", address(usdaMinter));
+        _saveDeploymentAddress("unreal", "CustodianManager", address(custodian));
+        _saveDeploymentAddress("unreal", "USDaTaxManager", address(taxManager));
+        _saveDeploymentAddress("unreal", "USDaFeeCollector", address(feeCollector));
+        _saveDeploymentAddress("unreal", "USDaPointsBoostVault", address(usdaVault));
 
         vm.stopBroadcast();
     }
