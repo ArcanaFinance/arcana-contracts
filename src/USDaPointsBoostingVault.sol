@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.19;
 
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20, ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {RebaseTokenMath} from "@tangible/contracts/libraries/RebaseTokenMath.sol";
 
@@ -13,22 +14,69 @@ import {USDa as USDaToken} from "./USDa.sol";
  * for USDa within this system.
  * @author Caesar LaVey
  */
-contract USDaPointsBoostVault is ERC20 {
+contract USDaPointsBoostVault is ERC20, Ownable {
     address public immutable USDa;
+    bool public stakingEnabled;
 
     event Deposit(address indexed caller, address indexed owner, uint256 assets, uint256 shares);
     event Withdraw(
         address indexed caller, address indexed receiver, address indexed owner, uint256 assets, uint256 shares
     );
 
+    error StakingDisabled();
+    error AlreadySet(bool value);
+
+    modifier isEnabled() {
+        if (!stakingEnabled) revert StakingDisabled();
+        _;
+    }
+
     /**
      * @dev Sets the USDa token address and disables its rebase functionality upon deployment.
      * @param usda The address of the USDa token.
      */
-    constructor(address usda) ERC20("USDa Points Token", "PTa") {
+    constructor(address admin, address usda) ERC20("USDa Points Token", "PTa") Ownable(admin) {
         USDa = usda;
         USDaToken(usda).disableRebase(address(this), true);
         _mint(address(this), type(uint256).max);
+        stakingEnabled = true;
+    }
+
+    /**
+     * @notice Allows the owner to store a boolean value in `stakingEnabled`. 
+     * @dev If `stakingEnabled` is true, users can call deposit and redeem. If false, these methods are locked.
+     * This method is mainly needed during rebase calculations of USDa.
+     * @param _isEnabled If true, deposit and redeem will be locked.
+     */
+    function setStakingEnabled(bool _isEnabled) external onlyOwner {
+        if (stakingEnabled == _isEnabled) revert AlreadySet(_isEnabled);
+        stakingEnabled = _isEnabled;
+    }
+
+    /**
+     * @notice Deposits USDa tokens into the vault in exchange for PTa tokens.
+     * @dev Mints PTa tokens to the recipient equivalent to the amount of USDa tokens deposited.
+     * @param assets The amount of USDa tokens to deposit.
+     * @param recipient The address to receive the PTa tokens.
+     * @return shares The amount of PTa tokens minted.
+     */
+    function deposit(uint256 assets, address recipient) external isEnabled returns (uint256 shares) {
+        shares = _pullUSDa(msg.sender, assets);
+        _transfer(address(this), recipient, shares);
+        emit Deposit(msg.sender, recipient, assets, shares);
+    }
+
+    /**
+     * @notice Redeems PTa tokens in exchange for USDa tokens.
+     * @dev Burns the PTa tokens from the sender and returns the equivalent amount of USDa tokens.
+     * @param shares The amount of PTa tokens to redeem.
+     * @param recipient The address to receive the USDa tokens.
+     * @return assets The amount of USDa tokens returned.
+     */
+    function redeem(uint256 shares, address recipient) external isEnabled returns (uint256 assets) {
+        _transfer(msg.sender, address(this), shares);
+        assets = _pushUSDa(recipient, shares);
+        emit Withdraw(msg.sender, recipient, msg.sender, assets, shares);
     }
 
     /**
@@ -59,32 +107,6 @@ contract USDaPointsBoostVault is ERC20 {
             uint256 usdaShares = RebaseTokenMath.toShares(shares, rebaseIndex);
             assets = RebaseTokenMath.toTokens(usdaShares, rebaseIndex);
         }
-    }
-
-    /**
-     * @notice Deposits USDa tokens into the vault in exchange for PTa tokens.
-     * @dev Mints PTa tokens to the recipient equivalent to the amount of USDa tokens deposited.
-     * @param assets The amount of USDa tokens to deposit.
-     * @param recipient The address to receive the PTa tokens.
-     * @return shares The amount of PTa tokens minted.
-     */
-    function deposit(uint256 assets, address recipient) external returns (uint256 shares) {
-        shares = _pullUSDa(msg.sender, assets);
-        _transfer(address(this), recipient, shares);
-        emit Deposit(msg.sender, recipient, assets, shares);
-    }
-
-    /**
-     * @notice Redeems PTa tokens in exchange for USDa tokens.
-     * @dev Burns the PTa tokens from the sender and returns the equivalent amount of USDa tokens.
-     * @param shares The amount of PTa tokens to redeem.
-     * @param recipient The address to receive the USDa tokens.
-     * @return assets The amount of USDa tokens returned.
-     */
-    function redeem(uint256 shares, address recipient) external returns (uint256 assets) {
-        _transfer(msg.sender, address(this), shares);
-        assets = _pushUSDa(recipient, shares);
-        emit Withdraw(msg.sender, recipient, msg.sender, assets, shares);
     }
 
     /**
