@@ -177,7 +177,7 @@ contract BaseSetup is Test, IUSDaDefinitions {
         );
         custodian = CustodianManager(address(custodianProxy));
 
-        usdaVault = new USDaPointsBoostVault(address(usdaToken));
+        usdaVault = new USDaPointsBoostVault(owner, address(usdaToken));
 
         // ~ Config ~
 
