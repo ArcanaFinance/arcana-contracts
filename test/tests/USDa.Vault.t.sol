@@ -54,6 +54,25 @@ contract USDaVaultTest is BaseSetup {
         assertEq(usdaVault.balanceOf(bob), amount);
     }
 
+    function test_vault_deposit_NotEnabled() public {
+        // ~ Config ~
+
+        uint256 amount = 10 ether;
+        vm.prank(address(usdaMinter));
+        usdaToken.mint(bob, amount);
+
+        vm.prank(owner);
+        usdaVault.setStakingEnabled(false);
+        assertEq(usdaVault.stakingEnabled(), false);
+
+        // bob cannot deposit when staking is disabled
+        vm.startPrank(bob);
+        usdaToken.approve(address(usdaVault), amount);
+        vm.expectRevert(abi.encodeWithSelector(USDaPointsBoostVault.StakingDisabled.selector));
+        usdaVault.deposit(amount, bob);
+        vm.stopPrank();
+    }
+
     function test_vault_deposit_fuzzing(uint256 amount, bool disableRebase) public {
         amount = bound(amount, 1, 1_000_000 ether);
 
@@ -115,6 +134,25 @@ contract USDaVaultTest is BaseSetup {
         assertEq(usdaToken.balanceOf(bob), preview);
         assertEq(usdaToken.balanceOf(address(usdaVault)), 0);
         assertEq(usdaVault.balanceOf(bob), 0);
+    }
+
+    function test_vault_redeem_NotEnabled() public {
+        // ~ Config ~
+
+        uint256 amount = 10 ether;
+        deal(address(usdaVault), bob, amount);
+        vm.prank(address(usdaMinter));
+        usdaToken.mint(address(usdaVault), amount);
+
+        vm.prank(owner);
+        usdaVault.setStakingEnabled(false);
+        assertEq(usdaVault.stakingEnabled(), false);
+
+        // bob cannot unstake when staking is disabled
+        vm.startPrank(bob);
+        vm.expectRevert(abi.encodeWithSelector(USDaPointsBoostVault.StakingDisabled.selector));
+        usdaVault.redeem(amount, bob);
+        vm.stopPrank();
     }
 
     function test_vault_redeem_fuzzing(uint256 amount, bool disableRebase) public {
