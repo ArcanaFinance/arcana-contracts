@@ -71,10 +71,10 @@ contract DeployCore is DeployUtility {
         arcUSDPointsBoostVault pointsVault = arcUSDPointsBoostVault(_deployPointsBoostingVault());
 
         //config
-        arcMinter.updateCustodian(address(custodianManager));
-        arcMinter.addSupportedAsset(REAL_USTB, REAL_USTB_ORACLE);
-        arcUSDToken.setMinter(address(arcMinter));
-        arcUSDToken.setTaxManager(address(taxManager));
+        if (arcMinter.custodian() != address(custodianManager)) arcMinter.updateCustodian(address(custodianManager));
+        if (!arcMinter.isSupportedAsset(REAL_USTB)) arcMinter.addSupportedAsset(REAL_USTB, REAL_USTB_ORACLE);
+        if (arcUSDToken.minter() != address(arcMinter)) arcUSDToken.setMinter(address(arcMinter));
+        if (arcUSDToken.taxManager() != address(taxManager)) arcUSDToken.setTaxManager(address(taxManager));
 
         vm.stopBroadcast();
 
