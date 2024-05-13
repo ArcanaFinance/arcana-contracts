@@ -35,7 +35,7 @@ abstract contract DeployUtility is Script {
 
     function _setup(bytes memory _salt) public {
         _loadPrivateKey();
-        _SALT = keccak256(bytes.concat(_salt, "-20240512"));
+        _SALT = keccak256(bytes.concat(_salt, "-20240514"));
     }
 
     /**

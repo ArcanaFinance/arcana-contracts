@@ -21,8 +21,8 @@ import "../../../test/utils/Constants.sol";
 
 /**
     @dev To run:
-    forge script script/deploy/mainnet/DeployToReal.s.sol:DeployToReal --broadcast --legacy \
-    --gas-estimate-multiplier 600 \
+    forge script script/deploy/mainnet/DeployCore.s.sol:DeployCore --broadcast --legacy \
+    --gas-estimate-multiplier 700 \
     --verify --verifier blockscout --verifier-url https://explorer.re.al//api -vvvv
 
     @dev To verify manually:
@@ -31,11 +31,11 @@ import "../../../test/utils/Constants.sol";
  */
 
 /**
- * @title DeployToReal
+ * @title DeployCore
  * @author Chase Brown
  * @notice This script deploys arcUSD to one or more mainnet satellite chains
  */
-contract DeployToReal is DeployUtility {
+contract DeployCore is DeployUtility {
     // ~ Variables ~
 
     arcUSD public arcUSDToken;
@@ -47,7 +47,7 @@ contract DeployToReal is DeployUtility {
     // ~ Setup ~
     
     function setUp() public {
-        _setup("test.arcUSD.deployment");
+        _setup("arcUSD.deployment");
 
         arcUSDToken = arcUSD(_loadDeploymentAddress("re.al", "arcUSD"));
         console.log("arcUSD Address %s", address(arcUSDToken));
@@ -98,8 +98,8 @@ contract DeployToReal is DeployUtility {
      */
     function _deployFeeCollector() internal returns (address feeCollectorAddress) {
         address[] memory distributors = new address[](2);
-        distributors[0] = REAL_JARON; // TODO: RWA:RevenueDistributor
-        distributors[1] = REAL_JARON; // TODO: $ARCANA Escrow or Insurance Fund?
+        distributors[0] = REAL_MULTISIG_CUSTODIAN; // TODO: RWA:RevenueDistributor
+        distributors[1] = REAL_MULTISIG_CUSTODIAN; // TODO: $ARCANA Escrow or Insurance Fund?
 
         uint256[] memory ratios = new uint256[](2);
         ratios[0] = 1;
@@ -213,7 +213,7 @@ contract DeployToReal is DeployUtility {
         bytes memory init = abi.encodeWithSelector(
             CustodianManager.initialize.selector,
             adminAddress,
-            REAL_JARON // TODO: Multisig?
+            REAL_MULTISIG_CUSTODIAN
         );
 
         custodianManagerProxy = _deployProxy("CustodianManager", address(custodianManager), init);

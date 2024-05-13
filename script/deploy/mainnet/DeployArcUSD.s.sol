@@ -8,7 +8,7 @@ import {DeployUtility} from "../../DeployUtility.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 // local imports
-import {arcUSD} from "../../../src/arcUSD.sol";
+import {arcUSD as arcUSDToken} from "../../../src/arcUSD.sol";
 import {IarcUSD} from "../../../src/interfaces/IarcUSD.sol";
 import {arcUSDMinter} from "../../../src/arcUSDMinter.sol";
 import {CustodianManager} from "../../../src/CustodianManager.sol";
@@ -21,8 +21,8 @@ import "../../../test/utils/Constants.sol";
 
 /**
     @dev To run:
-    forge script script/deploy/mainnet/DeployAll.s.sol:DeployAll --broadcast --legacy \
-    --gas-estimate-multiplier 600 \
+    forge script script/deploy/mainnet/DeployArcUSD.s.sol:DeployArcUSD --broadcast --legacy \
+    --gas-estimate-multiplier 800 \
     --verify --verifier blockscout --verifier-url https://explorer.re.al//api -vvvv
 
     @dev To verify manually (RE.AL):
@@ -36,11 +36,11 @@ import "../../../test/utils/Constants.sol";
  */
 
 /**
- * @title DeployAll
+ * @title DeployArcUSD
  * @author Chase Brown
  * @notice This script deploys arcUSD to one or more mainnet satellite chains
  */
-contract DeployAll is DeployUtility {
+contract DeployArcUSD is DeployUtility {
     // ~ Variables ~
 
     struct NetworkData {
@@ -59,7 +59,7 @@ contract DeployAll is DeployUtility {
     // ~ Setup ~
     
     function setUp() public {
-        _setup("test.arcUSD.deployment");
+        _setup("arcUSD.deployment");
 
         allChains.push(NetworkData(
             {chainName: "re.al", rpc_url: vm.envString("REAL_RPC_URL"), lz_endpoint: REAL_LZ_ENDPOINT_V1, chainId: REAL_LZ_CHAIN_ID_V1, tokenAddress: address(0)}
@@ -93,7 +93,7 @@ contract DeployAll is DeployUtility {
                 require(arcUSDAddress > REAL_MORE, "arcUSD address is not greater than MORE");
 
                 allChains[i].tokenAddress = arcUSDAddress;
-                arcUSD arcUSD = arcUSD(arcUSDAddress);
+                arcUSDToken arcUSD = arcUSDToken(arcUSDAddress);
 
                 // set trusted remote address on all other chains for each token.
                 for (uint256 j; j < len; ++j) {
@@ -116,7 +116,7 @@ contract DeployAll is DeployUtility {
             }
         }
         
-        // TODO: Deploy core contracts
+        // TODO: Deploy core contracts -> DeployCore
     }
 
     /**
@@ -128,28 +128,28 @@ contract DeployAll is DeployUtility {
      *      it will upgrade that proxy.
      */
     function _deployarcUSDToken(uint256 mainChainId, address layerZeroEndpoint) internal returns (address arcUSDProxy) {
-        bytes memory bytecode = abi.encodePacked(type(arcUSD).creationCode);
+        bytes memory bytecode = abi.encodePacked(type(arcUSDToken).creationCode);
         address arcUSDAddress = vm.computeCreate2Address(
             _SALT, keccak256(abi.encodePacked(bytecode, abi.encode(mainChainId, layerZeroEndpoint)))
         );
 
-        arcUSD arcUSDToken;
+        arcUSDToken arcUSD;
 
         if (_isDeployed(arcUSDAddress)) {
             console.log("arcUSD is already deployed to %s", arcUSDAddress);
-            arcUSDToken = arcUSD(arcUSDAddress);
+            arcUSD = arcUSDToken(arcUSDAddress);
         } else {
-            arcUSDToken = new arcUSD{salt: _SALT}(mainChainId, layerZeroEndpoint);
-            assert(arcUSDAddress == address(arcUSDToken));
+            arcUSD = new arcUSDToken{salt: _SALT}(mainChainId, layerZeroEndpoint);
+            assert(arcUSDAddress == address(arcUSD));
             console.log("arcUSD deployed to %s", arcUSDAddress);
         }
 
         bytes memory init = abi.encodeWithSelector(
-            arcUSD.initialize.selector,
+            arcUSDToken.initialize.selector,
             adminAddress,
             UNREAL_REBASE_MANAGER
         );
 
-        arcUSDProxy = _deployProxy("arcUSD", address(arcUSDToken), init);
+        arcUSDProxy = _deployProxy("arcUSD", address(arcUSD), init);
     }
 }
