@@ -9,19 +9,19 @@ pragma solidity ^0.8.19;
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 // contracts
-import {USDaMinter} from "../src/USDaMinter.sol";
-import {USDaPointsBoostVault} from "../src/USDaPointsBoostingVault.sol";
+import {arcUSDMinter} from "../src/arcUSDMinter.sol";
+import {arcUSDPointsBoostVault} from "../src/arcUSDPointsBoostingVault.sol";
 import {MockOracle} from "./mock/MockOracle.sol";
 import {MockToken} from "./mock/MockToken.sol";
 import {LZEndpointMock} from "./mock/LZEndpointMock.sol";
-import {USDa} from "../src/USDa.sol";
-import {USDaTaxManager} from "../src/USDaTaxManager.sol";
-import {USDaFeeCollector} from "../src/USDaFeeCollector.sol";
+import {arcUSD} from "../src/arcUSD.sol";
+import {arcUSDTaxManager} from "../src/arcUSDTaxManager.sol";
+import {arcUSDFeeCollector} from "../src/arcUSDFeeCollector.sol";
 import {CustodianManager} from "../src/CustodianManager.sol";
 
 // interfaces
-import {IUSDa} from "../src/interfaces/IUSDa.sol";
-import {IUSDaDefinitions} from "../src/interfaces/IUSDaDefinitions.sol";
+import {IarcUSD} from "../src/interfaces/IarcUSD.sol";
+import {IarcUSDDefinitions} from "../src/interfaces/IarcUSDDefinitions.sol";
 
 // helpers
 import {stdStorage, StdStorage, Test} from "forge-std/Test.sol";
@@ -29,12 +29,12 @@ import {SigUtils} from "./utils/SigUtils.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {Utils} from "./utils/Utils.sol";
 
-contract BaseSetup is Test, IUSDaDefinitions {
+contract BaseSetup is Test, IarcUSDDefinitions {
     Utils internal utils;
-    USDa internal usdaToken;
-    USDaTaxManager internal taxManager;
-    USDaFeeCollector internal feeCollector;
-    USDaPointsBoostVault internal usdaVault;
+    arcUSD internal arcUSDToken;
+    arcUSDTaxManager internal taxManager;
+    arcUSDFeeCollector internal feeCollector;
+    arcUSDPointsBoostVault internal arcUSDVault;
     CustodianManager internal custodian;
     LZEndpointMock public layerZeroEndpoint;
     MockToken internal USTB;
@@ -44,9 +44,9 @@ contract BaseSetup is Test, IUSDaDefinitions {
     MockToken internal USDCToken;
     MockToken internal USDTToken;
     MockToken internal token;
-    USDaMinter internal usdaMinter;
+    arcUSDMinter internal arcMinter;
     SigUtils internal sigUtils;
-    SigUtils internal sigUtilsUSDa;
+    SigUtils internal sigUtilsarcUSD;
 
     uint256 internal constant ownerPrivateKey = 0xA11CE;
     uint256 internal constant newOwnerPrivateKey = 0xA14CE;
@@ -88,11 +88,11 @@ contract BaseSetup is Test, IUSDaDefinitions {
     bytes32 internal adminRole = 0x00;
     bytes32 internal redeemerRole = keccak256("REDEEMER_ROLE");
 
-    // USDa error encodings
-    bytes internal OnlyMinterErr = abi.encodeWithSelector(IUSDaDefinitions.OnlyMinter.selector);
-    bytes internal ZeroAddressExceptionErr = abi.encodeWithSelector(IUSDaDefinitions.ZeroAddressException.selector);
-    bytes internal CantRenounceOwnershipErr = abi.encodeWithSelector(IUSDaDefinitions.CantRenounceOwnership.selector);
-    bytes internal LimitExceeded = abi.encodeWithSelector(IUSDaDefinitions.SupplyLimitExceeded.selector);
+    // arcUSD error encodings
+    bytes internal OnlyMinterErr = abi.encodeWithSelector(IarcUSDDefinitions.OnlyMinter.selector);
+    bytes internal ZeroAddressExceptionErr = abi.encodeWithSelector(IarcUSDDefinitions.ZeroAddressException.selector);
+    bytes internal CantRenounceOwnershipErr = abi.encodeWithSelector(IarcUSDDefinitions.CantRenounceOwnership.selector);
+    bytes internal LimitExceeded = abi.encodeWithSelector(IarcUSDDefinitions.SupplyLimitExceeded.selector);
 
     uint256 internal _slippageRange = 50000000000000000;
     uint256 internal _amountToDeposit = 50 * 10 ** 18;
@@ -148,61 +148,61 @@ contract BaseSetup is Test, IUSDaDefinitions {
 
         layerZeroEndpoint = new LZEndpointMock(uint16(block.chainid));
 
-        usdaToken = new USDa(1, address(layerZeroEndpoint));
-        ERC1967Proxy usdaTokenProxy = new ERC1967Proxy(
-            address(usdaToken), abi.encodeWithSelector(USDa.initialize.selector, address(this), rebaseManager)
+        arcUSDToken = new arcUSD(1, address(layerZeroEndpoint));
+        ERC1967Proxy arcUSDTokenProxy = new ERC1967Proxy(
+            address(arcUSDToken), abi.encodeWithSelector(arcUSD.initialize.selector, address(this), rebaseManager)
         );
-        usdaToken = USDa(address(usdaTokenProxy));
+        arcUSDToken = arcUSD(address(arcUSDTokenProxy));
 
-        feeCollector = new USDaFeeCollector(owner, address(usdaToken), distributors, ratios);
+        feeCollector = new arcUSDFeeCollector(owner, address(arcUSDToken), distributors, ratios);
 
-        taxManager = new USDaTaxManager(owner, address(usdaToken), address(feeCollector));
+        taxManager = new arcUSDTaxManager(owner, address(arcUSDToken), address(feeCollector));
 
-        usdaMinter = new USDaMinter(address(usdaToken));
+        arcMinter = new arcUSDMinter(address(arcUSDToken));
         ERC1967Proxy arcanaMintingProxy = new ERC1967Proxy(
-            address(usdaMinter),
-            abi.encodeWithSelector(USDaMinter.initialize.selector,
+            address(arcMinter),
+            abi.encodeWithSelector(arcUSDMinter.initialize.selector,
                 owner,
                 admin,
                 whitelister,
                 5 days
             )
         );
-        usdaMinter = USDaMinter(payable(address(arcanaMintingProxy)));
+        arcMinter = arcUSDMinter(payable(address(arcanaMintingProxy)));
 
-        custodian = new CustodianManager(address(usdaMinter));
+        custodian = new CustodianManager(address(arcMinter));
         ERC1967Proxy custodianProxy = new ERC1967Proxy(
             address(custodian),
             abi.encodeWithSelector(CustodianManager.initialize.selector, owner, mainCustodian)
         );
         custodian = CustodianManager(address(custodianProxy));
 
-        usdaVault = new USDaPointsBoostVault(owner, address(usdaToken));
+        arcUSDVault = new arcUSDPointsBoostVault(owner, address(arcUSDToken));
 
         // ~ Config ~
 
         vm.startPrank(owner);
 
-        usdaMinter.modifyWhitelist(bob, true);
-        usdaMinter.modifyWhitelist(alice, true);
+        arcMinter.modifyWhitelist(bob, true);
+        arcMinter.modifyWhitelist(alice, true);
 
         // set custodian on minter
-        usdaMinter.updateCustodian(address(custodian));
+        arcMinter.updateCustodian(address(custodian));
 
         // Add self as approved custodian
-        usdaMinter.addSupportedAsset(address(USTB), address(USTBOracle));
-        usdaMinter.addSupportedAsset(address(USDCToken), address(USTBOracle));
-        usdaMinter.addSupportedAsset(address(USDTToken), address(USTBOracle));
+        arcMinter.addSupportedAsset(address(USTB), address(USTBOracle));
+        arcMinter.addSupportedAsset(address(USDCToken), address(USTBOracle));
+        arcMinter.addSupportedAsset(address(USDTToken), address(USTBOracle));
 
         // Mint stEth to the actor in order to test
         USTB.mint(_amountToDeposit, bob);
         vm.stopPrank();
 
-        usdaToken.setMinter(address(usdaMinter));
+        arcUSDToken.setMinter(address(arcMinter));
 
-        usdaToken.setSupplyLimit(type(uint256).max);
+        arcUSDToken.setSupplyLimit(type(uint256).max);
 
-        usdaToken.setTaxManager(address(taxManager));
+        arcUSDToken.setTaxManager(address(taxManager));
     }
 
     function _createAddresses() internal {

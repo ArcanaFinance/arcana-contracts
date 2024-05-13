@@ -11,23 +11,23 @@ import {ICommonOFT} from "@layerzerolabs/contracts/token/oft/v2/interfaces/IComm
 import {IOFTV2} from "@layerzerolabs/contracts/token/oft/v2/interfaces/IOFTV2.sol";
 
 // local imports
-import {USDaMinter} from "./USDaMinter.sol";
+import {arcUSDMinter} from "./arcUSDMinter.sol";
 import {CommonValidations} from "./libraries/CommonValidations.sol";
 
 /**
  * @title CustodianManager
- * @notice Custodian contract for USDaMinting.
- * @dev This contract will withdraw from the USDaMinter contract and transfer collateral to the multisig custodian.
+ * @notice Custodian contract for arcUSDMinting.
+ * @dev This contract will withdraw from the arcUSDMinter contract and transfer collateral to the multisig custodian.
  */
 contract CustodianManager is OwnableUpgradeable, UUPSUpgradeable {
     using SafeERC20 for IERC20;
     using CommonValidations for *;
 
-    /// @dev Stores the contact reference to the USDaMinter contract.
-    USDaMinter public immutable usdaMinter;
+    /// @dev Stores the contact reference to the arcUSDMinter contract.
+    arcUSDMinter public immutable arcMinter;
     /// @dev Stores contract address to custodian where collateral is transferred.
     address public custodian;
-    /// @dev Stores the task address which allows for the withdrawal of funds from the usdaMinter contract.
+    /// @dev Stores the task address which allows for the withdrawal of funds from the arcMinter contract.
     address public task;
 
     event FundsWithdrawn(address asset, uint256 amount);
@@ -47,11 +47,11 @@ contract CustodianManager is OwnableUpgradeable, UUPSUpgradeable {
 
     /**
      * @notice Initializes CustodianManager.
-     * @param _usdaMinter Contract address for USDaMinter.
+     * @param _arcMinter Contract address for arcUSDMinter.
      */
-    constructor(address _usdaMinter) {
-        _usdaMinter.requireNonZeroAddress();
-        usdaMinter = USDaMinter(_usdaMinter);
+    constructor(address _arcMinter) {
+        _arcMinter.requireNonZeroAddress();
+        arcMinter = arcUSDMinter(_arcMinter);
     }
 
     /**
@@ -70,8 +70,8 @@ contract CustodianManager is OwnableUpgradeable, UUPSUpgradeable {
     }
 
     /**
-     * @notice This method will withdraw assets from the usdaMinter contract and transfer it to the custodian address.
-     * @param asset ERC-20 asset being withdrawn from the usdaMinter.
+     * @notice This method will withdraw assets from the arcMinter contract and transfer it to the custodian address.
+     * @param asset ERC-20 asset being withdrawn from the arcMinter.
      * @param amount Amount of asset to withdraw. Must be greater than 0 but less than or equal to withdrawable().
      * @custom:error NotAuthorized Thrown if caller is not equal to ask address or owner.
      * @custom:error NoFundsWithdrawable Thrown if there are no funds to be withdrawn or amount exceeds withdrawable.
@@ -83,7 +83,7 @@ contract CustodianManager is OwnableUpgradeable, UUPSUpgradeable {
         if (amountWithdrawable == 0) revert NoFundsWithdrawable();
         if (amount > amountWithdrawable) revert InsufficientBalance(amount, amountWithdrawable);
 
-        // withdraw from USDaMinter
+        // withdraw from arcUSDMinter
         uint256 received = _withdrawAssets(asset, amount);
         // transfer to custodian
         IERC20(asset).safeTransfer(custodian, received);  
@@ -93,7 +93,7 @@ contract CustodianManager is OwnableUpgradeable, UUPSUpgradeable {
 
     /**
      * @notice This method allows the owner to update the custodian address.
-     * @dev The custodian address will receive any assets withdrawn from the usdaMinter contract.
+     * @dev The custodian address will receive any assets withdrawn from the arcMinter contract.
      * @param newCustodian New custodian address.
      * @custom:error InvalidZeroAddress Thrown if newCustodian is equal to address(0).
      * @custom:error ValueUnchanged Thrown if the custodian is already set to newCustodian.
@@ -120,16 +120,16 @@ contract CustodianManager is OwnableUpgradeable, UUPSUpgradeable {
     }
 
     /**
-     * @notice This view method returns the amount of assets that can be withdrawn from the usdaMinter contract.
-     * @dev This method takes into account the amount of tokens the usdaMinter contract needs to fulfill pending claims
+     * @notice This view method returns the amount of assets that can be withdrawn from the arcMinter contract.
+     * @dev This method takes into account the amount of tokens the arcMinter contract needs to fulfill pending claims
      * and therefore is subtracted from the what is withdrawable from the balance. If the amount of required tokens
      * (to fulfill pending claims) is greater than the balance, withdrawable will return 0.
      * @param asset ERC-20 asset we wish to query withdrawable.
-     * @return Amount of asset that can be withdrawn from the usdaMinter contract.
+     * @return Amount of asset that can be withdrawn from the arcMinter contract.
      */
     function withdrawable(address asset) public view returns (uint256) {
-        uint256 required = usdaMinter.getPendingClaims(asset);
-        uint256 balance = IERC20(asset).balanceOf(address(usdaMinter));
+        uint256 required = arcMinter.getPendingClaims(asset);
+        uint256 balance = IERC20(asset).balanceOf(address(arcMinter));
 
         if (balance > required) {
             unchecked {
@@ -156,7 +156,7 @@ contract CustodianManager is OwnableUpgradeable, UUPSUpgradeable {
      */
     function _withdrawAssets(address asset, uint256 amount) internal returns (uint256 received) {
         uint256 balanceBefore = IERC20(asset).balanceOf(address(this));
-        usdaMinter.withdrawFunds(asset, amount);
+        arcMinter.withdrawFunds(asset, amount);
         received = IERC20(asset).balanceOf(address(this)) - balanceBefore;
 
         emit FundsWithdrawn(asset, amount);

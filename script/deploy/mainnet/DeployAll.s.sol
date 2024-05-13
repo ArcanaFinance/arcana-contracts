@@ -8,13 +8,13 @@ import {DeployUtility} from "../../DeployUtility.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 // local imports
-import {USDa} from "../../../src/USDa.sol";
-import {IUSDa} from "../../../src/interfaces/IUSDa.sol";
-import {USDaMinter} from "../../../src/USDaMinter.sol";
+import {arcUSD} from "../../../src/arcUSD.sol";
+import {IarcUSD} from "../../../src/interfaces/IarcUSD.sol";
+import {arcUSDMinter} from "../../../src/arcUSDMinter.sol";
 import {CustodianManager} from "../../../src/CustodianManager.sol";
-import {USDaTaxManager} from "../../../src/USDaTaxManager.sol";
-import {USDaFeeCollector} from "../../../src/USDaFeeCollector.sol";
-import {USDaPointsBoostVault} from "../../../src/USDaPointsBoostingVault.sol";
+import {arcUSDTaxManager} from "../../../src/arcUSDTaxManager.sol";
+import {arcUSDFeeCollector} from "../../../src/arcUSDFeeCollector.sol";
+import {arcUSDPointsBoostVault} from "../../../src/arcUSDPointsBoostingVault.sol";
 
 // helpers
 import "../../../test/utils/Constants.sol";
@@ -27,18 +27,18 @@ import "../../../test/utils/Constants.sol";
 
     @dev To verify manually (RE.AL):
     forge verify-contract <CONTRACT_ADDRESS> --chain-id 111188 --watch \
-    src/USDa.sol:USDa --verifier blockscout --verifier-url https://explorer.re.al//api
+    src/arcUSD.sol:arcUSD --verifier blockscout --verifier-url https://explorer.re.al//api
 
     @dev To verify manually (Base, Optimism, Polygon):
     export ETHERSCAN_API_KEY="<API_KEY>"
-    forge verify-contract <CONTRACT_ADDRESS> --chain-id <CHAIN_ID> --watch src/USDa.sol:USDa \
+    forge verify-contract <CONTRACT_ADDRESS> --chain-id <CHAIN_ID> --watch src/arcUSD.sol:arcUSD \
     --verifier etherscan --constructor-args $(cast abi-encode "constructor(uint256, address)" 111188 <LOCAL_LZ_ADDRESS>)
  */
 
 /**
  * @title DeployAll
  * @author Chase Brown
- * @notice This script deploys USDa to one or more mainnet satellite chains
+ * @notice This script deploys arcUSD to one or more mainnet satellite chains
  */
 contract DeployAll is DeployUtility {
     // ~ Variables ~
@@ -59,7 +59,7 @@ contract DeployAll is DeployUtility {
     // ~ Setup ~
     
     function setUp() public {
-        _setup("test.USDa.deployment");
+        _setup("test.arcUSD.deployment");
 
         allChains.push(NetworkData(
             {chainName: "re.al", rpc_url: vm.envString("REAL_RPC_URL"), lz_endpoint: REAL_LZ_ENDPOINT_V1, chainId: REAL_LZ_CHAIN_ID_V1, tokenAddress: address(0)}
@@ -77,7 +77,7 @@ contract DeployAll is DeployUtility {
     function run() public {
 
         // ---------------------------
-        // Deploy all USDa cross chain
+        // Deploy all arcUSD cross chain
         // ---------------------------
 
         uint256 len = allChains.length;
@@ -87,31 +87,31 @@ contract DeployAll is DeployUtility {
                 vm.createSelectFork(allChains[i].rpc_url);
                 vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
 
-                address usdaAddress = _deployUSDaToken(REAL_CHAINID, allChains[i].lz_endpoint);
+                address arcUSDAddress = _deployarcUSDToken(REAL_CHAINID, allChains[i].lz_endpoint);
 
-                require(usdaAddress > REAL_USTB, "USDa address is not greater than USTB");
-                require(usdaAddress > REAL_MORE, "USDa address is not greater than MORE");
+                require(arcUSDAddress > REAL_USTB, "arcUSD address is not greater than USTB");
+                require(arcUSDAddress > REAL_MORE, "arcUSD address is not greater than MORE");
 
-                allChains[i].tokenAddress = usdaAddress;
-                USDa usda = USDa(usdaAddress);
+                allChains[i].tokenAddress = arcUSDAddress;
+                arcUSD arcUSD = arcUSD(arcUSDAddress);
 
                 // set trusted remote address on all other chains for each token.
                 for (uint256 j; j < len; ++j) {
                     if (i != j) {
                         if (
-                            !usda.isTrustedRemote(
-                                allChains[j].chainId, abi.encodePacked(usdaAddress, usdaAddress)
+                            !arcUSD.isTrustedRemote(
+                                allChains[j].chainId, abi.encodePacked(arcUSDAddress, arcUSDAddress)
                             )
                         ) {
-                            usda.setTrustedRemoteAddress(
-                                allChains[j].chainId, abi.encodePacked(usdaAddress)
+                            arcUSD.setTrustedRemoteAddress(
+                                allChains[j].chainId, abi.encodePacked(arcUSDAddress)
                             );
                         }
                     }
                 }
 
-                // save USDa addresses to appropriate JSON
-                _saveDeploymentAddress(allChains[i].chainName, "USDa", usdaAddress);
+                // save arcUSD addresses to appropriate JSON
+                _saveDeploymentAddress(allChains[i].chainName, "arcUSD", arcUSDAddress);
                 vm.stopBroadcast();
             }
         }
@@ -120,36 +120,36 @@ contract DeployAll is DeployUtility {
     }
 
     /**
-     * @dev This method is in charge of deploying and upgrading USDa on any chain.
+     * @dev This method is in charge of deploying and upgrading arcUSD on any chain.
      * This method will perform the following steps:
-     *    - Compute the USDa implementation address
+     *    - Compute the arcUSD implementation address
      *    - If this address is not deployed, deploy new implementation
-     *    - Computes the proxy address. If implementation of that proxy is NOT equal to the USDa address computed,
+     *    - Computes the proxy address. If implementation of that proxy is NOT equal to the arcUSD address computed,
      *      it will upgrade that proxy.
      */
-    function _deployUSDaToken(uint256 mainChainId, address layerZeroEndpoint) internal returns (address usdaProxy) {
-        bytes memory bytecode = abi.encodePacked(type(USDa).creationCode);
-        address usdaAddress = vm.computeCreate2Address(
+    function _deployarcUSDToken(uint256 mainChainId, address layerZeroEndpoint) internal returns (address arcUSDProxy) {
+        bytes memory bytecode = abi.encodePacked(type(arcUSD).creationCode);
+        address arcUSDAddress = vm.computeCreate2Address(
             _SALT, keccak256(abi.encodePacked(bytecode, abi.encode(mainChainId, layerZeroEndpoint)))
         );
 
-        USDa usdaToken;
+        arcUSD arcUSDToken;
 
-        if (_isDeployed(usdaAddress)) {
-            console.log("USDa is already deployed to %s", usdaAddress);
-            usdaToken = USDa(usdaAddress);
+        if (_isDeployed(arcUSDAddress)) {
+            console.log("arcUSD is already deployed to %s", arcUSDAddress);
+            arcUSDToken = arcUSD(arcUSDAddress);
         } else {
-            usdaToken = new USDa{salt: _SALT}(mainChainId, layerZeroEndpoint);
-            assert(usdaAddress == address(usdaToken));
-            console.log("USDa deployed to %s", usdaAddress);
+            arcUSDToken = new arcUSD{salt: _SALT}(mainChainId, layerZeroEndpoint);
+            assert(arcUSDAddress == address(arcUSDToken));
+            console.log("arcUSD deployed to %s", arcUSDAddress);
         }
 
         bytes memory init = abi.encodeWithSelector(
-            USDa.initialize.selector,
+            arcUSD.initialize.selector,
             adminAddress,
             UNREAL_REBASE_MANAGER
         );
 
-        usdaProxy = _deployProxy("USDa", address(usdaToken), init);
+        arcUSDProxy = _deployProxy("arcUSD", address(arcUSDToken), init);
     }
 }

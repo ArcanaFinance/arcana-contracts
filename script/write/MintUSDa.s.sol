@@ -8,16 +8,16 @@ import {DeployUtility} from "../DeployUtility.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 // local imports
-import {USDa} from "../../src/USDa.sol";
-import {IUSDa} from "../../src/interfaces/IUSDa.sol";
-import {USDaMinter} from "../../src/USDaMinter.sol";
+import {arcUSD} from "../../src/arcUSD.sol";
+import {IarcUSD} from "../../src/interfaces/IarcUSD.sol";
+import {arcUSDMinter} from "../../src/arcUSDMinter.sol";
 
 // helpers
 import "../../test/utils/Constants.sol";
 
 /**
     @dev To run:
-    forge script script/write/MintUSDa.s.sol:MintUSDa --broadcast --legacy \
+    forge script script/write/MintarcUSD.s.sol:MintarcUSD --broadcast --legacy \
     --gas-estimate-multiplier 200 \
     --verify --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
 
@@ -27,13 +27,13 @@ import "../../test/utils/Constants.sol";
  */
 
 /**
- * @title MintUSDa
+ * @title MintarcUSD
  * @author Chase Brown
- * @notice This script deploys a new implementation contract for USDaMinter and upgrades the current proxy.
+ * @notice This script deploys a new implementation contract for arcUSDMinter and upgrades the current proxy.
  */
-contract MintUSDa is DeployUtility {
-    USDaMinter public usdaMinter;
-    address public usdaToken;
+contract MintarcUSD is DeployUtility {
+    arcUSDMinter public arcMinter;
+    address public arcUSDToken;
 
     uint256 public DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
     string public UNREAL_RPC_URL = vm.envString("UNREAL_RPC_URL");
@@ -43,8 +43,8 @@ contract MintUSDa is DeployUtility {
 
     function setUp() public {
         vm.createSelectFork(UNREAL_RPC_URL);
-        usdaMinter = USDaMinter(_loadDeploymentAddress("unreal", "USDaMinter"));
-        usdaToken = _loadDeploymentAddress("unreal", "USDa");
+        arcMinter = arcUSDMinter(_loadDeploymentAddress("unreal", "arcUSDMinter"));
+        arcUSDToken = _loadDeploymentAddress("unreal", "arcUSD");
     }
 
     // ~ Script ~
@@ -54,10 +54,10 @@ contract MintUSDa is DeployUtility {
 
         uint256 amountIn = 1000 ether; // TODO
 
-        uint256 getQuote = usdaMinter.quoteMint(UNREAL_USTB, adminAddress, amountIn);
+        uint256 getQuote = arcMinter.quoteMint(UNREAL_USTB, adminAddress, amountIn);
 
-        IERC20(UNREAL_USTB).approve(address(usdaMinter), amountIn);
-        usdaMinter.mint(UNREAL_USTB, amountIn, getQuote);
+        IERC20(UNREAL_USTB).approve(address(arcMinter), amountIn);
+        arcMinter.mint(UNREAL_USTB, amountIn, getQuote);
 
         vm.stopBroadcast();
     }

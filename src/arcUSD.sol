@@ -8,28 +8,28 @@ import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/
 
 // local interfaces
 import {ITaxManager} from "./interfaces/ITaxManager.sol";
-import {IUSDaDefinitions} from "./interfaces/IUSDaDefinitions.sol";
+import {IarcUSDDefinitions} from "./interfaces/IarcUSDDefinitions.sol";
 
 // local imports
 import {LayerZeroRebaseTokenUpgradeable} from "@tangible/contracts/tokens/LayerZeroRebaseTokenUpgradeable.sol";
 import {CrossChainToken} from "@tangible/contracts/tokens/CrossChainToken.sol";
 
 /**
- * @title USDa
- * @notice USDa Stable Coin Contract
+ * @title arcUSD
+ * @notice arcUSD Stable Coin Contract
  * @dev This contract extends the functionality of `LayerZeroRebaseTokenUpgradeable` to support rebasing and cross-chain
  * bridging of this token.
  */
-contract USDa is LayerZeroRebaseTokenUpgradeable, UUPSUpgradeable, IUSDaDefinitions {
+contract arcUSD is LayerZeroRebaseTokenUpgradeable, UUPSUpgradeable, IarcUSDDefinitions {
     // ~ Variables ~
 
-    /// @dev Stores the address of the `USDaMinter` contract.
+    /// @dev Stores the address of the `arcUSDMinter` contract.
     address public minter;
     /// @dev Stores the address of the Rebase Manager which calls `setRebaseIndex`.
     address public rebaseManager;
     /// @dev Stores the total supply limit. Total Supply cannot exceed this amount.
     uint256 public supplyLimit;
-    /// @dev Stores USDaTaxManager contract address.
+    /// @dev Stores arcUSDTaxManager contract address.
     address public taxManager;
 
     // ~ Constructor ~
@@ -56,7 +56,7 @@ contract USDa is LayerZeroRebaseTokenUpgradeable, UUPSUpgradeable, IUSDaDefiniti
         if (_admin == address(0)) revert ZeroAddressException();
         if (_rebaseManager == address(0)) revert ZeroAddressException();
 
-        __LayerZeroRebaseToken_init(_admin, "USDa", "USDa");
+        __LayerZeroRebaseToken_init(_admin, "arcUSD", "arcUSD");
         _setRebaseIndex(1 ether, 1);
         rebaseManager = _rebaseManager;
         supplyLimit = 500_000 ether;
@@ -93,7 +93,7 @@ contract USDa is LayerZeroRebaseTokenUpgradeable, UUPSUpgradeable, IUSDaDefiniti
     }
 
     /**
-     * @notice Allows owner to set a ceiling on USDa total supply to throttle minting.
+     * @notice Allows owner to set a ceiling on arcUSD total supply to throttle minting.
      */
     function setSupplyLimit(uint256 limit) external onlyOwner {
         require(limit >= totalSupply(), "Cannot set limit less than totalSupply");
@@ -128,7 +128,7 @@ contract USDa is LayerZeroRebaseTokenUpgradeable, UUPSUpgradeable, IUSDaDefiniti
     }
 
     /**
-     * @notice Allows the `minter` to mint more USDa tokens to a specified `to` address.
+     * @notice Allows the `minter` to mint more arcUSD tokens to a specified `to` address.
      */
     function mint(address to, uint256 amount) external {
         if (msg.sender != minter && msg.sender != taxManager) revert OnlyMinter();
@@ -151,7 +151,7 @@ contract USDa is LayerZeroRebaseTokenUpgradeable, UUPSUpgradeable, IUSDaDefiniti
     }
 
     /**
-     * @notice Returns the amount of USDa is held by addresses that are opted out of rebase.
+     * @notice Returns the amount of arcUSD is held by addresses that are opted out of rebase.
      */
     function optedOutTotalSupply() external view returns (uint256) {
         return ERC20Upgradeable.totalSupply();

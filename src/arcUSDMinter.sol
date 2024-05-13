@@ -19,7 +19,7 @@ import {RebaseTokenMath} from "@tangible/contracts/libraries/RebaseTokenMath.sol
 
 // interfaces
 import {CommonErrors} from "./interfaces/CommonErrors.sol";
-import {IUSDa} from "./interfaces/IUSDa.sol";
+import {IarcUSD} from "./interfaces/IarcUSD.sol";
 import {IOracle} from "./interfaces/IOracle.sol";
 import {IRebaseToken} from "./interfaces/IRebaseToken.sol";
 
@@ -27,12 +27,12 @@ import {IRebaseToken} from "./interfaces/IRebaseToken.sol";
 import {CommonValidations} from "./libraries/CommonValidations.sol";
 
 /**
- * @title USDa Minter
+ * @title arcUSD Minter
  * @author Caesar LaVey
  *
- * @notice USDaMinter facilitates the minting and redemption process of USDa tokens against various supported assets.
- * It allows for adding and removing assets and custodians, minting USDa by depositing assets, and requesting
- * redemption of USDa for assets. The contract uses a delay mechanism for redemptions to enhance security and manages
+ * @notice arcUSDMinter facilitates the minting and redemption process of arcUSD tokens against various supported assets.
+ * It allows for adding and removing assets and custodians, minting arcUSD by depositing assets, and requesting
+ * redemption of arcUSD for assets. The contract uses a delay mechanism for redemptions to enhance security and manages
  * custody transfers of assets to designated custodians.
  *
  * @dev The contract leverages OpenZeppelin's upgradeable contracts to ensure future improvements can be made without
@@ -42,7 +42,7 @@ import {CommonValidations} from "./libraries/CommonValidations.sol";
  * `IERC6372` for interoperability with other contract systems. The constructor is replaced by an initializer function
  * to support proxy deployment.
  */
-contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable, CommonErrors, IERC6372 {
+contract arcUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable, CommonErrors, IERC6372 {
     using Arrays for uint256[];
     using CommonValidations for *;
     using EnumerableSet for EnumerableSet.AddressSet;
@@ -62,8 +62,8 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
         uint48 claimableAfter;
     }
 
-    /// @custom:storage-location erc7201:arcana.storage.USDaMinter
-    struct USDaMinterStorage {
+    /// @custom:storage-location erc7201:arcana.storage.arcUSDMinter
+    struct arcUSDMinterStorage {
         Checkpoints.Trace208 coverageRatio;
         EnumerableSet.AddressSet assets;
         mapping(address asset => AssetInfo) assetInfos;
@@ -80,16 +80,16 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
         uint8 activeAssetsLength;
     }
 
-    IUSDa public immutable USDa;
+    IarcUSD public immutable arcUSD;
 
-    // keccak256(abi.encode(uint256(keccak256("arcana.storage.USDaMinter")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant USDaMinterStorageLocation =
+    // keccak256(abi.encode(uint256(keccak256("arcana.storage.arcUSDMinter")) - 1)) & ~bytes32(uint256(0xff))
+    bytes32 private constant arcUSDMinterStorageLocation =
         0x70b533cc9d2662f7b017cf7a562919e2eb5c285358c6b5315aa15e465920a900;
 
-    function _getUSDaMinterStorage() private pure returns (USDaMinterStorage storage $) {
+    function _getarcUSDMinterStorage() private pure returns (arcUSDMinterStorage storage $) {
         // slither-disable-next-line assembly
         assembly {
-            $.slot := USDaMinterStorageLocation
+            $.slot := arcUSDMinterStorageLocation
         }
     }
 
@@ -111,7 +111,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
         address indexed user,
         address indexed asset,
         uint256 indexed index,
-        uint256 amountUSDa,
+        uint256 amountarcUSD,
         uint256 amountCollateral,
         uint256 claimableAfter
     );
@@ -123,7 +123,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
         uint256 oldClaimableAfter,
         uint256 newClaimableAfter
     );
-    event TokensClaimed(address indexed user, address indexed asset, uint256 usdaAmount, uint256 claimed);
+    event TokensClaimed(address indexed user, address indexed asset, uint256 arcUSDAmount, uint256 claimed);
 
     error InsufficientOutputAmount(uint256 expected, uint256 actual);
     error NoTokensClaimable();
@@ -141,7 +141,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * @custom:error NotCustodian Thrown if the caller is not the current custodian of the contract.
      */
     modifier onlyCustodian() {
-        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
         if (msg.sender != $.custodian) {
             revert NotCustodian(msg.sender);
         }
@@ -154,7 +154,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * @custom:error NotAdmin Thrown if the caller is not the current admin of the contract.
      */
     modifier onlyAdmin() {
-        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
         if (msg.sender != $.admin && msg.sender != owner()) {
             revert NotAdmin(msg.sender);
         }
@@ -168,7 +168,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * @custom:error NotWhitelisted Thrown if the caller is not currently whitelisted.
      */
     modifier onlyWhitelisted() {
-        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
         if (!$.isWhitelisted[msg.sender]) {
             revert NotWhitelisted(msg.sender);
         }
@@ -182,7 +182,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * @custom:error NotWhitelister Thrown if the caller is not the current whitelister of the contract.
      */
     modifier onlyWhitelister() {
-        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
         if (msg.sender != $.whitelister && msg.sender != owner()) {
             revert NotWhitelister(msg.sender);
         }
@@ -202,7 +202,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      */
     modifier validAsset(address asset, bool includeRemoved) {
         asset.requireNonZeroAddress();
-        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
         if (!$.assets.contains(asset) || (!includeRemoved && $.assetInfos[asset].removed)) {
             revert NotSupportedAsset(asset);
         }
@@ -210,27 +210,27 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
     }
 
     /**
-     * @notice Initializes the USDaMinter contract with a reference to the USDa token contract.
-     * @dev This constructor sets the immutable USDa token contract address, ensuring that the USDaMinter contract
-     * always interacts with the correct instance of USDa.
+     * @notice Initializes the arcUSDMinter contract with a reference to the arcUSD token contract.
+     * @dev This constructor sets the immutable arcUSD token contract address, ensuring that the arcUSDMinter contract
+     * always interacts with the correct instance of arcUSD.
      * Since this is an upgradeable contract, the constructor does not perform any initialization logic that relies on
      * storage variables. Such logic is handled in the `initialize` function.
      * The constructor is only called once during the initial deployment before the contract is made upgradeable via a
      * proxy.
-     * @param usda The address of the USDa token contract. This address is immutable and specifies the USDa instance
+     * @param _arcUSD The address of the arcUSD token contract. This address is immutable and specifies the arcUSD instance
      * that the minter will interact with.
      * @custom:oz-upgrades-unsafe-allow constructor
      */
-    constructor(address usda) {
-        address(usda).requireNonZeroAddress();
-        USDa = IUSDa(usda);
+    constructor(address _arcUSD) {
+        address(_arcUSD).requireNonZeroAddress();
+        arcUSD = IarcUSD(_arcUSD);
         _disableInitializers();
     }
 
     function _authorizeUpgrade(address) internal override onlyOwner {}
 
     /**
-     * @notice Initializes the USDaMinter contract post-deployment to set up initial state and configurations.
+     * @notice Initializes the arcUSDMinter contract post-deployment to set up initial state and configurations.
      * @dev This function initializes the contract with the OpenZeppelin upgradeable pattern. It sets the initial owner
      * of the contract and the initial claim delay for redemption requests.
      * It must be called immediately after deploying the proxy to ensure the contract is in a valid state. This replaces
@@ -251,7 +251,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
         __ReentrancyGuard_init();
         __UUPSUpgradeable_init();
 
-        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
         $.admin = initialAdmin;
         $.whitelister = initialWhitelister;
         $.claimDelay = initialClaimDelay;
@@ -269,7 +269,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * @param delay The new claim delay in seconds. Must be different from the current delay to be set successfully.
      */
     function setClaimDelay(uint48 delay) external nonReentrant onlyOwner {
-        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
         $.claimDelay.requireDifferentUint48(delay);
         $.claimDelay = delay;
         emit ClaimDelayUpdated(delay);
@@ -284,7 +284,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
     function setCoverageRatio(uint256 ratio) external nonReentrant onlyAdmin {
         ratio.requireLessThanOrEqualToUint256(1e18);
         latestCoverageRatio().requireDifferentUint256(ratio);
-        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
         $.coverageRatio.push(clock(), uint208(ratio));
         emit CoverageRatioUpdated(ratio);
     }
@@ -295,7 +295,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * @param newMaxAge New max age for oracle prices.
      */
     function setMaxAge(uint256 newMaxAge) external onlyOwner {
-        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
         $.maxAge.requireDifferentUint256(newMaxAge);
         $.maxAge = newMaxAge;
         emit MaxAgeUpdated(newMaxAge);
@@ -312,7 +312,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * @custom:event CustodyTransfer Amount of asset transferred to what custodian.
      */
     function withdrawFunds(address asset, uint256 amount) external nonReentrant onlyCustodian {
-        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
         uint256 required = $.pendingClaims[asset];
         uint256 bal = IERC20(asset).balanceOf(address(this));
 
@@ -343,30 +343,30 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      */
     function modifyWhitelist(address account, bool whitelisted) external onlyWhitelister {
         account.requireNonZeroAddress();
-        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
         $.isWhitelisted[account].requireDifferentBoolean(whitelisted);
         $.isWhitelisted[account] = whitelisted;
         emit WhitelistStatusUpdated(account, whitelisted);
     }
 
     /**
-     * @notice Adds a new asset to the list of supported assets for minting USDa.
+     * @notice Adds a new asset to the list of supported assets for minting arcUSD.
      * @dev This function marks an asset as supported and disables rebasing for it if applicable. Only callable by the
-     * contract owner. It's essential for expanding the range of assets that can be used to mint USDa.
+     * contract owner. It's essential for expanding the range of assets that can be used to mint arcUSD.
      * Attempts to disable rebasing for the asset by calling `disableInitializers` on the asset contract. This is a
      * safety measure for assets that implement a rebase mechanism.
      * @param asset The address of the asset to add. Must be a contract address implementing the IERC20 interface.
      * @param oracle The address of the oracle contract that provides the asset's price feed.
-     * @custom:error InvalidAddress The asset address is the same as the USDa address.
+     * @custom:error InvalidAddress The asset address is the same as the arcUSD address.
      * @custom:error ValueUnchanged The asset is already supported.
      * @custom:event AssetAdded The address of the asset that was added.
      * @custom:event RebaseDisabled The address of the asset for which rebasing was disabled.
      */
     function addSupportedAsset(address asset, address oracle) external onlyOwner {
         asset.requireNonZeroAddress();
-        asset.requireNotEqual(address(USDa));
+        asset.requireNotEqual(address(arcUSD));
         oracle.requireNonZeroAddress();
-        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
         $.assets.requireAbsentAddress(asset);
         $.assets.add(asset);
         $.assetInfos[asset] = AssetInfo({oracle: oracle, removed: false});
@@ -390,14 +390,14 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      */
     function modifyOracleForAsset(address asset, address newOracle) external onlyOwner validAsset(asset, true) {
         newOracle.requireNonZeroAddress();
-        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
         newOracle.requireDifferentAddress($.assetInfos[asset].oracle);
         $.assetInfos[asset].oracle = newOracle;
         emit OracleUpdated(asset, newOracle);
     }
 
     /**
-     * @notice Removes an asset from the list of supported assets for minting USDa, making it ineligible for future
+     * @notice Removes an asset from the list of supported assets for minting arcUSD, making it ineligible for future
      * operations until restored.
      * @dev This function allows the contract owner to temporarily remove an asset from the list of supported assets.
      * Removed assets can be restored using the `restoreAsset` function. It is crucial for managing the lifecycle and
@@ -407,7 +407,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * @custom:event AssetRemoved Logs the removal of the asset.
      */
     function removeSupportedAsset(address asset) external onlyOwner validAsset(asset, false) {
-        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
         $.assetInfos[asset].removed = true;
         $.activeAssetsLength--;
         emit AssetRemoved(asset);
@@ -426,7 +426,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * @custom:event AssetRestored Logs the restoration of the asset, making it active again.
      */
     function restoreAsset(address asset) external onlyOwner validAsset(asset, true) {
-        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
         AssetInfo storage assetInfo = $.assetInfos[asset];
         assetInfo.removed.requireDifferentBoolean(false);
         assetInfo.removed = false;
@@ -446,7 +446,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      */
     function updateCustodian(address newCustodian) external onlyOwner {
         newCustodian.requireNonZeroAddress();
-        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
         $.custodian.requireDifferentAddress(newCustodian);
         $.custodian = newCustodian;
         emit CustodianUpdated(newCustodian);
@@ -463,7 +463,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      */
     function updateAdmin(address newAdmin) external onlyOwner {
         newAdmin.requireNonZeroAddress();
-        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
         $.admin.requireDifferentAddress(newAdmin);
         $.admin = newAdmin;
         emit AdminUpdated(newAdmin);
@@ -480,28 +480,28 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      */
     function updateWhitelister(address newWhitelister) external onlyOwner {
         newWhitelister.requireNonZeroAddress();
-        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
         $.whitelister.requireDifferentAddress(newWhitelister);
         $.whitelister = newWhitelister;
         emit WhitelisterUpdated(newWhitelister);
     }
 
     /**
-     * @notice Mints USDa tokens in exchange for a specified amount of a supported asset, which is directly transferred
+     * @notice Mints arcUSD tokens in exchange for a specified amount of a supported asset, which is directly transferred
      * to the custodian.
-     * @dev This function facilitates a user to deposit a supported asset directly to the custodian and receive USDa
+     * @dev This function facilitates a user to deposit a supported asset directly to the custodian and receive arcUSD
      * tokens in return.
      * The function ensures the asset is supported and employs non-reentrancy protection to prevent double spending.
-     * The actual amount of USDa minted equals the asset amount received by the custodian, which may vary due to
+     * The actual amount of arcUSD minted equals the asset amount received by the custodian, which may vary due to
      * transaction fees or adjustments.
      * The asset is pulled from the user to the custodian directly, ensuring transparency and traceability of asset
      * transfer.
      * @param asset The address of the supported asset to be deposited.
-     * @param amountIn The amount of the asset to be transferred from the user to the custodian in exchange for USDa.
-     * @return amountOut The amount of USDa minted and credited to the user's account.
+     * @param amountIn The amount of the asset to be transferred from the user to the custodian in exchange for arcUSD.
+     * @return amountOut The amount of arcUSD minted and credited to the user's account.
      * @custom:error NotSupportedAsset Indicates the asset is not supported for minting.
      * @custom:event Mint Logs the address of the user who minted, the asset address, the amount deposited, and the
-     * amount of USDa minted.
+     * amount of arcUSD minted.
      */
     function mint(address asset, uint256 amountIn, uint256 minAmountOut)
         external
@@ -510,16 +510,16 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
         onlyWhitelisted
         returns (uint256 amountOut)
     {
-        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
         address user = msg.sender;
 
         amountIn = _pullAssets(user, asset, amountIn);
 
-        uint256 balanceBefore = USDa.balanceOf(user);
-        USDa.mint(user, IOracle($.assetInfos[asset].oracle).valueOf(amountIn, $.maxAge, Math.Rounding.Floor));
+        uint256 balanceBefore = arcUSD.balanceOf(user);
+        arcUSD.mint(user, IOracle($.assetInfos[asset].oracle).valueOf(amountIn, $.maxAge, Math.Rounding.Floor));
 
         unchecked {
-            amountOut = USDa.balanceOf(user) - balanceBefore;
+            amountOut = arcUSD.balanceOf(user) - balanceBefore;
         }
 
         if (amountOut < minAmountOut) {
@@ -530,21 +530,21 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
     }
 
     /**
-     * @notice Requests the redemption of USDa tokens for a specified amount of a supported asset.
-     * @dev Allows users to burn USDa tokens in exchange for a claim on a specified amount of a supported asset, after
+     * @notice Requests the redemption of arcUSD tokens for a specified amount of a supported asset.
+     * @dev Allows users to burn arcUSD tokens in exchange for a claim on a specified amount of a supported asset, after
      * a delay defined by `claimDelay`. The request is recorded and can be claimed after the delay period.
      * This function employs non-reentrancy protection and checks that the asset is supported. It burns the requested
-     * amount of USDa from the user's balance immediately.
+     * amount of arcUSD from the user's balance immediately.
      * @param asset The address of the supported asset the user wishes to claim.
-     * @param amount The amount of USDa the user wishes to redeem for the asset.
+     * @param amount The amount of arcUSD the user wishes to redeem for the asset.
      * @custom:error NotSupportedAsset The asset is not supported for redemption.
      * @custom:event TokensRequested The address of the user who requested, the asset address, the amount requested, and
      * the timestamp after which the claim can be made.
      */
     function requestTokens(address asset, uint256 amount) external nonReentrant validAsset(asset, false) onlyWhitelisted {
-        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
         address user = msg.sender;
-        USDa.burnFrom(user, amount);
+        arcUSD.burnFrom(user, amount);
         uint256 amountAsset = IOracle($.assetInfos[asset].oracle).amountOf(amount, $.maxAge, Math.Rounding.Floor);
         $.pendingClaims[asset] += amountAsset;
         uint48 claimableAfter = clock() + $.claimDelay;
@@ -583,7 +583,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
     }
 
     /**
-     * @notice Claims the requested supported assets in exchange for previously burned USDa tokens, if the claim delay
+     * @notice Claims the requested supported assets in exchange for previously burned arcUSD tokens, if the claim delay
      * has passed.
      * @dev This function allows users to claim supported assets for which they have previously made redemption requests
      * and the claim delay has elapsed.
@@ -595,7 +595,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * @custom:event TokensClaimed The address of the user who claimed, the asset address, and the amount claimed.
      */
     function claimTokens(address asset) external nonReentrant validAsset(asset, true) onlyWhitelisted {
-        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
         address user = msg.sender;
 
         RedemptionRequest[] storage userRequests = $.redemptionRequests[user];
@@ -642,7 +642,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
         external
         onlyAdmin
     {
-        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
         RedemptionRequest storage request = $.redemptionRequests[user][index];
         uint48 claimableAfter = request.claimableAfter;
         claimableAfter.requireLessThanUint48(newClaimableAfter);
@@ -655,7 +655,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * @dev The custodian manages the collateral collected by this contract.
      */
     function custodian() external view returns (address) {
-        return _getUSDaMinterStorage().custodian;
+        return _getarcUSDMinterStorage().custodian;
     }
 
     /**
@@ -663,7 +663,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * @dev The admin is responsible for extending request times and setting the coverage ratio.
      */
     function admin() external view returns (address) {
-        return _getUSDaMinterStorage().admin;
+        return _getarcUSDMinterStorage().admin;
     }
 
     /**
@@ -671,7 +671,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * @dev The whitelister is responsible for managing whitelist status of EOAs.
      */
     function whitelister() external view returns (address) {
-        return _getUSDaMinterStorage().whitelister;
+        return _getarcUSDMinterStorage().whitelister;
     }
 
     /**
@@ -679,7 +679,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * @dev If the account is whitelisted, they have the ability to call mint, requestTokens, and claimTokens.
      */
     function isWhitelisted(address account) external view returns (bool) {
-        return _getUSDaMinterStorage().isWhitelisted[account];
+        return _getarcUSDMinterStorage().isWhitelisted[account];
     }
 
     /**
@@ -705,17 +705,17 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * @return The current claim delay in seconds.
      */
     function claimDelay() external view returns (uint48) {
-        return _getUSDaMinterStorage().claimDelay;
+        return _getarcUSDMinterStorage().claimDelay;
     }
 
     /**
      * @notice Checks if the specified asset is a supported asset that's acceptable collateral.
      * @param asset The ERC-20 token in question.
      * @return isSupported If true, the specified asset is a supported asset and therefore able to be used to mint
-     * USDa tokens 1:1.
+     * arcUSD tokens 1:1.
      */
     function isSupportedAsset(address asset) external view returns (bool isSupported) {
-        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
         isSupported = $.assets.contains(asset) && !$.assetInfos[asset].removed;
     }
 
@@ -735,7 +735,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
         view
         returns (RedemptionRequest[] memory requests)
     {
-        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
         RedemptionRequest[] storage userRequests = $.redemptionRequests[user];
         uint256 numRequests = userRequests.length;
         if (from >= numRequests) {
@@ -778,7 +778,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
         view
         returns (RedemptionRequest[] memory requests)
     {
-        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
         RedemptionRequest[] storage userRequests = $.redemptionRequests[user];
         uint256[] storage userRequestsByAsset = $.redemptionRequestsByAsset[user][asset];
         uint256 numRequests = userRequestsByAsset.length;
@@ -812,7 +812,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * @return assets An array of addresses representing all assets that have been registered in the contract.
      */
     function getAllAssets() external view returns (address[] memory assets) {
-        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
         assets = $.assets.values();
     }
 
@@ -825,7 +825,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * @return assets An array of addresses representing all active assets in the contract.
      */
     function getActiveAssets() external view returns (address[] memory assets) {
-        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
 
         uint256 numAssets = $.assets.length();
         uint256 numActiveAssets = $.activeAssetsLength;
@@ -852,19 +852,19 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * @return amount Amount of asset that is pending claim in totality.
      */
     function getPendingClaims(address asset) external view returns (uint256 amount) {
-        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
         amount = $.pendingClaims[asset];
     }
 
     /**
-     * @notice Provides a quote of USDa tokens a user would receive if they used a specified amountIn of an asset to
-     * mint USDa.
+     * @notice Provides a quote of arcUSD tokens a user would receive if they used a specified amountIn of an asset to
+     * mint arcUSD.
      * @dev Accounts for the user's rebase opt-out status. If opted out, a 1:1 ratio is used. Otherwise, rebase
      * adjustments apply.
      * @param asset The address of the supported asset to calculate the quote for.
      * @param from The account whose opt-out status to check.
-     * @param amountIn The amount of collateral being used to mint USDa.
-     * @return assets The amount of USDa `from` would receive if they minted with `amountIn` of `asset`.
+     * @param amountIn The amount of collateral being used to mint arcUSD.
+     * @return assets The amount of arcUSD `from` would receive if they minted with `amountIn` of `asset`.
      */
     function quoteMint(address asset, address from, uint256 amountIn)
         external
@@ -872,7 +872,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
         validAsset(asset, false)
         returns (uint256 assets)
     {
-        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
         (bool success, bytes memory data) = asset.staticcall(abi.encodeCall(IRebaseToken.optedOut, (address(this))));
         if (success) {
             bool isOptedOut = abi.decode(data, (bool));
@@ -881,8 +881,8 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
                 isOptedOut = abi.decode(data, (bool));
                 if (!isOptedOut) {
                     uint256 rebaseIndex = IRebaseToken(asset).rebaseIndex();
-                    uint256 usdaShares = RebaseTokenMath.toShares(amountIn, rebaseIndex);
-                    amountIn = RebaseTokenMath.toTokens(usdaShares, rebaseIndex);
+                    uint256 arcUSDShares = RebaseTokenMath.toShares(amountIn, rebaseIndex);
+                    amountIn = RebaseTokenMath.toTokens(arcUSDShares, rebaseIndex);
                 }
             }
         }
@@ -890,14 +890,14 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
     }
 
     /**
-     * @notice Provides a quote of assets a user would receive if they used a specified amountIn of USDa to
+     * @notice Provides a quote of assets a user would receive if they used a specified amountIn of arcUSD to
      * redeem assets.
      * @dev Accounts for the user's rebase opt-out status. If opted out, a 1:1 ratio is used. Otherwise, rebase
      * adjustments apply.
      * @param asset The address of the supported asset to calculate the quote for.
      * @param from The account whose opt-out status to check.
-     * @param amountIn The amount of USDa being used to redeem collateral.
-     * @return collateral The amount of collateral `from` would receive if they redeemed with `amountIn` of USDa.
+     * @param amountIn The amount of arcUSD being used to redeem collateral.
+     * @return collateral The amount of collateral `from` would receive if they redeemed with `amountIn` of arcUSD.
      */
     function quoteRedeem(address asset, address from, uint256 amountIn)
         external
@@ -905,14 +905,14 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
         validAsset(asset, false)
         returns (uint256 collateral)
     {
-        USDaMinterStorage storage $ = _getUSDaMinterStorage();
-        (bool success, bytes memory data) = address(USDa).staticcall(abi.encodeCall(IRebaseToken.optedOut, (from)));
+        arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
+        (bool success, bytes memory data) = address(arcUSD).staticcall(abi.encodeCall(IRebaseToken.optedOut, (from)));
         if (success) {
             bool isOptedOut = abi.decode(data, (bool));
             if (!isOptedOut) {
-                uint256 rebaseIndex = IRebaseToken(address(USDa)).rebaseIndex();
-                uint256 usdaShares = RebaseTokenMath.toShares(amountIn, rebaseIndex);
-                amountIn = RebaseTokenMath.toTokens(usdaShares, rebaseIndex);
+                uint256 rebaseIndex = IRebaseToken(address(arcUSD)).rebaseIndex();
+                uint256 arcUSDShares = RebaseTokenMath.toShares(amountIn, rebaseIndex);
+                amountIn = RebaseTokenMath.toTokens(arcUSDShares, rebaseIndex);
             }
         }
         collateral = IOracle($.assetInfos[asset].oracle).amountOf(amountIn, $.maxAge, Math.Rounding.Floor);
@@ -924,7 +924,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * to fund all requests.
      */
     function latestCoverageRatio() public view returns (uint256) {
-        return uint256(_getUSDaMinterStorage().coverageRatio.upperLookupRecent(clock()));
+        return uint256(_getarcUSDMinterStorage().coverageRatio.upperLookupRecent(clock()));
     }
 
     /**
@@ -939,7 +939,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * @custom:error NotSupportedAsset The asset is not supported for redemption.
      */
     function requiredTokens(address asset) public view returns (uint256 amount) {
-        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
         uint256 totalPendingClaims = $.pendingClaims[asset];
         uint256 balance = IERC20(asset).balanceOf(address(this));
         if (totalPendingClaims > balance) {
@@ -963,7 +963,7 @@ contract USDaMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * requests.
      */
     function _calculateClaimableTokens(address user, address asset) internal view returns (uint256 amount) {
-        USDaMinterStorage storage $ = _getUSDaMinterStorage();
+        arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
         uint256[] storage userRequestsByAsset = $.redemptionRequestsByAsset[user][asset];
         RedemptionRequest[] storage userRequests = $.redemptionRequests[user];
         uint256 numRequests = userRequestsByAsset.length;

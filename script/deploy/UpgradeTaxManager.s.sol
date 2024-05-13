@@ -5,8 +5,8 @@ import {console2} from "forge-std/Script.sol";
 import {DeployUtility} from "../DeployUtility.sol";
 
 // local imports
-import {USDaTaxManager} from "../../src/USDaTaxManager.sol";
-import {USDa} from "../../src/USDa.sol";
+import {arcUSDTaxManager} from "../../src/arcUSDTaxManager.sol";
+import {arcUSD} from "../../src/arcUSD.sol";
 
 // helpers
 import "../../test/utils/Constants.sol";
@@ -25,11 +25,11 @@ import "../../test/utils/Constants.sol";
 /**
  * @title UpgradeTaxManager
  * @author Chase Brown
- * @notice This script deploys a new implementation contract for USDa and upgrades the current proxy.
+ * @notice This script deploys a new implementation contract for arcUSD and upgrades the current proxy.
  */
 contract UpgradeTaxManager is DeployUtility {
-    USDaTaxManager public taxManager;
-    USDa public usdaToken;
+    arcUSDTaxManager public taxManager;
+    arcUSD public arcUSDToken;
     address public feeCollector;
 
     uint256 public DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
@@ -40,8 +40,8 @@ contract UpgradeTaxManager is DeployUtility {
 
     function setUp() public {
         vm.createSelectFork(UNREAL_RPC_URL);
-        usdaToken = USDa(_loadDeploymentAddress("unreal", "USDa"));
-        feeCollector = _loadDeploymentAddress("unreal", "USDaFeeCollector");
+        arcUSDToken = arcUSD(_loadDeploymentAddress("unreal", "arcUSD"));
+        feeCollector = _loadDeploymentAddress("unreal", "arcUSDFeeCollector");
     }
 
     // ~ Script ~
@@ -49,11 +49,11 @@ contract UpgradeTaxManager is DeployUtility {
     function run() public {
         vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
 
-        USDaTaxManager newTaxManager = new USDaTaxManager(adminAddress, address(usdaToken), feeCollector);
+        arcUSDTaxManager newTaxManager = new arcUSDTaxManager(adminAddress, address(arcUSDToken), feeCollector);
 
-        usdaToken.setTaxManager(address(newTaxManager));
+        arcUSDToken.setTaxManager(address(newTaxManager));
 
-        _saveDeploymentAddress("unreal", "USDaTaxManager", address(newTaxManager));
+        _saveDeploymentAddress("unreal", "arcUSDTaxManager", address(newTaxManager));
 
         vm.stopBroadcast();
     }

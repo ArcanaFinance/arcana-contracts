@@ -5,17 +5,17 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20, ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {RebaseTokenMath} from "@tangible/contracts/libraries/RebaseTokenMath.sol";
 
-import {USDa as USDaToken} from "./USDa.sol";
+import {arcUSD as arcUSDToken} from "./arcUSD.sol";
 
 /**
- * @title USDa Points Boost Vault
- * @dev This contract represents a points-based system for USDa token holders. By depositing USDa tokens, users
- * receive PTa tokens, which can be redeemed back to USDa. This mechanism effectively disables rebase functionality
- * for USDa within this system.
+ * @title arcUSD Points Boost Vault
+ * @dev This contract represents a points-based system for arcUSD token holders. By depositing arcUSD tokens, users
+ * receive PTa tokens, which can be redeemed back to arcUSD. This mechanism effectively disables rebase functionality
+ * for arcUSD within this system.
  * @author Caesar LaVey
  */
-contract USDaPointsBoostVault is ERC20, Ownable {
-    address public immutable USDa;
+contract arcUSDPointsBoostVault is ERC20, Ownable {
+    address public immutable arcUSD;
     bool public stakingEnabled;
 
     event Deposit(address indexed caller, address indexed owner, uint256 assets, uint256 shares);
@@ -32,12 +32,12 @@ contract USDaPointsBoostVault is ERC20, Ownable {
     }
 
     /**
-     * @dev Sets the USDa token address and disables its rebase functionality upon deployment.
-     * @param usda The address of the USDa token.
+     * @dev Sets the arcUSD token address and disables its rebase functionality upon deployment.
+     * @param _arcUSD The address of the arcUSD token.
      */
-    constructor(address admin, address usda) ERC20("USDa Points Token", "PTa") Ownable(admin) {
-        USDa = usda;
-        USDaToken(usda).disableRebase(address(this), true);
+    constructor(address admin, address _arcUSD) ERC20("arcUSD Points Token", "PTa") Ownable(admin) {
+        arcUSD = _arcUSD;
+        arcUSDToken(_arcUSD).disableRebase(address(this), true);
         _mint(address(this), type(uint256).max);
         stakingEnabled = true;
     }
@@ -45,7 +45,7 @@ contract USDaPointsBoostVault is ERC20, Ownable {
     /**
      * @notice Allows the owner to store a boolean value in `stakingEnabled`. 
      * @dev If `stakingEnabled` is true, users can call deposit and redeem. If false, these methods are locked.
-     * This method is mainly needed during rebase calculations of USDa.
+     * This method is mainly needed during rebase calculations of arcUSD.
      * @param _isEnabled If true, deposit and redeem will be locked.
      */
     function setStakingEnabled(bool _isEnabled) external onlyOwner {
@@ -54,82 +54,82 @@ contract USDaPointsBoostVault is ERC20, Ownable {
     }
 
     /**
-     * @notice Deposits USDa tokens into the vault in exchange for PTa tokens.
-     * @dev Mints PTa tokens to the recipient equivalent to the amount of USDa tokens deposited.
-     * @param assets The amount of USDa tokens to deposit.
+     * @notice Deposits arcUSD tokens into the vault in exchange for PTa tokens.
+     * @dev Mints PTa tokens to the recipient equivalent to the amount of arcUSD tokens deposited.
+     * @param assets The amount of arcUSD tokens to deposit.
      * @param recipient The address to receive the PTa tokens.
      * @return shares The amount of PTa tokens minted.
      */
     function deposit(uint256 assets, address recipient) external isEnabled returns (uint256 shares) {
-        shares = _pullUSDa(msg.sender, assets);
+        shares = _pullarcUSD(msg.sender, assets);
         _transfer(address(this), recipient, shares);
         emit Deposit(msg.sender, recipient, assets, shares);
     }
 
     /**
-     * @notice Redeems PTa tokens in exchange for USDa tokens.
-     * @dev Burns the PTa tokens from the sender and returns the equivalent amount of USDa tokens.
+     * @notice Redeems PTa tokens in exchange for arcUSD tokens.
+     * @dev Burns the PTa tokens from the sender and returns the equivalent amount of arcUSD tokens.
      * @param shares The amount of PTa tokens to redeem.
-     * @param recipient The address to receive the USDa tokens.
-     * @return assets The amount of USDa tokens returned.
+     * @param recipient The address to receive the arcUSD tokens.
+     * @return assets The amount of arcUSD tokens returned.
      */
     function redeem(uint256 shares, address recipient) external isEnabled returns (uint256 assets) {
         _transfer(msg.sender, address(this), shares);
-        assets = _pushUSDa(recipient, shares);
+        assets = _pusharcUSD(recipient, shares);
         emit Withdraw(msg.sender, recipient, msg.sender, assets, shares);
     }
 
     /**
-     * @notice Provides a preview of PTa shares for a given USDa deposit.
-     * @dev Guarantees a 1:1 exchange ratio for deposits, reflecting the contract's design where each USDa deposited
+     * @notice Provides a preview of PTa shares for a given arcUSD deposit.
+     * @dev Guarantees a 1:1 exchange ratio for deposits, reflecting the contract's design where each arcUSD deposited
      * is matched with an equivalent amount of PTa shares. This behavior is integral to the contract and not subject
      * to change based on external factors like rebasing.
-     * @param assets The amount of USDa to be deposited.
-     * @return shares The equivalent amount of PTa shares, guaranteed to be a 1:1 match with the USDa deposited.
+     * @param assets The amount of arcUSD to be deposited.
+     * @return shares The equivalent amount of PTa shares, guaranteed to be a 1:1 match with the arcUSD deposited.
      */
     function previewDeposit(address, uint256 assets) external pure returns (uint256 shares) {
         shares = assets;
     }
 
     /**
-     * @notice Provides a preview of USDa assets for a given amount of PTa shares to be redeemed.
+     * @notice Provides a preview of arcUSD assets for a given amount of PTa shares to be redeemed.
      * @dev Accounts for the user's rebase opt-out status. If opted out, a 1:1 ratio is used. Otherwise, rebase
      * adjustments apply.
      * @param from The account whose opt-out status to check.
      * @param shares The amount of PTa shares to redeem.
-     * @return assets The equivalent amount of USDa assets.
+     * @return assets The equivalent amount of arcUSD assets.
      */
     function previewRedeem(address from, uint256 shares) external view returns (uint256 assets) {
-        if (USDaToken(USDa).optedOut(from)) {
+        if (arcUSDToken(arcUSD).optedOut(from)) {
             assets = shares;
         } else {
-            uint256 rebaseIndex = USDaToken(USDa).rebaseIndex();
-            uint256 usdaShares = RebaseTokenMath.toShares(shares, rebaseIndex);
-            assets = RebaseTokenMath.toTokens(usdaShares, rebaseIndex);
+            uint256 rebaseIndex = arcUSDToken(arcUSD).rebaseIndex();
+            uint256 arcUSDShares = RebaseTokenMath.toShares(shares, rebaseIndex);
+            assets = RebaseTokenMath.toTokens(arcUSDShares, rebaseIndex);
         }
     }
 
     /**
-     * @dev Pulls USDa tokens from the sender to this contract.
-     * @param from The address from which USDa tokens are transferred.
-     * @param amount The amount of USDa tokens to transfer.
-     * @return The amount of USDa tokens successfully transferred.
+     * @dev Pulls arcUSD tokens from the sender to this contract.
+     * @param from The address from which arcUSD tokens are transferred.
+     * @param amount The amount of arcUSD tokens to transfer.
+     * @return The amount of arcUSD tokens successfully transferred.
      */
-    function _pullUSDa(address from, uint256 amount) internal returns (uint256) {
-        IERC20 token = IERC20(USDa);
+    function _pullarcUSD(address from, uint256 amount) internal returns (uint256) {
+        IERC20 token = IERC20(arcUSD);
         uint256 balanceBefore = token.balanceOf(address(this));
         token.transferFrom(from, address(this), amount);
         return token.balanceOf(address(this)) - balanceBefore;
     }
 
     /**
-     * @dev Pushes USDa tokens from this contract to the recipient.
-     * @param to The address to which USDa tokens are transferred.
-     * @param amount The amount of USDa tokens to transfer.
-     * @return The amount of USDa tokens successfully transferred.
+     * @dev Pushes arcUSD tokens from this contract to the recipient.
+     * @param to The address to which arcUSD tokens are transferred.
+     * @param amount The amount of arcUSD tokens to transfer.
+     * @return The amount of arcUSD tokens successfully transferred.
      */
-    function _pushUSDa(address to, uint256 amount) internal returns (uint256) {
-        IERC20 token = IERC20(USDa);
+    function _pusharcUSD(address to, uint256 amount) internal returns (uint256) {
+        IERC20 token = IERC20(arcUSD);
         uint256 balanceBefore = token.balanceOf(to);
         token.transfer(to, amount);
         return token.balanceOf(to) - balanceBefore;

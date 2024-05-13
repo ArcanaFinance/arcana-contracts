@@ -6,18 +6,18 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
- * @title USDaFeeCollector
- * @notice This contract receives USDa from rebase fees and distributes them to the necessary addresses.
+ * @title arcUSDFeeCollector
+ * @notice This contract receives arcUSD from rebase fees and distributes them to the necessary addresses.
  */
-contract USDaFeeCollector is Ownable {
-    /// @dev Stores contract address of USDa token.
-    address public immutable USDa;
-    /// @dev Stores addresses where USDa rewards are distributed to.
+contract arcUSDFeeCollector is Ownable {
+    /// @dev Stores contract address of arcUSD token.
+    address public immutable arcUSD;
+    /// @dev Stores addresses where arcUSD rewards are distributed to.
     address[] public distributors;
-    /// @dev Stores ratios of amount of USDa that's allocated to each address in `distributors`.
+    /// @dev Stores ratios of amount of arcUSD that's allocated to each address in `distributors`.
     uint256[] public ratios;
 
-    /// @dev This event is emitted when USDa is transferred to a distributor as a reward.
+    /// @dev This event is emitted when arcUSD is transferred to a distributor as a reward.
     event RewardsDistributed(address receiver, uint256 amount);
     /// @dev This event is emitted when `updateRewardDistribution` is executed successfully.
     event DistributionUpdated(address[] newDistributors, uint256[] ratios);
@@ -28,31 +28,31 @@ contract USDaFeeCollector is Ownable {
     error InvalidArraySize();
 
     /**
-     * @notice Initializes USDaFeeCollector.
+     * @notice Initializes arcUSDFeeCollector.
      * @param _admin Initial Owner of contract.
-     * @param _usda Address of USDa contract.
-     * @param _distributors Array of addresses that will receive USDa royalties.
+     * @param _arcUSD Address of arcUSD contract.
+     * @param _distributors Array of addresses that will receive arcUSD royalties.
      * @param _ratios Array of ratios for calculating percentage of royalties go to each distributor.
      */
-    constructor(address _admin, address _usda, address[] memory _distributors, uint256[] memory _ratios)
+    constructor(address _admin, address _arcUSD, address[] memory _distributors, uint256[] memory _ratios)
         Ownable(_admin)
     {
-        if (_usda == address(0) || _admin == address(0)) revert ZeroAddressException();
+        if (_arcUSD == address(0) || _admin == address(0)) revert ZeroAddressException();
 
         uint256 len = _distributors.length;
         if (len != _ratios.length || len == 0) revert InvalidArraySize();
 
-        USDa = _usda;
+        arcUSD = _arcUSD;
         distributors = _distributors;
         ratios = _ratios;
     }
 
     /**
-     * @notice This method is used to distribute USDa rewards form this contract to the various addresses
+     * @notice This method is used to distribute arcUSD rewards form this contract to the various addresses
      * stored in the `distributors` array.
      */
-    function distributeUSDa() external {
-        uint256 contractBalance = getUsdaBalance();
+    function distributeArcUSD() external {
+        uint256 contractBalance = getArcUSDBalance();
         uint256 len = distributors.length;
         uint256 totalRatio;
 
@@ -67,7 +67,7 @@ contract USDaFeeCollector is Ownable {
             address receiver = distributors[i];
             uint256 amountToTransfer = (contractBalance * ratios[i]) / totalRatio;
 
-            IERC20(USDa).transfer(receiver, amountToTransfer);
+            IERC20(arcUSD).transfer(receiver, amountToTransfer);
             emit RewardsDistributed(receiver, amountToTransfer);
 
             unchecked {
@@ -78,7 +78,7 @@ contract USDaFeeCollector is Ownable {
 
     /**
      * @notice Permissioned method for updating the reward distributions.
-     * @param _distributors Array of addresses that will receive USDa rewards from this contract upon distribution.
+     * @param _distributors Array of addresses that will receive arcUSD rewards from this contract upon distribution.
      * @param _ratios Array of ratios of amount of rewards to send to each address in `_distributors`.
      */
     function updateRewardDistribution(address[] memory _distributors, uint256[] memory _ratios) external onlyOwner {
@@ -106,9 +106,9 @@ contract USDaFeeCollector is Ownable {
     }
 
     /**
-     * @notice Returns the contract's balance of USDa token.
+     * @notice Returns the contract's balance of arcUSD token.
      */
-    function getUsdaBalance() public view returns (uint256) {
-        return IERC20(USDa).balanceOf(address(this));
+    function getArcUSDBalance() public view returns (uint256) {
+        return IERC20(arcUSD).balanceOf(address(this));
     }
 }

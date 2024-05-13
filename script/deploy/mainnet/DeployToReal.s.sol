@@ -8,13 +8,13 @@ import {DeployUtility} from "../../DeployUtility.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 // local imports
-import {USDa} from "../../../src/USDa.sol";
-import {IUSDa} from "../../../src/interfaces/IUSDa.sol";
-import {USDaMinter} from "../../../src/USDaMinter.sol";
+import {arcUSD} from "../../../src/arcUSD.sol";
+import {IarcUSD} from "../../../src/interfaces/IarcUSD.sol";
+import {arcUSDMinter} from "../../../src/arcUSDMinter.sol";
 import {CustodianManager} from "../../../src/CustodianManager.sol";
-import {USDaTaxManager} from "../../../src/USDaTaxManager.sol";
-import {USDaFeeCollector} from "../../../src/USDaFeeCollector.sol";
-import {USDaPointsBoostVault} from "../../../src/USDaPointsBoostingVault.sol";
+import {arcUSDTaxManager} from "../../../src/arcUSDTaxManager.sol";
+import {arcUSDFeeCollector} from "../../../src/arcUSDFeeCollector.sol";
+import {arcUSDPointsBoostVault} from "../../../src/arcUSDPointsBoostingVault.sol";
 
 // helpers
 import "../../../test/utils/Constants.sol";
@@ -33,12 +33,12 @@ import "../../../test/utils/Constants.sol";
 /**
  * @title DeployToReal
  * @author Chase Brown
- * @notice This script deploys USDa to one or more mainnet satellite chains
+ * @notice This script deploys arcUSD to one or more mainnet satellite chains
  */
 contract DeployToReal is DeployUtility {
     // ~ Variables ~
 
-    USDa public usdaToken;
+    arcUSD public arcUSDToken;
 
     uint256 public DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
     string public REAL_RPC_URL = vm.envString("REAL_RPC_URL");
@@ -47,10 +47,10 @@ contract DeployToReal is DeployUtility {
     // ~ Setup ~
     
     function setUp() public {
-        _setup("test.USDa.deployment");
+        _setup("test.arcUSD.deployment");
 
-        usdaToken = USDa(_loadDeploymentAddress("re.al", "USDa"));
-        console.log("USDa Address %s", address(usdaToken));
+        arcUSDToken = arcUSD(_loadDeploymentAddress("re.al", "arcUSD"));
+        console.log("arcUSD Address %s", address(arcUSDToken));
     }
 
     // ~ Script ~
@@ -64,17 +64,17 @@ contract DeployToReal is DeployUtility {
         // -------------------------
 
         // core contract deployments
-        USDaFeeCollector feeCollector = USDaFeeCollector(_deployFeeCollector());
-        USDaTaxManager taxManager = USDaTaxManager(_deployTaxManager(address(feeCollector)));
-        USDaMinter usdaMinter = USDaMinter(_deployUSDaMinter());
-        CustodianManager custodianManager = CustodianManager(_deployCustodianManager(address(usdaMinter)));
-        USDaPointsBoostVault pointsVault = USDaPointsBoostVault(_deployPointsBoostingVault());
+        arcUSDFeeCollector feeCollector = arcUSDFeeCollector(_deployFeeCollector());
+        arcUSDTaxManager taxManager = arcUSDTaxManager(_deployTaxManager(address(feeCollector)));
+        arcUSDMinter arcMinter = arcUSDMinter(_deployarcUSDMinter());
+        CustodianManager custodianManager = CustodianManager(_deployCustodianManager(address(arcMinter)));
+        arcUSDPointsBoostVault pointsVault = arcUSDPointsBoostVault(_deployPointsBoostingVault());
 
         //config
-        usdaMinter.updateCustodian(address(custodianManager));
-        usdaMinter.addSupportedAsset(REAL_USTB, REAL_USTB_ORACLE);
-        usdaToken.setMinter(address(usdaMinter));
-        usdaToken.setTaxManager(address(taxManager));
+        arcMinter.updateCustodian(address(custodianManager));
+        arcMinter.addSupportedAsset(REAL_USTB, REAL_USTB_ORACLE);
+        arcUSDToken.setMinter(address(arcMinter));
+        arcUSDToken.setTaxManager(address(taxManager));
 
         vm.stopBroadcast();
 
@@ -83,11 +83,11 @@ contract DeployToReal is DeployUtility {
         // Save Addresses to JSON
         // ----------------------
 
-        _saveDeploymentAddress("re.al", "USDaMinter", address(usdaMinter));
+        _saveDeploymentAddress("re.al", "arcUSDMinter", address(arcMinter));
         _saveDeploymentAddress("re.al", "CustodianManager", address(custodianManager));
-        _saveDeploymentAddress("re.al", "USDaTaxManager", address(taxManager));
-        _saveDeploymentAddress("re.al", "USDaFeeCollector", address(feeCollector));
-        _saveDeploymentAddress("re.al", "USDaPointsBoostVault", address(pointsVault));
+        _saveDeploymentAddress("re.al", "arcUSDTaxManager", address(taxManager));
+        _saveDeploymentAddress("re.al", "arcUSDFeeCollector", address(feeCollector));
+        _saveDeploymentAddress("re.al", "arcUSDPointsBoostVault", address(pointsVault));
     }
     
     /**
@@ -105,21 +105,21 @@ contract DeployToReal is DeployUtility {
         ratios[0] = 1;
         ratios[1] = 1;
 
-        bytes memory bytecode = abi.encodePacked(type(USDaFeeCollector).creationCode);
+        bytes memory bytecode = abi.encodePacked(type(arcUSDFeeCollector).creationCode);
 
         feeCollectorAddress = vm.computeCreate2Address(
-            _SALT, keccak256(abi.encodePacked(bytecode, abi.encode(adminAddress, address(usdaToken), distributors, ratios)))
+            _SALT, keccak256(abi.encodePacked(bytecode, abi.encode(adminAddress, address(arcUSDToken), distributors, ratios)))
         );
 
-        USDaFeeCollector feeCollector;
+        arcUSDFeeCollector feeCollector;
 
         if (_isDeployed(feeCollectorAddress)) {
-            console.log("USDaFeeCollector is already deployed to %s", feeCollectorAddress);
-            feeCollector = USDaFeeCollector(feeCollectorAddress);
+            console.log("arcUSDFeeCollector is already deployed to %s", feeCollectorAddress);
+            feeCollector = arcUSDFeeCollector(feeCollectorAddress);
         } else {
-            feeCollector = new USDaFeeCollector{salt: _SALT}(adminAddress, address(usdaToken), distributors, ratios);
+            feeCollector = new arcUSDFeeCollector{salt: _SALT}(adminAddress, address(arcUSDToken), distributors, ratios);
             assert(feeCollectorAddress == address(feeCollector));
-            console.log("USDaFeeCollector deployed to %s", feeCollectorAddress);
+            console.log("arcUSDFeeCollector deployed to %s", feeCollectorAddress);
         }
     }
 
@@ -132,57 +132,57 @@ contract DeployToReal is DeployUtility {
      *      current TaxManager::feeCollector does not match `feeCollector`
      */
     function _deployTaxManager(address feeCollector) internal returns (address taxManagerAddress) {
-        bytes memory bytecode = abi.encodePacked(type(USDaTaxManager).creationCode);
+        bytes memory bytecode = abi.encodePacked(type(arcUSDTaxManager).creationCode);
         taxManagerAddress = vm.computeCreate2Address(
-            _SALT, keccak256(abi.encodePacked(bytecode, abi.encode(adminAddress, address(usdaToken), feeCollector)))
+            _SALT, keccak256(abi.encodePacked(bytecode, abi.encode(adminAddress, address(arcUSDToken), feeCollector)))
         );
 
-        USDaTaxManager taxManager;
+        arcUSDTaxManager taxManager;
 
         if (_isDeployed(taxManagerAddress)) {
-            console.log("USDaTaxManager is already deployed to %s", taxManagerAddress);
-            taxManager = USDaTaxManager(taxManagerAddress);
+            console.log("arcUSDTaxManager is already deployed to %s", taxManagerAddress);
+            taxManager = arcUSDTaxManager(taxManagerAddress);
         } else {
-            taxManager = new USDaTaxManager{salt: _SALT}(adminAddress, address(usdaToken), feeCollector);
+            taxManager = new arcUSDTaxManager{salt: _SALT}(adminAddress, address(arcUSDToken), feeCollector);
             assert(taxManagerAddress == address(taxManager));
-            console.log("USDaTaxManager deployed to %s", taxManagerAddress);
+            console.log("arcUSDTaxManager deployed to %s", taxManagerAddress);
         }
     }
 
     /**
-     * @dev This method is in charge of deploying and upgrading USDaMinter on any chain.
+     * @dev This method is in charge of deploying and upgrading arcUSDMinter on any chain.
      * This method will perform the following steps:
-     *    - Compute the USDaMinter implementation address
+     *    - Compute the arcUSDMinter implementation address
      *    - If this address is not deployed, deploy new implementation
-     *    - Computes the proxy address. If implementation of that proxy is NOT equal to the USDaMinter address computed,
+     *    - Computes the proxy address. If implementation of that proxy is NOT equal to the arcUSDMinter address computed,
      *      it will upgrade that proxy.
      */
-    function _deployUSDaMinter() internal returns (address usdaMinterProxy) {
-        bytes memory bytecode = abi.encodePacked(type(USDaMinter).creationCode);
-        address usdaMinterAddress = vm.computeCreate2Address(
-            _SALT, keccak256(abi.encodePacked(bytecode, abi.encode(address(usdaToken))))
+    function _deployarcUSDMinter() internal returns (address arcMinterProxy) {
+        bytes memory bytecode = abi.encodePacked(type(arcUSDMinter).creationCode);
+        address arcMinterAddress = vm.computeCreate2Address(
+            _SALT, keccak256(abi.encodePacked(bytecode, abi.encode(address(arcUSDToken))))
         );
 
-        USDaMinter usdaMinter;
+        arcUSDMinter arcMinter;
 
-        if (_isDeployed(usdaMinterAddress)) {
-            console.log("USDaMinter is already deployed to %s", usdaMinterAddress);
-            usdaMinter = USDaMinter(usdaMinterAddress);
+        if (_isDeployed(arcMinterAddress)) {
+            console.log("arcUSDMinter is already deployed to %s", arcMinterAddress);
+            arcMinter = arcUSDMinter(arcMinterAddress);
         } else {
-            usdaMinter = new USDaMinter{salt: _SALT}(address(usdaToken));
-            assert(usdaMinterAddress == address(usdaMinter));
-            console.log("USDaMinter deployed to %s", usdaMinterAddress);
+            arcMinter = new arcUSDMinter{salt: _SALT}(address(arcUSDToken));
+            assert(arcMinterAddress == address(arcMinter));
+            console.log("arcUSDMinter deployed to %s", arcMinterAddress);
         }
 
         bytes memory init = abi.encodeWithSelector(
-            USDaMinter.initialize.selector,
+            arcUSDMinter.initialize.selector,
             adminAddress,
             REAL_JARON,
             adminAddress,
             7 days
         );
 
-        usdaMinterProxy = _deployProxy("USDaMinter", address(usdaMinter), init);
+        arcMinterProxy = _deployProxy("arcUSDMinter", address(arcMinter), init);
     }
 
     /**
@@ -193,10 +193,10 @@ contract DeployToReal is DeployUtility {
      *    - Computes the proxy address. If implementation of that proxy is NOT equal to the CustodianManager address computed,
      *      it will upgrade that proxy.
      */
-    function _deployCustodianManager(address usdaMinter) internal returns (address custodianManagerProxy) {
+    function _deployCustodianManager(address arcMinter) internal returns (address custodianManagerProxy) {
         bytes memory bytecode = abi.encodePacked(type(CustodianManager).creationCode);
         address custodianManagerAddress = vm.computeCreate2Address(
-            _SALT, keccak256(abi.encodePacked(bytecode, abi.encode(usdaMinter)))
+            _SALT, keccak256(abi.encodePacked(bytecode, abi.encode(arcMinter)))
         );
 
         CustodianManager custodianManager;
@@ -205,7 +205,7 @@ contract DeployToReal is DeployUtility {
             console.log("CustodianManager is already deployed to %s", custodianManagerAddress);
             custodianManager = CustodianManager(custodianManagerAddress);
         } else {
-            custodianManager = new CustodianManager{salt: _SALT}(usdaMinter);
+            custodianManager = new CustodianManager{salt: _SALT}(arcMinter);
             assert(custodianManagerAddress == address(custodianManager));
             console.log("CustodianManager deployed to %s", custodianManagerAddress);
         }
@@ -226,20 +226,20 @@ contract DeployToReal is DeployUtility {
      *    - If this address is not deployed, deploy new contract
      */
     function _deployPointsBoostingVault() internal returns (address pointsBoostingVaultAddress) {
-        bytes memory bytecode = abi.encodePacked(type(USDaPointsBoostVault).creationCode);
+        bytes memory bytecode = abi.encodePacked(type(arcUSDPointsBoostVault).creationCode);
         pointsBoostingVaultAddress = vm.computeCreate2Address(
-            _SALT, keccak256(abi.encodePacked(bytecode, abi.encode(adminAddress, address(usdaToken))))
+            _SALT, keccak256(abi.encodePacked(bytecode, abi.encode(adminAddress, address(arcUSDToken))))
         );
 
-        USDaPointsBoostVault usdaVault;
+        arcUSDPointsBoostVault arcUSDVault;
 
         if (_isDeployed(pointsBoostingVaultAddress)) {
-            console.log("USDaPointsBoostVault is already deployed to %s", pointsBoostingVaultAddress);
-            usdaVault = USDaPointsBoostVault(pointsBoostingVaultAddress);
+            console.log("arcUSDPointsBoostVault is already deployed to %s", pointsBoostingVaultAddress);
+            arcUSDVault = arcUSDPointsBoostVault(pointsBoostingVaultAddress);
         } else {
-            usdaVault = new USDaPointsBoostVault{salt: _SALT}(adminAddress, address(usdaToken));
-            assert(pointsBoostingVaultAddress == address(usdaVault));
-            console.log("USDaPointsBoostVault deployed to %s", pointsBoostingVaultAddress);
+            arcUSDVault = new arcUSDPointsBoostVault{salt: _SALT}(adminAddress, address(arcUSDToken));
+            assert(pointsBoostingVaultAddress == address(arcUSDVault));
+            console.log("arcUSDPointsBoostVault deployed to %s", pointsBoostingVaultAddress);
         }
     }
 }

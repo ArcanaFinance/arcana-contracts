@@ -5,9 +5,9 @@ import {console2} from "forge-std/Script.sol";
 import {DeployUtility} from "../DeployUtility.sol";
 
 // local imports
-import {USDa} from "../../src/USDa.sol";
-import {IUSDa} from "../../src/interfaces/IUSDa.sol";
-import {USDaMinter} from "../../src/USDaMinter.sol";
+import {arcUSD} from "../../src/arcUSD.sol";
+import {IarcUSD} from "../../src/interfaces/IarcUSD.sol";
+import {arcUSDMinter} from "../../src/arcUSDMinter.sol";
 
 // helpers
 import "../../test/utils/Constants.sol";
@@ -26,11 +26,11 @@ import "../../test/utils/Constants.sol";
 /**
  * @title UpgradeMinter
  * @author Chase Brown
- * @notice This script deploys a new implementation contract for USDaMinter and upgrades the current proxy.
+ * @notice This script deploys a new implementation contract for arcUSDMinter and upgrades the current proxy.
  */
 contract UpgradeMinter is DeployUtility {
-    USDaMinter public usdaMinter;
-    address public usdaToken;
+    arcUSDMinter public arcMinter;
+    address public arcUSDToken;
 
     uint256 public DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
     string public UNREAL_RPC_URL = vm.envString("UNREAL_RPC_URL");
@@ -39,8 +39,8 @@ contract UpgradeMinter is DeployUtility {
 
     function setUp() public {
         vm.createSelectFork(UNREAL_RPC_URL);
-        usdaMinter = USDaMinter(_loadDeploymentAddress("unreal", "USDaMinter"));
-        usdaToken = _loadDeploymentAddress("unreal", "USDa");
+        arcMinter = arcUSDMinter(_loadDeploymentAddress("unreal", "arcUSDMinter"));
+        arcUSDToken = _loadDeploymentAddress("unreal", "arcUSD");
     }
 
     // ~ Script ~
@@ -48,8 +48,8 @@ contract UpgradeMinter is DeployUtility {
     function run() public {
         vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
 
-        USDaMinter newUsdaMinter = new USDaMinter(usdaToken);
-        usdaMinter.upgradeToAndCall(address(newUsdaMinter), "");
+        arcUSDMinter newUsdaMinter = new arcUSDMinter(arcUSDToken);
+        arcMinter.upgradeToAndCall(address(newUsdaMinter), "");
 
         vm.stopBroadcast();
     }

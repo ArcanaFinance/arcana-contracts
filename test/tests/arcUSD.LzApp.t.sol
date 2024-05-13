@@ -9,12 +9,12 @@ import {stdStorage, StdStorage, Test} from "forge-std/Test.sol";
 import {SigUtils} from "../utils/SigUtils.sol";
 import {Vm} from "forge-std/Vm.sol";
 
-import {USDa} from "../../src/USDa.sol";
+import {arcUSD} from "../../src/arcUSD.sol";
 import {BaseSetup} from "../BaseSetup.sol";
 import {LZEndpointMock} from "../mock/LZEndpointMock.sol";
 
-contract USDaLzAppTest is Test, BaseSetup {
-    USDa internal _usdaToken;
+contract arcUSDLzAppTest is Test, BaseSetup {
+    arcUSD internal _arcUSDToken;
 
     // mock
     LZEndpointMock internal _lzEndpoint;
@@ -35,23 +35,23 @@ contract USDaLzAppTest is Test, BaseSetup {
 
         _lzEndpoint = new LZEndpointMock(uint16(block.chainid));
 
-        _usdaToken = new USDa(block.chainid, address(_lzEndpoint));
-        ERC1967Proxy _usdaTokenProxy = new ERC1967Proxy(
-            address(_usdaToken), abi.encodeWithSelector(USDa.initialize.selector, _owner, _rebaseManager)
+        _arcUSDToken = new arcUSD(block.chainid, address(_lzEndpoint));
+        ERC1967Proxy _arcUSDTokenProxy = new ERC1967Proxy(
+            address(_arcUSDToken), abi.encodeWithSelector(arcUSD.initialize.selector, _owner, _rebaseManager)
         );
-        _usdaToken = USDa(address(_usdaTokenProxy));
-        vm.label(address(_usdaToken), "USDa_Proxy");
+        _arcUSDToken = arcUSD(address(_arcUSDTokenProxy));
+        vm.label(address(_arcUSDToken), "arcUSD_Proxy");
 
         vm.prank(_owner);
-        _usdaToken.setMinter(_minter);
+        _arcUSDToken.setMinter(_minter);
     }
 
     function test_lzApp_CorrectInitialConfig() public {
-        assertEq(_usdaToken.owner(), _owner);
-        assertEq(_usdaToken.minter(), _minter);
-        assertEq(_usdaToken.rebaseManager(), _rebaseManager);
-        assertEq(address(_usdaToken.lzEndpoint()), address(_lzEndpoint));
-        assertEq(_usdaToken.isMainChain(), true);
+        assertEq(_arcUSDToken.owner(), _owner);
+        assertEq(_arcUSDToken.minter(), _minter);
+        assertEq(_arcUSDToken.rebaseManager(), _rebaseManager);
+        assertEq(address(_arcUSDToken.lzEndpoint()), address(_lzEndpoint));
+        assertEq(_arcUSDToken.isMainChain(), true);
     }
 
     function test_lzApp_setConfig_onlyOwner() public {
@@ -59,40 +59,40 @@ contract USDaLzAppTest is Test, BaseSetup {
 
         vm.prank(_bob);
         vm.expectRevert();
-        _usdaToken.setConfig(uint16(1), uint16(block.chainid), 1, newConfig);
+        _arcUSDToken.setConfig(uint16(1), uint16(block.chainid), 1, newConfig);
 
         vm.prank(_owner);
-        _usdaToken.setConfig(uint16(1), uint16(block.chainid), 1, newConfig);
+        _arcUSDToken.setConfig(uint16(1), uint16(block.chainid), 1, newConfig);
     }
 
     function test_lzApp_setSendVersion_onlyOwner() public {
         vm.prank(_bob);
         vm.expectRevert();
-        _usdaToken.setSendVersion(uint16(2));
+        _arcUSDToken.setSendVersion(uint16(2));
 
         vm.prank(_owner);
-        _usdaToken.setSendVersion(uint16(2));
+        _arcUSDToken.setSendVersion(uint16(2));
     }
 
     function test_lzApp_setReceiveVersion_onlyOwner() public {
         vm.prank(_bob);
         vm.expectRevert();
-        _usdaToken.setReceiveVersion(uint16(2));
+        _arcUSDToken.setReceiveVersion(uint16(2));
 
         vm.prank(_owner);
-        _usdaToken.setReceiveVersion(uint16(2));
+        _arcUSDToken.setReceiveVersion(uint16(2));
     }
 
     function test_lzApp_setTrustedRemoteAddress() public {
-        bytes memory remote = abi.encodePacked(address(2), address(_usdaToken));
+        bytes memory remote = abi.encodePacked(address(2), address(_arcUSDToken));
         uint16 remoteChainId = 1;
 
-        assertEq(_usdaToken.trustedRemoteLookup(remoteChainId), "");
+        assertEq(_arcUSDToken.trustedRemoteLookup(remoteChainId), "");
 
         vm.prank(_owner);
-        _usdaToken.setTrustedRemoteAddress(remoteChainId, abi.encodePacked(address(2)));
+        _arcUSDToken.setTrustedRemoteAddress(remoteChainId, abi.encodePacked(address(2)));
 
-        assertEq(_usdaToken.trustedRemoteLookup(remoteChainId), remote);
+        assertEq(_arcUSDToken.trustedRemoteLookup(remoteChainId), remote);
     }
 
     function test_lzApp_setTrustedRemoteAddress_onlyOwner() public {
@@ -100,9 +100,9 @@ contract USDaLzAppTest is Test, BaseSetup {
 
         vm.prank(_bob);
         vm.expectRevert();
-        _usdaToken.setTrustedRemoteAddress(remoteChainId, abi.encodePacked(address(2)));
+        _arcUSDToken.setTrustedRemoteAddress(remoteChainId, abi.encodePacked(address(2)));
 
         vm.prank(_owner);
-        _usdaToken.setTrustedRemoteAddress(remoteChainId, abi.encodePacked(address(2)));
+        _arcUSDToken.setTrustedRemoteAddress(remoteChainId, abi.encodePacked(address(2)));
     }
 }

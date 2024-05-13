@@ -8,9 +8,9 @@ import {DeployUtility} from "../DeployUtility.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 // local imports
-import {USDa} from "../../src/USDa.sol";
-import {IUSDa} from "../../src/interfaces/IUSDa.sol";
-import {USDaMinter} from "../../src/USDaMinter.sol";
+import {arcUSD} from "../../src/arcUSD.sol";
+import {IarcUSD} from "../../src/interfaces/IarcUSD.sol";
+import {arcUSDMinter} from "../../src/arcUSDMinter.sol";
 
 // helpers
 import "../../test/utils/Constants.sol";
@@ -29,11 +29,11 @@ import "../../test/utils/Constants.sol";
 /**
  * @title RequestTokens
  * @author Chase Brown
- * @notice This script deploys a new implementation contract for USDaMinter and upgrades the current proxy.
+ * @notice This script deploys a new implementation contract for arcUSDMinter and upgrades the current proxy.
  */
 contract RequestTokens is DeployUtility {
-    USDaMinter public usdaMinter;
-    USDa public usdaToken;
+    arcUSDMinter public arcMinter;
+    arcUSD public arcUSDToken;
 
     uint256 public DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
     string public UNREAL_RPC_URL = vm.envString("UNREAL_RPC_URL");
@@ -43,8 +43,8 @@ contract RequestTokens is DeployUtility {
 
     function setUp() public {
         vm.createSelectFork(UNREAL_RPC_URL);
-        usdaMinter = USDaMinter(_loadDeploymentAddress("unreal", "USDaMinter"));
-        usdaToken = USDa(_loadDeploymentAddress("unreal", "USDa"));
+        arcMinter = arcUSDMinter(_loadDeploymentAddress("unreal", "arcUSDMinter"));
+        arcUSDToken = arcUSD(_loadDeploymentAddress("unreal", "arcUSD"));
     }
 
     // ~ Script ~
@@ -52,12 +52,12 @@ contract RequestTokens is DeployUtility {
     function run() public {
         vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
 
-        uint256 amountIn = usdaToken.balanceOf(adminAddress); // TODO
+        uint256 amountIn = arcUSDToken.balanceOf(adminAddress); // TODO
 
-        //uint256 getQuote = usdaMinter.quoteRedeem(UNREAL_USTB, adminAddress, amountIn);
+        //uint256 getQuote = arcMinter.quoteRedeem(UNREAL_USTB, adminAddress, amountIn);
 
-        usdaToken.approve(address(usdaMinter), amountIn);
-        usdaMinter.requestTokens(UNREAL_USTB, amountIn);
+        arcUSDToken.approve(address(arcMinter), amountIn);
+        arcMinter.requestTokens(UNREAL_USTB, amountIn);
 
         vm.stopBroadcast();
     }

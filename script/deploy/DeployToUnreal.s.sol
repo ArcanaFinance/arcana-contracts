@@ -8,13 +8,13 @@ import {DeployUtility} from "../DeployUtility.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 // local imports
-import {USDa} from "../../src/USDa.sol";
-import {IUSDa} from "../../src/interfaces/IUSDa.sol";
-import {USDaMinter} from "../../src/USDaMinter.sol";
+import {arcUSD} from "../../src/arcUSD.sol";
+import {IarcUSD} from "../../src/interfaces/IarcUSD.sol";
+import {arcUSDMinter} from "../../src/arcUSDMinter.sol";
 import {CustodianManager} from "../../src/CustodianManager.sol";
-import {USDaTaxManager} from "../../src/USDaTaxManager.sol";
-import {USDaFeeCollector} from "../../src/USDaFeeCollector.sol";
-import {USDaPointsBoostVault} from "../../src/USDaPointsBoostingVault.sol";
+import {arcUSDTaxManager} from "../../src/arcUSDTaxManager.sol";
+import {arcUSDFeeCollector} from "../../src/arcUSDFeeCollector.sol";
+import {arcUSDPointsBoostVault} from "../../src/arcUSDPointsBoostingVault.sol";
 
 // helpers
 import "../../test/utils/Constants.sol";
@@ -33,7 +33,7 @@ import "../../test/utils/Constants.sol";
 /**
  * @title DeployToUnreal
  * @author Chase Brown
- * @notice This script deploys the USDa ecosystem to Unreal chain.
+ * @notice This script deploys the arcUSD ecosystem to Unreal chain.
  */
 contract DeployToUnreal is DeployUtility {
     // ~ Variables ~
@@ -66,38 +66,38 @@ contract DeployToUnreal is DeployUtility {
         ratios[0] = 1;
         ratios[1] = 1;
 
-        // Deploy USDa token
-        USDa usdaToken = new USDa(UNREAL_CHAINID, UNREAL_LZ_ENDPOINT_V1);
-        ERC1967Proxy usdaTokenProxy = new ERC1967Proxy(
-            address(usdaToken),
-            abi.encodeWithSelector(USDa.initialize.selector,
+        // Deploy arcUSD token
+        arcUSD arcUSDToken = new arcUSD(UNREAL_CHAINID, UNREAL_LZ_ENDPOINT_V1);
+        ERC1967Proxy arcUSDTokenProxy = new ERC1967Proxy(
+            address(arcUSDToken),
+            abi.encodeWithSelector(arcUSD.initialize.selector,
                 adminAddress,
                 adminAddress // TODO: RebaseManager
             )
         );
-        usdaToken = USDa(address(usdaTokenProxy));
+        arcUSDToken = arcUSD(address(arcUSDTokenProxy));
 
         // Deploy FeeCollector
-        USDaFeeCollector feeCollector = new USDaFeeCollector(adminAddress, address(usdaToken), distributors, ratios);
+        arcUSDFeeCollector feeCollector = new arcUSDFeeCollector(adminAddress, address(arcUSDToken), distributors, ratios);
 
         // Deploy taxManager
-        USDaTaxManager taxManager = new USDaTaxManager(adminAddress, address(usdaToken), address(feeCollector));
+        arcUSDTaxManager taxManager = new arcUSDTaxManager(adminAddress, address(arcUSDToken), address(feeCollector));
 
-        // Deploy USDaMinter contract.
-        USDaMinter usdaMinter = new USDaMinter(address(usdaToken));
+        // Deploy arcUSDMinter contract.
+        arcUSDMinter arcMinter = new arcUSDMinter(address(arcUSDToken));
         ERC1967Proxy arcanaMintingProxy = new ERC1967Proxy(
-            address(usdaMinter),
-            abi.encodeWithSelector(USDaMinter.initialize.selector,
+            address(arcMinter),
+            abi.encodeWithSelector(arcUSDMinter.initialize.selector,
                 adminAddress,
                 UNREAL_JARON,
                 adminAddress, // TODO: Whitelister -> Gelato task?
                 5 days
             )
         );
-        usdaMinter = USDaMinter(payable(address(arcanaMintingProxy)));
+        arcMinter = arcUSDMinter(payable(address(arcanaMintingProxy)));
 
         // Deploy CustodianManager
-        CustodianManager custodian = new CustodianManager(address(usdaMinter));
+        CustodianManager custodian = new CustodianManager(address(arcMinter));
         ERC1967Proxy custodianProxy = new ERC1967Proxy(
             address(custodian),
             abi.encodeWithSelector(CustodianManager.initialize.selector,
@@ -107,31 +107,31 @@ contract DeployToUnreal is DeployUtility {
         );
         custodian = CustodianManager(address(custodianProxy));
 
-        // Deploy USDa Vault
-        USDaPointsBoostVault usdaVault = new USDaPointsBoostVault(adminAddress, address(usdaToken));
+        // Deploy arcUSD Vault
+        arcUSDPointsBoostVault arcUSDVault = new arcUSDPointsBoostVault(adminAddress, address(arcUSDToken));
 
         // ------
         // Config
         // ------
 
-        usdaMinter.updateCustodian(address(custodian));
+        arcMinter.updateCustodian(address(custodian));
 
-        usdaMinter.addSupportedAsset(UNREAL_USTB, UNREAL_USTB_ORACLE);
+        arcMinter.addSupportedAsset(UNREAL_USTB, UNREAL_USTB_ORACLE);
 
-        usdaToken.setMinter(address(usdaMinter));
+        arcUSDToken.setMinter(address(arcMinter));
 
-        usdaToken.setTaxManager(address(taxManager));
+        arcUSDToken.setTaxManager(address(taxManager));
 
         // --------------
         // Save Addresses
         // --------------
 
-        _saveDeploymentAddress("unreal", "USDa", address(usdaToken));
-        _saveDeploymentAddress("unreal", "USDaMinter", address(usdaMinter));
+        _saveDeploymentAddress("unreal", "arcUSD", address(arcUSDToken));
+        _saveDeploymentAddress("unreal", "arcUSDMinter", address(arcMinter));
         _saveDeploymentAddress("unreal", "CustodianManager", address(custodian));
-        _saveDeploymentAddress("unreal", "USDaTaxManager", address(taxManager));
-        _saveDeploymentAddress("unreal", "USDaFeeCollector", address(feeCollector));
-        _saveDeploymentAddress("unreal", "USDaPointsBoostVault", address(usdaVault));
+        _saveDeploymentAddress("unreal", "arcUSDTaxManager", address(taxManager));
+        _saveDeploymentAddress("unreal", "arcUSDFeeCollector", address(feeCollector));
+        _saveDeploymentAddress("unreal", "arcUSDPointsBoostVault", address(arcUSDVault));
 
         vm.stopBroadcast();
     }

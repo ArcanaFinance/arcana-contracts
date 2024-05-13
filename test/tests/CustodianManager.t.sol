@@ -26,11 +26,11 @@ contract CustodianManagerTest is BaseSetup {
         super.setUp();
 
         vm.startPrank(owner);
-        usdaMinter.removeSupportedAsset(address(USTB));
-        usdaMinter.removeSupportedAsset(address(USDCToken));
-        usdaMinter.removeSupportedAsset(address(USDTToken));
+        arcMinter.removeSupportedAsset(address(USTB));
+        arcMinter.removeSupportedAsset(address(USDCToken));
+        arcMinter.removeSupportedAsset(address(USDTToken));
 
-        usdaMinter.addSupportedAsset(address(unrealUSTB), address(USTBOracle));
+        arcMinter.addSupportedAsset(address(unrealUSTB), address(USTBOracle));
         vm.stopPrank();
     }
 
@@ -39,7 +39,7 @@ contract CustodianManagerTest is BaseSetup {
         // deal doesn't work with unrealUSTB since the storage layout is different
         if (token == address(unrealUSTB)) {
             // if address is opted out, update normal balance (basket is opted out of rebasing)
-            if (give == address(usdaMinter)) {
+            if (give == address(arcMinter)) {
                 bytes32 USTBStorageLocation = 0x52c63247e1f47db19d5ce0460030c497f067ca4cebf71ba98eeadabe20bace00;
                 uint256 mapSlot = 0;
                 bytes32 slot = keccak256(abi.encode(give, uint256(USTBStorageLocation) + mapSlot));
@@ -60,13 +60,13 @@ contract CustodianManagerTest is BaseSetup {
     }
 
     function test_custodian_init_state() public {
-        assertEq(address(custodian.usdaMinter()), address(usdaMinter));
+        assertEq(address(custodian.arcMinter()), address(arcMinter));
         assertEq(custodian.custodian(), mainCustodian);
         assertEq(custodian.owner(), owner);
     }
 
     function test_custodian_isUpgradeable() public {
-        CustodianManager newImplementation = new CustodianManager(address(usdaMinter));
+        CustodianManager newImplementation = new CustodianManager(address(arcMinter));
 
         bytes32 implementationSlot =
             vm.load(address(custodian), 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc);
@@ -81,7 +81,7 @@ contract CustodianManagerTest is BaseSetup {
     }
 
     function test_custodian_isUpgradeable_onlyOwner() public {
-        CustodianManager newImplementation = new CustodianManager(address(usdaMinter));
+        CustodianManager newImplementation = new CustodianManager(address(arcMinter));
 
         vm.prank(bob);
         vm.expectRevert();
@@ -96,23 +96,23 @@ contract CustodianManagerTest is BaseSetup {
 
         uint256 amount = 1_000 * 1e18;
 
-        vm.prank(address(usdaMinter));
-        usdaToken.mint(address(usdaMinter), amount);
+        vm.prank(address(arcMinter));
+        arcUSDToken.mint(address(arcMinter), amount);
 
         // ~ Pre-state check ~
 
-        assertEq(usdaToken.balanceOf(address(mainCustodian)), 0);
-        assertEq(usdaToken.balanceOf(address(usdaMinter)), amount);
+        assertEq(arcUSDToken.balanceOf(address(mainCustodian)), 0);
+        assertEq(arcUSDToken.balanceOf(address(arcMinter)), amount);
 
         // ~ Execute withdrawFunds ~
 
         vm.prank(owner);
-        custodian.withdrawFunds(address(usdaToken), amount);
+        custodian.withdrawFunds(address(arcUSDToken), amount);
 
         // ~ Post-state check ~
 
-        assertEq(usdaToken.balanceOf(address(mainCustodian)), amount);
-        assertEq(usdaToken.balanceOf(address(usdaMinter)), 0);
+        assertEq(arcUSDToken.balanceOf(address(mainCustodian)), amount);
+        assertEq(arcUSDToken.balanceOf(address(arcMinter)), 0);
     }
 
     function test_custodian_withdrawFunds_requiredNotZero() public {
@@ -121,21 +121,21 @@ contract CustodianManagerTest is BaseSetup {
         uint256 amount = 1_000 * 1e18;
 
         // bob goes to mint then request tokens
-        vm.prank(address(usdaMinter));
-        usdaToken.mint(bob, amount);
+        vm.prank(address(arcMinter));
+        arcUSDToken.mint(bob, amount);
         vm.startPrank(bob);
-        usdaToken.approve(address(usdaMinter), amount);
-        usdaMinter.requestTokens(address(unrealUSTB), amount);
+        arcUSDToken.approve(address(arcMinter), amount);
+        arcMinter.requestTokens(address(unrealUSTB), amount);
         vm.stopPrank();
-        assertEq(usdaMinter.requiredTokens(address(unrealUSTB)), amount);
+        assertEq(arcMinter.requiredTokens(address(unrealUSTB)), amount);
 
-        _deal(address(unrealUSTB), address(usdaMinter), usdaMinter.requiredTokens(address(unrealUSTB)) + amount);
-        //uint256 preBal = unrealUSTB.balanceOf(address(usdaMinter));
+        _deal(address(unrealUSTB), address(arcMinter), arcMinter.requiredTokens(address(unrealUSTB)) + amount);
+        //uint256 preBal = unrealUSTB.balanceOf(address(arcMinter));
 
         // ~ Pre-state check ~
 
         assertApproxEqAbs(unrealUSTB.balanceOf(address(mainCustodian)), 0, 1);
-        assertApproxEqAbs(unrealUSTB.balanceOf(address(usdaMinter)), amount * 2, 1);
+        assertApproxEqAbs(unrealUSTB.balanceOf(address(arcMinter)), amount * 2, 1);
         assertApproxEqAbs(custodian.withdrawable(address(unrealUSTB)), amount, 1);
 
         // ~ Execute withdrawFunds ~
@@ -146,7 +146,7 @@ contract CustodianManagerTest is BaseSetup {
         // ~ Post-state check ~
 
         assertApproxEqAbs(unrealUSTB.balanceOf(address(mainCustodian)), amount, 1);
-        assertApproxEqAbs(unrealUSTB.balanceOf(address(usdaMinter)), amount, 1);
+        assertApproxEqAbs(unrealUSTB.balanceOf(address(arcMinter)), amount, 1);
         assertApproxEqAbs(custodian.withdrawable(address(unrealUSTB)), 0, 1);
     }
 
@@ -154,13 +154,13 @@ contract CustodianManagerTest is BaseSetup {
         // ~ Config ~
 
         uint256 amount = 1_000 * 1e18;
-        _deal(address(unrealUSTB), address(usdaMinter), amount);
-        uint256 preBal = unrealUSTB.balanceOf(address(usdaMinter));
+        _deal(address(unrealUSTB), address(arcMinter), amount);
+        uint256 preBal = unrealUSTB.balanceOf(address(arcMinter));
 
         // ~ Pre-state check ~
 
         assertEq(unrealUSTB.balanceOf(address(mainCustodian)), 0);
-        assertEq(unrealUSTB.balanceOf(address(usdaMinter)), preBal);
+        assertEq(unrealUSTB.balanceOf(address(arcMinter)), preBal);
 
         // ~ Execute withdrawFunds ~
 
@@ -170,24 +170,24 @@ contract CustodianManagerTest is BaseSetup {
         // ~ Post-state check ~
 
         assertApproxEqAbs(unrealUSTB.balanceOf(address(mainCustodian)), preBal, 1);
-        assertApproxEqAbs(unrealUSTB.balanceOf(address(usdaMinter)), 0, 1);
+        assertApproxEqAbs(unrealUSTB.balanceOf(address(arcMinter)), 0, 1);
     }
 
     function test_custodian_withdrawFunds_restrictions() public {
         // ~ Config ~
 
         uint256 amount = 1_000 * 1e18;
-        vm.prank(address(usdaMinter));
-        usdaToken.mint(address(custodian), amount);
+        vm.prank(address(arcMinter));
+        arcUSDToken.mint(address(custodian), amount);
 
         // only owner can call withdrawFunds
         vm.prank(bob);
         vm.expectRevert();
-        custodian.withdrawFunds(address(usdaToken), amount);
+        custodian.withdrawFunds(address(arcUSDToken), amount);
 
         // can't withdraw more than what is in contract's balance
         vm.prank(owner);
         vm.expectRevert();
-        custodian.withdrawFunds(address(usdaToken), amount + 1);
+        custodian.withdrawFunds(address(arcUSDToken), amount + 1);
     }
 }
