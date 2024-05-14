@@ -217,4 +217,17 @@ contract arcUSDTest is Test, BaseSetup {
         _arcUSDToken.setMinter(_newMinter);
         assertEq(_arcUSDToken.minter(), _minter);
     }
+
+    function test_taxManagerCanMintPastLimit() public {
+        vm.startPrank(owner);
+        _arcUSDToken.setSupplyLimit(_arcUSDToken.totalSupply());
+        vm.stopPrank();
+
+        vm.prank(_minter);
+        vm.expectRevert();
+        _arcUSDToken.mint(_newMinter, 100);
+
+        vm.prank(address(_taxManager));
+        _arcUSDToken.mint(_newMinter, 100);
+    }
 }

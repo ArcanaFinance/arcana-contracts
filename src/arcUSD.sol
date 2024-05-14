@@ -96,7 +96,6 @@ contract arcUSD is LayerZeroRebaseTokenUpgradeable, UUPSUpgradeable, IarcUSDDefi
      * @notice Allows owner to set a ceiling on arcUSD total supply to throttle minting.
      */
     function setSupplyLimit(uint256 limit) external onlyOwner {
-        require(limit >= totalSupply(), "Cannot set limit less than totalSupply");
         emit SupplyLimitUpdated(limit);
         supplyLimit = limit;
     }
@@ -168,7 +167,9 @@ contract arcUSD is LayerZeroRebaseTokenUpgradeable, UUPSUpgradeable, IarcUSDDefi
 
     function _update(address from, address to, uint256 amount) internal override {
         super._update(from, to, amount);
-        if (totalSupply() >= supplyLimit) revert SupplyLimitExceeded();
+        if (from == address(0) && msg.sender != taxManager) {
+            if (totalSupply() > supplyLimit) revert SupplyLimitExceeded();
+        }
     }
 
     /**
