@@ -107,7 +107,7 @@ contract CustodianManagerTest is BaseSetup {
         // ~ Execute withdrawFunds ~
 
         vm.prank(owner);
-        custodian.withdrawFunds(address(arcUSDToken), amount);
+        custodian.withdrawFunds(address(arcUSDToken), 0);
 
         // ~ Post-state check ~
 
@@ -115,7 +115,7 @@ contract CustodianManagerTest is BaseSetup {
         assertEq(arcUSDToken.balanceOf(address(arcMinter)), 0);
     }
 
-    function test_custodian_withdrawFunds_requiredNotZero() public {
+    function test_custodian_withdrawFunds_minAmountOut() public {
         // ~ Config ~
 
         uint256 amount = 1_000 * 1e18;
@@ -139,6 +139,11 @@ contract CustodianManagerTest is BaseSetup {
         assertApproxEqAbs(custodian.withdrawable(address(unrealUSTB)), amount, 1);
 
         // ~ Execute withdrawFunds ~
+
+        // force revert
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(CustodianManager.MinAmountOutExceedsWithdrawable.selector, amount+1, amount));
+        custodian.withdrawFunds(address(unrealUSTB), amount+1);
 
         vm.prank(owner);
         custodian.withdrawFunds(address(unrealUSTB), amount);

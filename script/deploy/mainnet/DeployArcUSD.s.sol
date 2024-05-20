@@ -22,8 +22,7 @@ import "../../../test/utils/Constants.sol";
 /**
     @dev To run:
     forge script script/deploy/mainnet/DeployArcUSD.s.sol:DeployArcUSD --broadcast --legacy \
-    --gas-estimate-multiplier 800 \
-    --verify --verifier blockscout --verifier-url https://explorer.re.al//api -vvvv
+    --gas-estimate-multiplier 600 -vvvv
 
     @dev To verify manually (RE.AL):
     forge verify-contract <CONTRACT_ADDRESS> --chain-id 111188 --watch \

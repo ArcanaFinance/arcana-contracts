@@ -35,8 +35,8 @@ contract CustodianManager is OwnableUpgradeable, UUPSUpgradeable {
     event CustodianUpdated(address indexed custodian);
     event TaskAddressUpdated(address indexed task);
 
-    error InsufficientBalance(uint256 expected, uint256 actual);
     error NoFundsWithdrawable();
+    error MinAmountOutExceedsWithdrawable(uint256 minExpected, uint256 withdrawable);
     error NotAuthorized(address caller);
 
     /// @dev Used to sanitize a caller address to ensure msg.sender is equal to task address or owner.
@@ -70,21 +70,20 @@ contract CustodianManager is OwnableUpgradeable, UUPSUpgradeable {
     }
 
     /**
-     * @notice This method will withdraw assets from the arcMinter contract and transfer it to the custodian address.
+     * @notice This method will withdraw all withdrawable assets from the arcMinter contract and transfer it to the custodian address.
      * @param asset ERC-20 asset being withdrawn from the arcMinter.
-     * @param amount Amount of asset to withdraw. Must be greater than 0 but less than or equal to withdrawable().
+     * @param minAmountOut Minimum amount of asset to withdraw. Must be less than withdrawable.
      * @custom:error NotAuthorized Thrown if caller is not equal to ask address or owner.
-     * @custom:error NoFundsWithdrawable Thrown if there are no funds to be withdrawn or amount exceeds withdrawable.
-     * @custom:error InsufficientBalance Thrown if the amount being withdrawn is greater than withdrawable.
+     * @custom:error MinAmountOutExceedsWithdrawable Thrown if minAmountOut is greater than withdrawable.
      * @custom:event FundsSentToCustodian Amount of asset transferred to what custodian.
      */
-    function withdrawFunds(address asset, uint256 amount) external onlyTask {
+    function withdrawFunds(address asset, uint256 minAmountOut) external onlyTask {
         uint256 amountWithdrawable = withdrawable(asset);
         if (amountWithdrawable == 0) revert NoFundsWithdrawable();
-        if (amount > amountWithdrawable) revert InsufficientBalance(amount, amountWithdrawable);
+        if (minAmountOut > amountWithdrawable) revert MinAmountOutExceedsWithdrawable(minAmountOut, amountWithdrawable);
 
         // withdraw from arcUSDMinter
-        uint256 received = _withdrawAssets(asset, amount);
+        uint256 received = _withdrawAssets(asset, amountWithdrawable);
         // transfer to custodian
         IERC20(asset).safeTransfer(custodian, received);  
 
