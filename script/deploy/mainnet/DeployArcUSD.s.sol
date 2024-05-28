@@ -28,7 +28,7 @@ import "../../../test/utils/Constants.sol";
     forge verify-contract <CONTRACT_ADDRESS> --chain-id 111188 --watch \
     src/arcUSD.sol:arcUSD --verifier blockscout --verifier-url https://explorer.re.al//api
 
-    @dev To verify manually (Base, Optimism, Polygon):
+    @dev To verify manually (Base, Optimism, Polygon, BSC):
     export ETHERSCAN_API_KEY="<API_KEY>"
     forge verify-contract <CONTRACT_ADDRESS> --chain-id <CHAIN_ID> --watch src/arcUSD.sol:arcUSD \
     --verifier etherscan --constructor-args $(cast abi-encode "constructor(uint256, address)" 111188 <LOCAL_LZ_ADDRESS>)
@@ -61,13 +61,39 @@ contract DeployArcUSD is DeployUtility {
         _setup("arcUSD.deployment");
 
         allChains.push(NetworkData(
-            {chainName: "re.al", rpc_url: vm.envString("REAL_RPC_URL"), lz_endpoint: REAL_LZ_ENDPOINT_V1, chainId: REAL_LZ_CHAIN_ID_V1, tokenAddress: address(0)}
+            {
+                chainName: "re.al", 
+                rpc_url: vm.envString("REAL_RPC_URL"), 
+                lz_endpoint: REAL_LZ_ENDPOINT_V1, 
+                chainId: REAL_LZ_CHAIN_ID_V1, 
+                tokenAddress: _loadDeploymentAddress("re.al", "arcUSD")
+            }
         ));
         allChains.push(NetworkData(
-            {chainName: "optimism", rpc_url: vm.envString("OPTIMISM_RPC_URL"), lz_endpoint: OPTIMISM_LZ_ENDPOINT_V1, chainId: OPTIMISM_LZ_CHAIN_ID_V1, tokenAddress: address(0)}
+            {
+                chainName: "optimism", 
+                rpc_url: vm.envString("OPTIMISM_RPC_URL"), 
+                lz_endpoint: OPTIMISM_LZ_ENDPOINT_V1, 
+                chainId: OPTIMISM_LZ_CHAIN_ID_V1, 
+                tokenAddress: _loadDeploymentAddress("optimism", "arcUSD")
+            }
         ));
         allChains.push(NetworkData(
-            {chainName: "base", rpc_url: vm.envString("BASE_RPC_URL"), lz_endpoint: BASE_LZ_ENDPOINT_V1, chainId: BASE_LZ_CHAIN_ID_V1, tokenAddress: address(0)}
+            {
+                chainName: "base", 
+                rpc_url: vm.envString("BASE_RPC_URL"), 
+                lz_endpoint: BASE_LZ_ENDPOINT_V1, 
+                chainId: BASE_LZ_CHAIN_ID_V1, 
+                tokenAddress: _loadDeploymentAddress("base", "arcUSD")}
+        ));
+        allChains.push(NetworkData(
+            {
+                chainName: "bsc", 
+                rpc_url: vm.envString("BSC_RPC_URL"), 
+                lz_endpoint: BSC_LZ_ENDPOINT_V1, 
+                chainId: BSC_LZ_CHAIN_ID_V1, 
+                tokenAddress: address(0)
+            }
         ));
     }
 

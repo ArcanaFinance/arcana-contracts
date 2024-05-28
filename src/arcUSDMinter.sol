@@ -78,6 +78,7 @@ contract arcUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
         address whitelister;
         uint48 claimDelay;
         uint8 activeAssetsLength;
+        uint16 tax;
     }
 
     IarcUSD public immutable arcUSD;
@@ -104,6 +105,7 @@ contract arcUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
     event AdminUpdated(address indexed admin);
     event WhitelisterUpdated(address indexed whitelister);
     event WhitelistStatusUpdated(address indexed whitelister, bool isWhitelisted);
+    event TaxUpdated(uint16 newTax);
     event CustodyTransfer(address indexed custodian, address indexed asset, uint256 amount);
     event Mint(address indexed user, address indexed asset, uint256 amount, uint256 received);
     event RebaseDisabled(address indexed asset);
@@ -487,6 +489,21 @@ contract arcUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
     }
 
     /**
+     * @notice Updates the tax taken upon mints and redemptions.
+     * @dev This function allows the contract owner to assign a tax to mints and redemptions.
+     * It uses 1 basis point meaning a 1% tax would be 10 and a .1% tax is 1.
+     * @param newTax Tax we wish to assign.
+     * @custom:error ValueUnchanged The desired tax is already set.
+     * @custom:event TaxUpdated Contains the new tax assigned.
+     */
+    function updateTax(uint16 newTax) external onlyOwner {
+        arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
+        uint256($.tax).requireDifferentUint256(uint256(newTax));
+        $.tax = newTax;
+        emit TaxUpdated(newTax);
+    }
+
+    /**
      * @notice Mints arcUSD tokens in exchange for a specified amount of a supported asset, which is directly transferred
      * to the custodian.
      * @dev This function facilitates a user to deposit a supported asset directly to the custodian and receive arcUSD
@@ -511,22 +528,22 @@ contract arcUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
         returns (uint256 amountOut)
     {
         arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
-        address user = msg.sender;
 
-        amountIn = _pullAssets(user, asset, amountIn);
+        amountIn = _pullAssets(msg.sender, asset, amountIn);
+        uint256 amountAfterTax = amountIn - (amountIn * $.tax / 1000);
 
-        uint256 balanceBefore = arcUSD.balanceOf(user);
-        arcUSD.mint(user, IOracle($.assetInfos[asset].oracle).valueOf(amountIn, $.maxAge, Math.Rounding.Floor));
+        uint256 balanceBefore = arcUSD.balanceOf(msg.sender);
+        arcUSD.mint(msg.sender, IOracle($.assetInfos[asset].oracle).valueOf(amountAfterTax, $.maxAge, Math.Rounding.Floor));
 
         unchecked {
-            amountOut = arcUSD.balanceOf(user) - balanceBefore;
+            amountOut = arcUSD.balanceOf(msg.sender) - balanceBefore;
         }
 
         if (amountOut < minAmountOut) {
             revert InsufficientOutputAmount(minAmountOut, amountOut);
         }
 
-        emit Mint(user, asset, amountIn, amountOut);
+        emit Mint(msg.sender, asset, amountIn, amountOut);
     }
 
     /**
@@ -543,20 +560,20 @@ contract arcUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
      */
     function requestTokens(address asset, uint256 amount) external nonReentrant validAsset(asset, false) onlyWhitelisted {
         arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
-        address user = msg.sender;
-        arcUSD.burnFrom(user, amount);
+        arcUSD.burnFrom(msg.sender, amount);
         uint256 amountAsset = IOracle($.assetInfos[asset].oracle).amountOf(amount, $.maxAge, Math.Rounding.Floor);
+        amountAsset = amountAsset - (amountAsset * $.tax / 1000);
         $.pendingClaims[asset] += amountAsset;
         uint48 claimableAfter = clock() + $.claimDelay;
-        RedemptionRequest[] storage userRequests = $.redemptionRequests[user];
-        uint256[] storage userRequestsByAsset = $.redemptionRequestsByAsset[user][asset];
+        RedemptionRequest[] storage userRequests = $.redemptionRequests[msg.sender];
+        uint256[] storage userRequestsByAsset = $.redemptionRequestsByAsset[msg.sender][asset];
         userRequests.push(RedemptionRequest({asset: asset, amount: amountAsset, claimableAfter: claimableAfter, claimed: 0}));
         uint256 index;
         unchecked {
             index = (userRequests.length - 1).toUint32();
         }
         userRequestsByAsset.push(index);
-        emit TokensRequested(user, asset, index, amount, amountAsset, claimableAfter);
+        emit TokensRequested(msg.sender, asset, index, amount, amountAsset, claimableAfter);
     }
 
     /**
@@ -672,6 +689,13 @@ contract arcUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
      */
     function whitelister() external view returns (address) {
         return _getarcUSDMinterStorage().whitelister;
+    }
+
+    /**
+     * @notice Returns the mint/redemption tax stored in this contract.
+     */
+    function tax() external view returns (uint16) {
+        return _getarcUSDMinterStorage().tax;
     }
 
     /**
@@ -886,7 +910,8 @@ contract arcUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
                 }
             }
         }
-        assets = IOracle($.assetInfos[asset].oracle).valueOf(amountIn, $.maxAge, Math.Rounding.Floor);
+        uint256 amountAfterTax = amountIn - (amountIn * $.tax / 1000);
+        assets = IOracle($.assetInfos[asset].oracle).valueOf(amountAfterTax, $.maxAge, Math.Rounding.Floor);
     }
 
     /**
@@ -915,7 +940,8 @@ contract arcUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
                 amountIn = RebaseTokenMath.toTokens(arcUSDShares, rebaseIndex);
             }
         }
-        collateral = IOracle($.assetInfos[asset].oracle).amountOf(amountIn, $.maxAge, Math.Rounding.Floor);
+        uint256 amountOut = IOracle($.assetInfos[asset].oracle).amountOf(amountIn, $.maxAge, Math.Rounding.Floor);
+        collateral = amountOut - (amountOut * $.tax / 1000);
     }
 
     /**

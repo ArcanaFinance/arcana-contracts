@@ -188,9 +188,32 @@ contract arcUSDMinterCoreTest is BaseSetup, CommonErrors {
         assertEq(arcUSDToken.balanceOf(bob), amount);
     }
 
+    function test_arcMinter_mint_tax() public {
+        vm.prank(owner);
+        arcMinter.updateTax(2); // .2% tax
+
+        uint256 amount = 10 ether;
+        deal(address(USTB), bob, amount);
+        
+        uint256 amountAfterTax = amount - (amount * arcMinter.tax() / 1000);
+        assertLt(amountAfterTax, amount);
+
+        // taker
+        vm.startPrank(bob);
+        USTB.approve(address(arcMinter), amount);
+        arcMinter.mint(address(USTB), amount, amountAfterTax);
+        vm.stopPrank();
+
+        assertEq(USTB.balanceOf(bob), 0);
+        assertEq(USTB.balanceOf(address(arcMinter)), amount);
+        assertEq(arcUSDToken.balanceOf(bob), amountAfterTax);
+    }
+
     function test_arcMinter_mint_fuzzing(uint256 amount) public {
         vm.assume(amount > 0 && amount < _maxMintPerBlock);
         deal(address(USTB), bob, amount);
+
+        assertEq(amount, arcMinter.quoteMint(address(USTB), bob, amount));
 
         // taker
         vm.startPrank(bob);
@@ -201,6 +224,29 @@ contract arcUSDMinterCoreTest is BaseSetup, CommonErrors {
         assertEq(USTB.balanceOf(bob), 0);
         assertEq(USTB.balanceOf(address(arcMinter)), amount);
         assertEq(arcUSDToken.balanceOf(bob), amount);
+    }
+
+    function test_arcMinter_mint_tax_fuzzing(uint256 amount) public {
+        vm.assume(amount > 1000 && amount < _maxMintPerBlock);
+        deal(address(USTB), bob, amount);
+
+        vm.prank(owner);
+        arcMinter.updateTax(2); // .2% tax
+        
+        uint256 amountAfterTax = amount - (amount * arcMinter.tax() / 1000);
+
+        assertLt(amountAfterTax, amount);
+        assertEq(amountAfterTax, arcMinter.quoteMint(address(USTB), bob, amount));
+
+        // taker
+        vm.startPrank(bob);
+        USTB.approve(address(arcMinter), amount);
+        arcMinter.mint(address(USTB), amount, amountAfterTax);
+        vm.stopPrank();
+
+        assertEq(USTB.balanceOf(bob), 0);
+        assertEq(USTB.balanceOf(address(arcMinter)), amount);
+        assertEq(arcUSDToken.balanceOf(bob), amountAfterTax);
     }
 
     function test_arcMinter_requestTokens_noFuzz() public {
@@ -267,6 +313,79 @@ contract arcUSDMinterCoreTest is BaseSetup, CommonErrors {
 
         assertEq(requested, amount);
         assertEq(claimable, amount);
+    }
+
+    function test_arcMinter_requestTokens_tax_noFuzz() public {
+        // ~ config ~
+
+        uint256 amount = 10 ether;
+
+        vm.prank(address(arcMinter));
+        arcUSDToken.mint(alice, amount);
+        deal(address(USTB), address(arcMinter), amount);
+
+        // set tax
+        vm.prank(owner);
+        arcMinter.updateTax(2); // .2% tax
+
+        uint256 amountAfterTax = amount - (amount * arcMinter.tax() / 1000);
+
+        assertLt(amountAfterTax, amount);
+        assertEq(arcMinter.quoteRedeem(address(USTB), alice, amount), amountAfterTax);
+
+        // ~ Pre-state check ~
+
+        assertEq(arcUSDToken.balanceOf(alice), amount);
+        assertEq(USTB.balanceOf(alice), 0);
+        assertEq(USTB.balanceOf(address(arcMinter)), amount);
+
+        arcUSDMinter.RedemptionRequest[] memory requests = arcMinter.getRedemptionRequests(alice, address(USTB), 0, 10);
+        assertEq(requests.length, 0);
+
+        // ~ Alice executes requestTokens ~
+
+        vm.startPrank(alice);
+        arcUSDToken.approve(address(arcMinter), amount);
+        arcMinter.requestTokens(address(USTB), amount);
+        vm.stopPrank();
+
+        // ~ Post-state check ~
+
+        assertEq(arcUSDToken.balanceOf(alice), 0);
+        assertEq(USTB.balanceOf(alice), 0);
+        assertEq(USTB.balanceOf(address(arcMinter)), amount);
+
+        requests = arcMinter.getRedemptionRequests(alice, address(USTB), 0, 10);
+        assertEq(requests.length, 1);
+        assertEq(requests[0].amount, amountAfterTax);
+        assertEq(requests[0].claimableAfter, block.timestamp + 5 days);
+        assertEq(requests[0].claimed, 0);
+
+        uint256 requested = arcMinter.getPendingClaims(address(USTB));
+        uint256 claimable = arcMinter.claimableTokens(alice, address(USTB));
+
+        assertEq(requested, amountAfterTax);
+        assertEq(claimable, 0);
+
+        // ~ Warp to claimDelay-1 ~
+
+        vm.warp(block.timestamp + arcMinter.claimDelay() - 1);
+
+        requested = arcMinter.getPendingClaims(address(USTB));
+        claimable = arcMinter.claimableTokens(alice, address(USTB));
+
+        assertEq(requested, amountAfterTax);
+        assertEq(claimable, 0);
+
+        // ~ Warp to post-claimDelay and query claimable ~
+
+        vm.warp(block.timestamp + arcMinter.claimDelay());
+
+        requested = arcMinter.getPendingClaims(address(USTB));
+        claimable = arcMinter.claimableTokens(alice, address(USTB));
+
+        assertEq(requested, amountAfterTax);
+        assertEq(claimable, amountAfterTax);
     }
 
     function test_arcMinter_requestTokens_then_extendClaimTimestamp() public {
@@ -404,6 +523,79 @@ contract arcUSDMinterCoreTest is BaseSetup, CommonErrors {
 
         assertEq(requested, amount);
         assertEq(claimable, amount);
+    }
+
+    function test_arcMinter_requestTokens_tax_fuzzing(uint256 amount) public {
+        vm.assume(amount > 1000 && amount < _maxMintPerBlock);
+
+        // ~ config ~
+
+        vm.prank(address(arcMinter));
+        arcUSDToken.mint(alice, amount);
+        deal(address(USTB), address(arcMinter), amount);
+
+        // set tax
+        vm.prank(owner);
+        arcMinter.updateTax(2); // .2% tax
+
+        uint256 amountAfterTax = amount - (amount * arcMinter.tax() / 1000);
+
+        assertLt(amountAfterTax, amount);
+        assertEq(arcMinter.quoteRedeem(address(USTB), alice, amount), amountAfterTax);
+
+        // ~ Pre-state check ~
+
+        assertEq(arcUSDToken.balanceOf(alice), amount);
+        assertEq(USTB.balanceOf(alice), 0);
+        assertEq(USTB.balanceOf(address(arcMinter)), amount);
+
+        arcUSDMinter.RedemptionRequest[] memory requests = arcMinter.getRedemptionRequests(alice, address(USTB), 0, 10);
+        assertEq(requests.length, 0);
+
+        // ~ Alice executes requestTokens ~
+
+        vm.startPrank(alice);
+        arcUSDToken.approve(address(arcMinter), amount);
+        arcMinter.requestTokens(address(USTB), amount);
+        vm.stopPrank();
+
+        // ~ Post-state check ~
+
+        assertEq(arcUSDToken.balanceOf(alice), 0);
+        assertEq(USTB.balanceOf(alice), 0);
+        assertEq(USTB.balanceOf(address(arcMinter)), amount);
+
+        requests = arcMinter.getRedemptionRequests(alice, address(USTB), 0, 10);
+        assertEq(requests.length, 1);
+        assertEq(requests[0].amount, amountAfterTax);
+        assertEq(requests[0].claimableAfter, block.timestamp + 5 days);
+        assertEq(requests[0].claimed, 0);
+
+        uint256 requested = arcMinter.getPendingClaims(address(USTB));
+        uint256 claimable = arcMinter.claimableTokens(alice, address(USTB));
+
+        assertEq(requested, amountAfterTax);
+        assertEq(claimable, 0);
+
+        // ~ Warp to claimDelay-1 ~
+
+        vm.warp(block.timestamp + arcMinter.claimDelay() - 1);
+
+        requested = arcMinter.getPendingClaims(address(USTB));
+        claimable = arcMinter.claimableTokens(alice, address(USTB));
+
+        assertEq(requested, amountAfterTax);
+        assertEq(claimable, 0);
+
+        // ~ Warp to post-claimDelay and query claimable ~
+
+        vm.warp(block.timestamp + arcMinter.claimDelay());
+
+        requested = arcMinter.getPendingClaims(address(USTB));
+        claimable = arcMinter.claimableTokens(alice, address(USTB));
+
+        assertEq(requested, amountAfterTax);
+        assertEq(claimable, amountAfterTax);
     }
 
     function test_arcMinter_requestTokens_multiple() public {
