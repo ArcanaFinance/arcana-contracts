@@ -432,8 +432,8 @@ DA:507,1565
 DA:509,1565
 DA:511,1565
 DA:512,1565
-FN:532,USDaMinter.extendClaimTimestamp
-FNDA:1,USDaMinter.extendClaimTimestamp
+FN:532,USDaMinter.updateClaimTimestamp
+FNDA:1,USDaMinter.updateClaimTimestamp
 DA:536,1
 DA:537,1
 DA:538,1

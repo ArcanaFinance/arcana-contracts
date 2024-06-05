@@ -639,30 +639,29 @@ contract arcUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
     }
 
     /**
-     * @notice Extends the claimable after timestamp for a specific redemption request.
+     * @notice Updates the claimable after timestamp for a specific redemption request.
      * @dev Allows the custodian to delay the claimability of assets for a particular redemption request. This can be
      * used in scenarios where additional time is needed before the assets can be released or in response to changing
      * conditions affecting the asset or market stability.
      * This action updates both the general and asset-specific redemption request entries to ensure consistency across
      * the contract's tracking mechanisms.
+     * This method can also be used to lower the claimable timestamp for a specific request that we're trying to push
+     * through to mitigate depegging of arcUSD. This would be done only by the admin.
      * @param user The address of the user whose redemption request is being modified.
      * @param asset The asset for which the redemption request was made.
      * @param index The index of the redemption request in the user's general array of requests.
-     * @param newClaimableAfter The new timestamp after which the redemption request can be claimed. Must be later than
-     * the current claimable after timestamp.
+     * @param newClaimableAfter The new timestamp after which the redemption request can be claimed.
      * @custom:error NotAdmin Thrown if the caller is not the designated custodian.
-     * @custom:error ValueBelowMinimum Thrown if the new claimable after timestamp is not later than the existing one.
      * @custom:event TokenRequestUpdated Logs the update of the claimable after timestamp, providing the old and new
      * timestamps.
      */
-    function extendClaimTimestamp(address user, address asset, uint256 index, uint48 newClaimableAfter)
+    function updateClaimTimestamp(address user, address asset, uint256 index, uint48 newClaimableAfter)
         external
         onlyAdmin
     {
         arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
         RedemptionRequest storage request = $.redemptionRequests[user][index];
         uint48 claimableAfter = request.claimableAfter;
-        claimableAfter.requireLessThanUint48(newClaimableAfter);
         request.claimableAfter = newClaimableAfter;
         emit TokenRequestUpdated(user, asset, index, request.amount, claimableAfter, newClaimableAfter);
     }

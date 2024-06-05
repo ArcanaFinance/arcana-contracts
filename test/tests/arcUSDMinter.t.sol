@@ -388,7 +388,7 @@ contract arcUSDMinterCoreTest is BaseSetup, CommonErrors {
         assertEq(claimable, amountAfterTax);
     }
 
-    function test_arcMinter_requestTokens_then_extendClaimTimestamp() public {
+    function test_arcMinter_requestTokens_then_updateClaimTimestamp() public {
         // ~ config ~
 
         uint256 amount = 10 ether;
@@ -433,10 +433,10 @@ contract arcUSDMinterCoreTest is BaseSetup, CommonErrors {
         assertEq(requested, amount);
         assertEq(claimable, 0);
 
-        // ~ Custodian executes extendClaimTimestamp ~
+        // ~ Custodian executes updateClaimTimestamp ~
 
         vm.prank(admin);
-        arcMinter.extendClaimTimestamp(alice, address(USTB), 0, uint48(block.timestamp + newDelay));
+        arcMinter.updateClaimTimestamp(alice, address(USTB), 0, uint48(block.timestamp + newDelay));
 
         // ~ Warp to original post-claimDelay and query claimable ~
 
@@ -451,6 +451,65 @@ contract arcUSDMinterCoreTest is BaseSetup, CommonErrors {
         // ~ Warp to new post-claimDelay and query claimable ~
 
         vm.warp(block.timestamp + newDelay);
+
+        requested = arcMinter.getPendingClaims(address(USTB));
+        claimable = arcMinter.claimableTokens(alice, address(USTB));
+
+        assertEq(requested, amount);
+        assertEq(claimable, amount);
+    }
+
+    function test_arcMinter_requestTokens_then_updateClaimTimestamp_early() public {
+        // ~ config ~
+
+        uint256 amount = 10 ether;
+
+        uint256 newDelay = 10 days;
+
+        vm.prank(address(arcMinter));
+        arcUSDToken.mint(alice, amount);
+        deal(address(USTB), address(arcMinter), amount);
+
+        // ~ Pre-state check ~
+
+        assertEq(arcUSDToken.balanceOf(alice), amount);
+        assertEq(USTB.balanceOf(alice), 0);
+        assertEq(USTB.balanceOf(address(arcMinter)), amount);
+
+        arcUSDMinter.RedemptionRequest[] memory requests = arcMinter.getRedemptionRequests(alice, address(USTB), 0, 10);
+        assertEq(requests.length, 0);
+
+        // ~ Alice executes requestTokens ~
+
+        vm.startPrank(alice);
+        arcUSDToken.approve(address(arcMinter), amount);
+        arcMinter.requestTokens(address(USTB), amount);
+        vm.stopPrank();
+
+        // ~ Post-state check ~
+
+        assertEq(arcUSDToken.balanceOf(alice), 0);
+        assertEq(USTB.balanceOf(alice), 0);
+        assertEq(USTB.balanceOf(address(arcMinter)), amount);
+
+        requests = arcMinter.getRedemptionRequests(alice, address(USTB), 0, 10);
+        assertEq(requests.length, 1);
+        assertEq(requests[0].amount, amount);
+        assertEq(requests[0].claimableAfter, block.timestamp + 5 days);
+        assertEq(requests[0].claimed, 0);
+
+        uint256 requested = arcMinter.getPendingClaims(address(USTB));
+        uint256 claimable = arcMinter.claimableTokens(alice, address(USTB));
+
+        assertEq(requested, amount);
+        assertEq(claimable, 0);
+
+        // ~ Custodian executes updateClaimTimestamp ~
+
+        vm.prank(admin);
+        arcMinter.updateClaimTimestamp(alice, address(USTB), 0, uint48(block.timestamp));
+
+        // ~ query claimable ~
 
         requested = arcMinter.getPendingClaims(address(USTB));
         claimable = arcMinter.claimableTokens(alice, address(USTB));
