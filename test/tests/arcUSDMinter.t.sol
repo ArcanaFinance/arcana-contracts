@@ -464,8 +464,6 @@ contract arcUSDMinterCoreTest is BaseSetup, CommonErrors {
 
         uint256 amount = 10 ether;
 
-        uint256 newDelay = 10 days;
-
         vm.prank(address(arcMinter));
         arcUSDToken.mint(alice, amount);
         deal(address(USTB), address(arcMinter), amount);

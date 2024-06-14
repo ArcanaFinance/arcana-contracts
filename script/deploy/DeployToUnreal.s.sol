@@ -67,15 +67,15 @@ contract DeployToUnreal is DeployUtility {
         ratios[1] = 1;
 
         // Deploy arcUSD token
-        arcUSD arcUSDToken = new arcUSD(UNREAL_CHAINID, UNREAL_LZ_ENDPOINT_V1);
-        ERC1967Proxy arcUSDTokenProxy = new ERC1967Proxy(
-            address(arcUSDToken),
-            abi.encodeWithSelector(arcUSD.initialize.selector,
-                adminAddress,
-                adminAddress // TODO: RebaseManager
-            )
-        );
-        arcUSDToken = arcUSD(address(arcUSDTokenProxy));
+        // arcUSD arcUSDToken = new arcUSD(UNREAL_CHAINID, UNREAL_LZ_ENDPOINT_V1);
+        // ERC1967Proxy arcUSDTokenProxy = new ERC1967Proxy(
+        //     address(arcUSDToken),
+        //     abi.encodeWithSelector(arcUSD.initialize.selector,
+        //         adminAddress,
+        //         adminAddress // TODO: RebaseManager
+        //     )
+        // );
+        arcUSD arcUSDToken = arcUSD(_loadDeploymentAddress("unreal", "arcUSD"));
 
         // Deploy FeeCollector
         arcUSDFeeCollector feeCollector = new arcUSDFeeCollector(adminAddress, address(arcUSDToken), distributors, ratios);
@@ -126,7 +126,7 @@ contract DeployToUnreal is DeployUtility {
         // Save Addresses
         // --------------
 
-        _saveDeploymentAddress("unreal", "arcUSD", address(arcUSDToken));
+        //_saveDeploymentAddress("unreal", "arcUSD", address(arcUSDToken));
         _saveDeploymentAddress("unreal", "arcUSDMinter", address(arcMinter));
         _saveDeploymentAddress("unreal", "CustodianManager", address(custodian));
         _saveDeploymentAddress("unreal", "arcUSDTaxManager", address(taxManager));

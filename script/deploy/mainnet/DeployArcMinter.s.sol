@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {console2} from "forge-std/Script.sol";
+import {console} from "forge-std/Script.sol";
 import {DeployUtility} from "../../DeployUtility.sol";
 
 // local imports
@@ -14,23 +14,22 @@ import "../../../test/utils/Constants.sol";
 
 /**
     @dev To run:
-    forge script script/deploy/mainnet/UpgradeMinter.s.sol:UpgradeMinter --broadcast --legacy \
-    --gas-estimate-multiplier 400 \
+    forge script script/deploy/mainnet/DeployArcMinter.s.sol:DeployArcMinter --broadcast --legacy \
+    --gas-estimate-multiplier 600 \
     --verify --verifier blockscout --verifier-url https://explorer.re.al//api -vvvv
 
     @dev To verify manually:
     forge verify-contract <CONTRACT_ADDRESS> --chain-id 111188 --watch \
-    src/Contract.sol:Contract --verifier blockscout --verifier-url https://explorer.re.al//api -vvvv \
-    --constructor-args $(cast abi-encode "constructor(address)" <arcUSD_CONTRACT_ADDRESS>)
+    src/arcUSD.sol:arcUSD --verifier blockscout --verifier-url https://explorer.re.al//api \
+    --constructor-args $(cast abi-encode "constructor(address)" 0xAEC9e50e3397f9ddC635C6c429C8C7eca418a143)
  */
 
 /**
- * @title UpgradeMinter
+ * @title DeployArcMinter
  * @author Chase Brown
- * @notice This script deploys a new implementation contract for arcUSDMinter and upgrades the current proxy.
+ * @notice This script deploys a new implementation contract for arcUSDMinter.
  */
-contract UpgradeMinter is DeployUtility {
-    arcUSDMinter public arcMinter;
+contract DeployArcMinter is DeployUtility {
     address public arcUSDToken;
 
     uint256 public DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
@@ -40,7 +39,6 @@ contract UpgradeMinter is DeployUtility {
 
     function setUp() public {
         vm.createSelectFork(REAL_RPC_URL);
-        arcMinter = arcUSDMinter(_loadDeploymentAddress("re.al", "arcUSDMinter"));
         arcUSDToken = _loadDeploymentAddress("re.al", "arcUSD");
     }
 
@@ -49,8 +47,8 @@ contract UpgradeMinter is DeployUtility {
     function run() public {
         vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
 
-        new arcUSDMinter(arcUSDToken);
-        //arcMinter.upgradeToAndCall(address(newUsdaMinter), ""); TODO: Have multisig call upgradeToAndCall
+        arcUSDMinter newArcMinter = new arcUSDMinter(arcUSDToken);
+        console.log(address(newArcMinter));
 
         vm.stopBroadcast();
     }
