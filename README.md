@@ -2,33 +2,33 @@
 
 ## Overview
 
-The Arcana protocol is an ecosystem of smart contracts that allow investors to partake in a yield generation method that leverages futures trading on centralized exchanges. Investors can mint USDa via the USDaMinter contract in exchange for stablecoins. The stablecoins will be used by the protocol to generate yield by funding liquidity for CEX futures trading and USDa holders will receive yield via rebasing. 
+The Arcana protocol is an ecosystem of smart contracts that allow investors to partake in a yield generation method that leverages futures trading on centralized exchanges. Investors can mint arcUSD via the arcUSDMinter contract in exchange for stablecoins. The stablecoins will be used by the protocol to generate yield by funding liquidity for CEX futures trading and arcUSD holders will receive yield via rebasing. 
 
-10% of profits from rebases are taken by the protocol via the USDaTaxManager which is called upon only when a rebase occurs. The rest of the profit goes to USDa holders. USDa holders can use their USDa to redeem stablecoins from the protocol through the USDaMinter contract.
+10% of profits from rebases are taken by the protocol via the arcUSDTaxManager which is called upon only when a rebase occurs. The rest of the profit goes to arcUSD holders. arcUSD holders can use their arcUSD to redeem stablecoins from the protocol through the arcUSDMinter contract.
 
-The redeem flow is a 2-step process. Users will need to call USDaMinter::requestRedeem which will burn their USDa and emit an event that is picked up by an off chain element to start the movement of stablecoins to fulfill that redemption. Redeemers will need to wait 5-7 days (depending on the claimDelay assigned on the USDaMinter contract). After the delay has been completed, the redeemer may return and execute claimTokens to claim their redemption.
+The redeem flow is a 2-step process. Users will need to call arcUSDMinter::requestRedeem which will burn their arcUSD and emit an event that is picked up by an off chain element to start the movement of stablecoins to fulfill that redemption. Redeemers will need to wait 5-7 days (depending on the claimDelay assigned on the arcUSDMinter contract). After the delay has been completed, the redeemer may return and execute claimTokens to claim their redemption.
 
 ## Technical
 
 ### Contracts
 
-- [USDa](./src/USDa.sol) - This ERC-20 contract extends the functionality of `LayerZeroRebaseTokenUpgradeable` from [tangible-foundation-contracts](https://github.com/TangibleTNFT/tangible-foundation-contracts/tree/main) to support rebasing and cross-chain bridging.
-- [USDaMinter](./src/USDaMinter.sol) - Facilitates the minting and redemption process of USDa tokens against supported ERC-20 collateral assets.
-- [USDaFeeCollector](./src/USDaFeeCollector.sol) - This contract receives USDa from rebase fees and distributes them to the necessary recipients.
-- [USDaTaxManager](./src/USDaTaxManager.sol) - This contract manages the taxation of rebases on the USDa token.
-- [USDaPointsBoostVault](./src/USDaPointsBoostingVault.sol) - This contract represents a points-based system for USDa token holders. By depositing USDa tokens, users receive PTa tokens, which can be redeemed back to USDa.
-- [CustodianManager](./src/CustodianManager.sol) - This contract will withdraw from the USDaMinter contract and transfer collateral to the multisig custodian.
+- [arcUSD](./src/arcUSD.sol) - This ERC-20 contract extends the functionality of `LayerZeroRebaseTokenUpgradeable` from [tangible-foundation-contracts](https://github.com/TangibleTNFT/tangible-foundation-contracts/tree/main) to support rebasing and cross-chain bridging.
+- [arcUSDMinter](./src/arcUSDMinter.sol) - Facilitates the minting and redemption process of arcUSD tokens against supported ERC-20 collateral assets.
+- [arcUSDFeeCollector](./src/arcUSDFeeCollector.sol) - This contract receives arcUSD from rebase fees and distributes them to the necessary recipients.
+- [arcUSDTaxManager](./src/arcUSDTaxManager.sol) - This contract manages the taxation of rebases on the arcUSD token.
+- [arcUSDPointsBoostVault](./src/arcUSDPointsBoostingVault.sol) - This contract represents a points-based system for arcUSD token holders. By depositing arcUSD tokens, users receive PTa tokens, which can be redeemed back to arcUSD.
+- [CustodianManager](./src/CustodianManager.sol) - This contract will withdraw from the arcUSDMinter contract and transfer collateral to the multisig custodian.
 
 ### Tests
 
-- [USDaTest](./test/tests/USDa.t.sol) - Core unit tests for USDa basic functionality.
-- [USDaRebaseTest](./test/tests/USDa.Rebase.t.sol) - Contains unit tests for rebase-based functionality for USDa.
-- [USDaLzAppTest](./test/tests/USDa.LzApp.t.sol) - Contains unit tests for LayerZero App setters.
-- [USDaVaultTest](./test/tests/USDa.Vault.t.sol) - Unit Tests for USDaPointsBoostVault contract interactions.
-- [USDaFeeCollectorTest](./test/tests/USDaFeeCollector.t.sol) - Unit Tests for USDaFeeCollector contract interactions.
+- [arcUSDTest](./test/tests/arcUSD.t.sol) - Core unit tests for arcUSD basic functionality.
+- [arcUSDRebaseTest](./test/tests/arcUSD.Rebase.t.sol) - Contains unit tests for rebase-based functionality for arcUSD.
+- [arcUSDLzAppTest](./test/tests/arcUSD.LzApp.t.sol) - Contains unit tests for LayerZero App setters.
+- [arcUSDVaultTest](./test/tests/arcUSD.Vault.t.sol) - Unit Tests for arcUSDPointsBoostVault contract interactions.
+- [arcUSDFeeCollectorTest](./test/tests/arcUSDFeeCollector.t.sol) - Unit Tests for arcUSDFeeCollector contract interactions.
 - [CustodianManagerTest](./test/tests/CustodianManager.t.sol) - Unit Tests for CustodianManager contract interactions.
-- [USDaMinterCoreTest](./test/tests/USDaMinter.t.sol) - Core unit tests for USDaMinter contract functionality.
-- [USDaMinterUSTBIntegrationTest](./test/tests/USDaMinter.USTB.t.sol) - Contains integration tests for USDaMinter when USTB is the collateral token.
+- [arcUSDMinterCoreTest](./test/tests/arcUSDMinter.t.sol) - Core unit tests for arcUSDMinter contract functionality.
+- [arcUSDMinterUSTBIntegrationTest](./test/tests/arcUSDMinter.USTB.t.sol) - Contains integration tests for arcUSDMinter when USTB is the collateral token.
 
 ## Local How-To's
 
