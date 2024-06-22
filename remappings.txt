@@ -5,3 +5,4 @@ forge-std/=lib/forge-std/src/
 @layerzerolabs/contracts/=lib/tangible-foundation-contracts/lib/layerzerolabs/contracts/
 @layerzerolabs/contracts-upgradeable/=lib/tangible-foundation-contracts/src/layerzero/
 @tangible/contracts/=lib/tangible-foundation-contracts/src/
+@aero/contracts/=lib/aerodrome-contracts/contracts/
