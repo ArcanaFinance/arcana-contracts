@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: true
 
-    name: USDa Contracts Unit Tests
+    name: Arcana Contracts Unit Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -36,4 +36,5 @@ jobs:
           forge test
         env:
           UNREAL_RPC_URL: ${{ secrets.UNREAL_RPC_URL }}
+          BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
         id: test
