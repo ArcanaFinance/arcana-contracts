@@ -6,3 +6,8 @@
 	path = lib/tangible-foundation-contracts
 	url = https://github.com/TangibleTNFT/tangible-foundation-contracts
 	branch = main
+
+[submodule "lib/aerodrome-contracts"]
+	path = lib/aerodrome-contracts
+	url = https://github.com/aerodrome-finance/contracts.git
+	branch = main
