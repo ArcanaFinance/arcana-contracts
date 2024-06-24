@@ -4,7 +4,7 @@ pragma solidity ^0.8.19;
 // oz imports
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Metadata, IERC20} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 // aerodrome imports
@@ -38,17 +38,16 @@ contract AeroLooper is UUPSUpgradeable, CommonErrors, OwnableUpgradeable {
     IVoter public immutable AERO_VOTER;
     /// @dev Stores contract reference to Aerdrome Gauge for pool.
     IGauge public immutable GAUGE;
-    /// @dev Stores address for WETH.
-    address public immutable WETH;
-    /// @dev Stores address for ERC-20 token which serves as underlying in pool.
-    //address public immutable UNDERLYING;
     /// @dev Stores address of Aerodrome pool.
     address public immutable POOL;
+    /// @dev Address of token0 in pool.
+    address public immutable TOKEN0;
+    /// @dev Address of token1 in pool.
+    address public immutable TOKEN1;
+    /// @dev True if pool is stable, otherwise false.
+    bool public immutable STABLE;
     /// @dev Used to add a small deviation of the minimum amount of tokens used when adding liquidity.
     uint256 public slippage;
-
-    address public immutable TOKEN0;
-    address public immutable TOKEN1;
 
 
     // ---------------
@@ -81,21 +80,12 @@ contract AeroLooper is UUPSUpgradeable, CommonErrors, OwnableUpgradeable {
 
         AERO_ROUTER = IRouter(_aeroRouter);
         AERO_VOTER = IVoter(AERO_ROUTER.voter());
-        WETH = address(AERO_ROUTER.weth());
 
         TOKEN0 = IPool(_pool).token0();
         TOKEN1 = IPool(_pool).token1();
 
-        // (address token0, address token1) = WETH < _underlying ? 
-        //     (WETH, _underlying) : (_underlying, WETH);
-        // POOL = AERO_ROUTER.poolFor(
-        //     token0,
-        //     token1,
-        //     false,
-        //     AERO_ROUTER.defaultFactory()
-        // );
-
         GAUGE = IGauge(AERO_VOTER.gauges(_pool));
+        STABLE = IPool(_pool).stable();
         POOL = _pool;
 
         _disableInitializers();
@@ -125,23 +115,20 @@ contract AeroLooper is UUPSUpgradeable, CommonErrors, OwnableUpgradeable {
      * This method can be used in tangent with quoteAddLiquidity to identify params.
      *
      * @param amountToken0 Amount of TOKEN0 to be injected into liquidity.
-     * @param amountToken1 Amount of TOKEN1 token to be injected into liquidity.
-     * @param expectedLiquidity Amount of expected liquidity tokens to receive post-addLiquidity.
+     * @param amountToken1 Amount of TOKEN1 to be injected into liquidity.
      * @param deadline Desired block.timestamp deadline of liquidity add.
      */
     function injectLiquidity(
         uint256 amountToken0, 
         uint256 amountToken1,
-        uint256 expectedLiquidity,
         uint256 deadline
-    ) external onlyOwner {
-        uint256 amountLPTokens = _injectLiquidity(
+    ) external onlyOwner returns (uint256 amount0, uint256 amount1, uint256 liquidity) {
+        (amount0, amount1, liquidity) = _injectLiquidity(
             amountToken0,
             amountToken1,
-            expectedLiquidity,
             deadline
         );
-        _stakeLPTokens(amountLPTokens);
+        _stakeLPTokens(liquidity);
     }
 
     /**
@@ -221,7 +208,7 @@ contract AeroLooper is UUPSUpgradeable, CommonErrors, OwnableUpgradeable {
 
     /**
      * @notice This method is used to get a quote for adding liquidity to the pool. The method takes an amount of TOKEN0
-     * and an amount of TOKEN1 token and will return the amount that will be taken into the pool (based on the current
+     * and an amount of TOKEN1 and will return the amount that will be taken into the pool (based on the current
      * ratio) and the amount of lp tokens that will be minted for that liquidity.
      * @dev This method should be called before executing injectLiquidity.
      * 
@@ -240,11 +227,48 @@ contract AeroLooper is UUPSUpgradeable, CommonErrors, OwnableUpgradeable {
         (amount0, amount1, liquidity) = AERO_ROUTER.quoteAddLiquidity(
             TOKEN0,
             TOKEN1,
-            false,
+            STABLE,
             IRouter(AERO_ROUTER).defaultFactory(),
             amountToken0,
             amountToken1
         );
+    }
+
+
+    // --------------
+    // Public Methods
+    // --------------
+
+    /**
+     * @notice This public method returns the reserves and ratio of pool with TOKEN0 and TOKEN1.
+     * @dev Only references pool that is stored in this contract for reserves.
+     */
+    function getCurrentRatio() internal returns (uint256 amount0, uint256 amount1, uint256 ratio) {
+        (amount0, amount1) = AERO_ROUTER.getReserves(TOKEN0, TOKEN1, STABLE, AERO_ROUTER.defaultFactory());
+        uint256 decimals0 = IERC20Metadata(TOKEN0).decimals();
+        uint256 decimals1 = IERC20Metadata(TOKEN1).decimals();
+
+        uint256 diff;
+        address lowerToken;
+        if (int256(decimals0) - int256(decimals1) != 0) {
+            (diff, lowerToken) = decimals0 > decimals1 ? (decimals0 - decimals1, TOKEN1) : (decimals1 - decimals0, TOKEN0);
+        }
+
+        if (diff != 0) {
+            if (lowerToken == TOKEN0) {
+                ratio = (amount0 * 10**diff) * 10**decimals1 / amount1;
+            }
+            else {
+                ratio = amount0 * 10**decimals0 / (amount1 * 10**diff);
+            }
+        }
+        else {
+            ratio = amount0 * 10**decimals0 / amount1;
+        }
+
+        emit Debug("diff", diff);
+        emit Debug("lowerToken", lowerToken);
+        emit Debug("ratio", ratio);
     }
 
 
@@ -255,25 +279,21 @@ contract AeroLooper is UUPSUpgradeable, CommonErrors, OwnableUpgradeable {
     function _injectLiquidity(
         uint256 amountToken0, 
         uint256 amountToken1,
-        uint256 expectedLiquidity,
         uint256 deadline
-    ) internal returns (uint256 liquidity) {
+    ) internal returns (uint256 deposited0, uint256 deposited1, uint256 liquidity) {
         IERC20(TOKEN0).approve(address(AERO_ROUTER), amountToken0);
         IERC20(TOKEN1).approve(address(AERO_ROUTER), amountToken1);
-        (,,liquidity) = AERO_ROUTER.addLiquidity(
+        (deposited0, deposited1, liquidity) = AERO_ROUTER.addLiquidity(
             TOKEN0, // tokenA
             TOKEN1, // tokenB
-            false, // stable
+            STABLE, // stable
             amountToken0, // amountADesired
             amountToken1, // amountBDesired
-            amountToken1-(amountToken1*slippage/1000), // amountAMin
-            amountToken0-(amountToken0*slippage/1000), // amountBMin
+            amountToken0-(amountToken0*slippage/1000), // amountAMin
+            amountToken1-(amountToken1*slippage/1000), // amountBMin
             address(this), // to
             deadline // deadline
         );
-        if (liquidity != expectedLiquidity) {
-            revert InsufficientLiquidityReceived(liquidity, expectedLiquidity);
-        }
         emit LiquidityInjected(amountToken0, amountToken1, liquidity);
     }
 
@@ -283,31 +303,53 @@ contract AeroLooper is UUPSUpgradeable, CommonErrors, OwnableUpgradeable {
     }
 
     event Debug(string key, uint256 val);
+    event Debug(string key, address val);
 
-    function _sellEmissions(uint256 amount) internal returns (uint256 amountEth, uint256 amountUnderlying) {
-        // TODO: Get ratio
-        (uint256 amount0, uint256 amount1) = AERO_ROUTER.getReserves(TOKEN0, TOKEN1, false, AERO_ROUTER.defaultFactory());
-        emit Debug("pool ratio", amount0/amount1*1e12);
+    function _sellEmissions(uint256 amount) internal returns (uint256 token0Received, uint256 token1Received) {
+        // TODO: Get reserves
+        (,,uint256 ratio) = getCurrentRatio();
+
+        uint256 balToken0 = IERC20(TOKEN0).balanceOf(address(this));
+        uint256 balToken1 = IERC20(TOKEN1).balanceOf(address(this));
+
+        uint256 amountForToken0 = amount * ratio / 1e18;
+
+        emit Debug("amountForToken0", amountForToken0);
+        emit Debug("AERO pre-bal", AERO.balanceOf(address(this)));
+
         // TODO: Sell for TOKEN0
-        uint256 amountForEth = (amount * amount0 / amount1 * 1e12) / 1e22; // TODO Check math
-        emit Debug("amount AERO for TOKEN0", amountForEth);
-        uint256 ethReceived = _swapForEth(amountForEth);
-        // TODO: Sell for USDC
-        uint256 amountForUnderlying = amount - amountForEth;
-        emit Debug("amount AERO for USDC", amountForUnderlying);
-        emit Debug("check ratio", amountForEth/amountForUnderlying*1e12);
+        emit Debug("amount AERO for TOKEN0", amountForToken0);
+        token0Received = _swapAero(amountForToken0, TOKEN0);
+
+        // TODO: Sell for TOKEN1
+        uint256 amountForToken1 = amount - amountForToken0;
+        emit Debug("amount AERO for TOKEN1", amountForToken1);
+        token1Received = _swapAero(amountForToken1, TOKEN1);
+
+        emit Debug("check ratio", amountForToken0 * 1e18/amountForToken1);
+        emit Debug("AERO post-bal", AERO.balanceOf(address(this)));
+
     }
 
-    function _swapForEth(uint256 amount) internal returns (uint256 amountReceived) { // TODO: Refactor
+    function _swapAero(uint256 amount, address targetToken) internal returns (uint256 amountReceived) { // TODO: Refactor
         IRouter.Route[] memory route = new IRouter.Route[](1);
         route[0] = IRouter.Route({
             from: address(AERO),
-            to: WETH,
-            stable: false,
+            to: targetToken,
+            stable: STABLE,
             factory: AERO_ROUTER.defaultFactory()
         });
+
         AERO.approve(address(AERO_ROUTER), amount);
-        AERO_ROUTER.swapExactTokensForETH(amount, 0, route, address(this), block.timestamp); // TODO Get quote
+        uint256[] memory amounts = AERO_ROUTER.swapExactTokensForTokens(
+            amount,
+            0,
+            route,
+            address(this),
+            block.timestamp
+        ); // TODO Get quote
+
+        return amounts[1];
     }
 
     function _claimEmissions() internal returns (uint256) {}
