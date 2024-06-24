@@ -24,7 +24,7 @@ contract AeroLooperTest is Test {
 
     AeroLooper aeroLooper;
 
-    IPool internal pool;
+    IPool internal constant POOL = IPool(0xcDAC0d6c6C59727a65F871236188350531885C43);
     IGauge internal gauge;
 
     address internal constant owner = address(bytes20(bytes("owner")));
@@ -32,6 +32,7 @@ contract AeroLooperTest is Test {
 
     address internal constant AERO = 0x940181a94A35A4569E4529A3CDfB74e38FD98631;
     address internal constant AERO_ROUTER = 0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43;
+    address internal constant BASE_WETH = 0x4200000000000000000000000000000000000006;
     address internal constant BASE_USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
     address internal constant BASE_USDC_MASTERMINTER = 0x2230393EDAD0299b7E7B59F20AA856cD1bEd52e1;
 
@@ -41,7 +42,7 @@ contract AeroLooperTest is Test {
         // ~ Deployment ~
 
         vm.startPrank(owner);
-        aeroLooper = new AeroLooper(AERO_ROUTER, BASE_USDC);
+        aeroLooper = new AeroLooper(AERO_ROUTER, address(POOL));
         ERC1967Proxy aeroLooperProxy = new ERC1967Proxy(
             address(aeroLooper),
             abi.encodeWithSelector(AeroLooper.initialize.selector)
@@ -52,7 +53,6 @@ contract AeroLooperTest is Test {
         // ~ testing config ~
 
         gauge = aeroLooper.GAUGE();
-        pool = IPool(aeroLooper.POOL());
 
         // configure minter to mint USDC
         vm.prank(BASE_USDC_MASTERMINTER);
@@ -88,12 +88,13 @@ contract AeroLooperTest is Test {
     /// @dev Initial State test
     function test_aeroLooper_init_state() public {
         assertEq(address(aeroLooper.AERO_ROUTER()), AERO_ROUTER);
-        assertEq(aeroLooper.UNDERLYING(), BASE_USDC);
+        assertEq(aeroLooper.TOKEN0(), BASE_WETH);
+        assertEq(aeroLooper.TOKEN1(), BASE_USDC);
     }
 
     /// @dev Verifies proper state changes when AeroLooper::injectLiquidity is called.
     ///      Before calling injectLiquidity we must first call AeroLooper::quoteAddLiquidity to identify
-    ///      the amount of ETH and underlying to inject, given the current ratio of pool reserves.
+    ///      the amount of ETH and underlying to inject, given the current ratio of POOL reserves.
     function test_aeroLooper_injectLiquidity() public {
         // ~ Config ~
 
@@ -101,11 +102,11 @@ contract AeroLooperTest is Test {
         _dealUnderlying(address(aeroLooper), 2_000 * 1e6);
         (uint256 amount0, uint256 amount1, uint256 liquidity) = aeroLooper.quoteAddLiquidity(1 ether, 2_000 * 1e6);
 
-        (uint256 preReserve0, uint256 preReserve1,) = IPool(address(pool)).getReserves();
+        (uint256 preReserve0, uint256 preReserve1,) = IPool(address(POOL)).getReserves();
 
         uint256 preBalEth = address(aeroLooper).balance;
         uint256 preBalTkn = IERC20(BASE_USDC).balanceOf(address(aeroLooper));
-        uint256 preBalGauge = IERC20(address(pool)).balanceOf(address(gauge));
+        uint256 preBalGauge = IERC20(address(POOL)).balanceOf(address(gauge));
 
         // ~ Execute injectLiquidity ~
 
@@ -114,7 +115,7 @@ contract AeroLooperTest is Test {
 
         // ~ Post-state check ~
 
-        (uint256 postReserve0, uint256 postReserve1,) = IPool(address(pool)).getReserves();
+        (uint256 postReserve0, uint256 postReserve1,) = IPool(address(POOL)).getReserves();
 
         assertEq(postReserve0, preReserve0 + amount0);
         assertEq(postReserve1, preReserve1 + amount1);
@@ -122,13 +123,13 @@ contract AeroLooperTest is Test {
         assertEq(address(aeroLooper).balance, preBalEth - amount0);
         assertEq(IERC20(BASE_USDC).balanceOf(address(aeroLooper)), preBalTkn - amount1);
 
-        assertEq(IERC20(address(pool)).balanceOf(address(gauge)), preBalGauge + liquidity);
+        assertEq(IERC20(address(POOL)).balanceOf(address(gauge)), preBalGauge + liquidity);
         assertEq(gauge.balanceOf(address(aeroLooper)), liquidity);
     }
 
     /// @dev Uses fuzzing to verify proper state changes when AeroLooper::injectLiquidity is called.
     ///      Before calling injectLiquidity we must first call AeroLooper::quoteAddLiquidity to identify
-    ///      the amount of ETH and underlying to inject, given the current ratio of pool reserves.
+    ///      the amount of ETH and underlying to inject, given the current ratio of POOL reserves.
     ///      Slippage has been implemented to allow for a small deviation of expected input vs actual input into liq.
     function test_aeroLooper_injectLiquidity_fuzzing(uint256 amountETH, uint256 amountUSDC) public {
         // ~ Config ~
@@ -140,11 +141,11 @@ contract AeroLooperTest is Test {
         _dealUnderlying(address(aeroLooper), amountUSDC);
 
         (uint256 amount0, uint256 amount1, uint256 liquidity) = aeroLooper.quoteAddLiquidity(amountETH, amountUSDC);
-        (uint256 preReserve0, uint256 preReserve1,) = IPool(address(pool)).getReserves();
+        (uint256 preReserve0, uint256 preReserve1,) = IPool(address(POOL)).getReserves();
 
         uint256 preBalEth = address(aeroLooper).balance;
         uint256 preBalTkn = IERC20(BASE_USDC).balanceOf(address(aeroLooper));
-        uint256 preBalGauge = IERC20(address(pool)).balanceOf(address(gauge));
+        uint256 preBalGauge = IERC20(address(POOL)).balanceOf(address(gauge));
 
         // ~ Execute injectLiquidity ~
 
@@ -153,7 +154,7 @@ contract AeroLooperTest is Test {
 
         // ~ Post-state check ~
 
-        (uint256 postReserve0, uint256 postReserve1,) = IPool(address(pool)).getReserves();
+        (uint256 postReserve0, uint256 postReserve1,) = IPool(address(POOL)).getReserves();
 
         assertApproxEqAbs(postReserve0, preReserve0 + amount0, amount0*aeroLooper.slippage()/1000);
         assertApproxEqAbs(postReserve1, preReserve1 + amount1, amount1*aeroLooper.slippage()/1000);
@@ -161,7 +162,7 @@ contract AeroLooperTest is Test {
         assertApproxEqAbs(address(aeroLooper).balance, preBalEth - amount0, amount0*aeroLooper.slippage()/1000);
         assertApproxEqAbs(IERC20(BASE_USDC).balanceOf(address(aeroLooper)), preBalTkn - amount1, amount1*aeroLooper.slippage()/1000);
 
-        assertEq(IERC20(address(pool)).balanceOf(address(gauge)), preBalGauge + liquidity);
+        assertEq(IERC20(address(POOL)).balanceOf(address(gauge)), preBalGauge + liquidity);
         assertEq(gauge.balanceOf(address(aeroLooper)), liquidity);
     }
 
@@ -220,16 +221,16 @@ contract AeroLooperTest is Test {
         _dealUnderlying(address(aeroLooper), 2_000 * 1e6);
 
         (uint256 amount0, uint256 amount1, uint256 liquidity) = aeroLooper.quoteAddLiquidity(1 ether, 2_000 * 1e6);
-        uint256 preBalGauge = IERC20(address(pool)).balanceOf(address(gauge));
+        uint256 preBalGauge = IERC20(address(POOL)).balanceOf(address(gauge));
 
         vm.prank(owner);
         aeroLooper.injectLiquidity(amount0, amount1, liquidity, block.timestamp);
 
         // ~ Pre-state check ~
 
-        assertEq(IERC20(address(pool)).balanceOf(address(gauge)), preBalGauge + liquidity);
+        assertEq(IERC20(address(POOL)).balanceOf(address(gauge)), preBalGauge + liquidity);
         assertEq(gauge.balanceOf(address(aeroLooper)), liquidity);
-        assertEq(IERC20(address(pool)).balanceOf(owner), 0);
+        assertEq(IERC20(address(POOL)).balanceOf(owner), 0);
 
         // ~ Execute withdrawFromGauge ~
 
@@ -238,9 +239,9 @@ contract AeroLooperTest is Test {
 
         // ~ Post-state check ~
 
-        assertEq(IERC20(address(pool)).balanceOf(address(gauge)), preBalGauge);
+        assertEq(IERC20(address(POOL)).balanceOf(address(gauge)), preBalGauge);
         assertEq(gauge.balanceOf(address(aeroLooper)), 0);
-        assertEq(IERC20(address(pool)).balanceOf(owner), liquidity);
+        assertEq(IERC20(address(POOL)).balanceOf(owner), liquidity);
     }
 
     /// @dev Verifies restrictions when AeroLooper::withdrawFromGauge is called with unacceptable conditions.
