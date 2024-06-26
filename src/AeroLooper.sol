@@ -19,16 +19,12 @@ import {CommonValidations} from "./libraries/CommonValidations.sol";
 
 /**
  * @title AeroLooper
+ * @author chasebrownn
  * @notice This contract is in charge of managing liquidity positions and emissions on Aerodrome.
  */
 contract AeroLooper is UUPSUpgradeable, CommonErrors, OwnableUpgradeable {
     using CommonValidations for *;
     using SafeERC20 for IERC20;
-
-    // TODO: Collect ETH
-    // TODO: Gelato Func will check ETH balance of contract and inject it into an ETH/USDC liquidity
-    //      - Once injected, LP tokens have to be staked for emissions
-    // TODO: If there's claimable emissions; claim those emissions, sell emissions, and re-inject into pool, stake LP tokens
 
     /// @dev AERO token address.
     IERC20 public constant AERO = IERC20(0x940181a94A35A4569E4529A3CDfB74e38FD98631);
@@ -48,6 +44,8 @@ contract AeroLooper is UUPSUpgradeable, CommonErrors, OwnableUpgradeable {
     bool public immutable STABLE;
     /// @dev Used to add a small deviation of the minimum amount of tokens used when adding liquidity.
     uint256 public slippage;
+    /// @dev Stores the address of an EOA that can execute injectLiquidity & claimAndStakeEmissions.
+    address public admin;
 
 
     // ---------------
@@ -59,10 +57,28 @@ contract AeroLooper is UUPSUpgradeable, CommonErrors, OwnableUpgradeable {
     event FundsWithdrawn(address token, uint256 amount);
     event GaugeWithdrawn(uint256 amount, uint256 stillInBalance);
     event SlippageUpdated(uint256 newSlippage);
+    event AdminUpdated(address admin);
+    event AeroSwapped(uint256 amountAero, address swappedTo, uint256 amountOut);
 
     error InsufficientLiquidityReceived(uint256 received, uint256 expected);
     error ETHWithdrawFailed();
     error AmountExceedsWithdrawable(uint256 withdrawable);
+    error Unauthorized(address caller);
+
+
+    // ---------
+    // Modifiers
+    // ---------
+
+    /**
+     * @dev Modifier for verifying msg.sender is wither owner or admin.
+     */
+    modifier onlyAdmin() {
+        if (msg.sender != admin && msg.sender != owner()) {
+            revert Unauthorized(msg.sender);
+        }
+        _;
+    }
 
 
     // ----------
@@ -122,53 +138,68 @@ contract AeroLooper is UUPSUpgradeable, CommonErrors, OwnableUpgradeable {
         uint256 amountToken0, 
         uint256 amountToken1,
         uint256 deadline
-    ) external onlyOwner returns (uint256 amount0, uint256 amount1, uint256 liquidity) {
-        (amount0, amount1, liquidity) = _injectLiquidity(
+    ) external onlyAdmin returns (uint256 amount0, uint256 amount1, uint256 liquidity) {
+        (amount0, amount1, liquidity) = _addLiquidityAndStake(
             amountToken0,
             amountToken1,
             deadline
         );
-        _stakeLPTokens(liquidity);
     }
 
     /**
-     * @notice This permissioned method allows the owner to claim and stake any emissions from the Gauge.
+     * @notice This permissioned method is used to claim and stake any emissions from the Gauge.
      * @dev This contract will claim any claimable AERO from the Gauge and use that to inject more liquidity
      * into the pool. First, the contract has to sell the AERO for TOKEN0 and TOKEN1. The amount that it sells is
-     * dependant on the current TOKEN0/TOKEN1 ratio in the pool. This method also takes into account the current
-     * contract balance of TOKEN0 and TOKEN1 to avoid any collection of dust and thus any unused liquidity.
+     * dependant on `portion`.
+     *
+     * @param portion The percentage of AERO that will be allocated for swapping to token0. The remaining AERO
+     * will be sold for token1.
      */
-    function claimAndStakeEmissions() external onlyOwner {
-        // TODO claim emissions
+    function claimAndStakeEmissions(uint256 portion) external onlyAdmin {
+        // claim emissions
         require(claimableRewards() != 0);
         GAUGE.getReward(address(this));
-        // TODO swap emissions for TOKEN0 and USDC
-        //      take into account TOKEN0/USDC ratio and amount of TOKEN0+USDC dust in contract
+
         uint256 balance = AERO.balanceOf(address(this));
-        _sellEmissions(balance);
-        // TODO stake LP tokens
+        uint256 swapToToken0 = balance * portion / 1e18;
+        uint256 swapToToken1 = balance - swapToToken0;
+
+        // swap AERO for token0 and token1
+        _swapAero(swapToToken0, TOKEN0);
+        _swapAero(swapToToken1, TOKEN1);
+
+        uint256 token0Balance = IERC20(TOKEN0).balanceOf(address(this));
+        uint256 token1Balance = IERC20(TOKEN1).balanceOf(address(this));
+
+        // get quote for liquidity add
+        (uint256 amount0Quoted, uint256 amount1Quoted,) = quoteAddLiquidity(
+            token0Balance,
+            token1Balance
+        );
+
+        _addLiquidityAndStake(amount0Quoted, amount1Quoted, block.timestamp);
     }
 
     /**
-     * @notice This permissioned external method allows the owner to update the slippage variable.
+     * @notice This permissioned external method is used to update the slippage variable.
      * @dev The slippage is used to calculate amount of minimum slippage is allowed when injecting liquidity.
      * By default this variable is 10 which is 1% slippage. If we're adding 100 TOKEN0 into the pool, the 1% slippage
      * will calculate the minimum taken by the pool as 99 TOKEN0. Nothing less is allowed.
      *
      * @param newSlippage New variable to be assigned as slippage. Must be less than 1001.
      */
-    function setSlippage(uint256 newSlippage) external onlyOwner {
+    function setSlippage(uint256 newSlippage) external onlyAdmin {
         newSlippage.requireLessThanOrEqualToUint256(1000);
         emit SlippageUpdated(newSlippage);
         slippage = newSlippage;
     }
 
     /**
-     * @notice This permissioned external method allows the owner to withdraw the staked liquidity tokens that
+     * @notice This permissioned external method is used to withdraw the staked liquidity tokens that
      * are inside the Gauge contract.
      * @param amount Amount of lp tokens to withdraw from the Gauge contract.
      */
-    function withdrawFromGauge(uint256 amount) external onlyOwner {
+    function withdrawFromGauge(uint256 amount) external onlyAdmin {
         uint256 balance = GAUGE.balanceOf(address(this));
         if (amount > balance) revert AmountExceedsWithdrawable(balance);
         emit GaugeWithdrawn(amount, balance - amount);
@@ -177,10 +208,10 @@ contract AeroLooper is UUPSUpgradeable, CommonErrors, OwnableUpgradeable {
     }
 
     /**
-     * @notice This permissioned external method allows the owner to withdraw TOKEN0 from this contract.
+     * @notice This permissioned external method is used to withdraw TOKEN0 from this contract.
      * @param amount Amount of TOKEN0 to withdraw.
      */
-    function withdrawETH(uint256 amount) external onlyOwner {
+    function withdrawETH(uint256 amount) external onlyAdmin {
         amount.requireLessThanOrEqualToUint256(address(this).balance);
         emit FundsWithdrawn(address(0), amount);
         (bool success,) = owner().call{value:amount}("");
@@ -188,15 +219,27 @@ contract AeroLooper is UUPSUpgradeable, CommonErrors, OwnableUpgradeable {
     }
 
     /**
-     * @notice This permissioned external method allows the owner to withdraw ERC20 tokens from this contract.
+     * @notice This permissioned external method is used to withdraw ERC20 tokens from this contract.
      * @param token Contract address of ERC20 token that's being withdrawn.
      * @param amount Amount of ERC20 tokens to withdraw.
      */
-    function withdrawERC20(address token, uint256 amount) external onlyOwner {
-        amount.requireLessThanOrEqualToUint256(IERC20(token).balanceOf(address(this)));
+    function withdrawERC20(address token, uint256 amount) external onlyAdmin {
         token.requireNonZeroAddress();
+        amount.requireLessThanOrEqualToUint256(IERC20(token).balanceOf(address(this)));
         emit FundsWithdrawn(token, amount);
         IERC20(token).safeTransfer(owner(), amount);
+    }
+
+    /**
+     * @notice This permissioned method is used to assign the admin address.
+     * @dev The admin address can call most permissioned methods in this contract.
+     * @param newAdmin New admin address.
+     */
+    function setAdmin(address newAdmin) external onlyOwner {
+        newAdmin.requireNonZeroAddress();
+        newAdmin.requireDifferentAddress(admin);
+        emit AdminUpdated(newAdmin);
+        admin = newAdmin;
     }
 
     /**
@@ -205,6 +248,11 @@ contract AeroLooper is UUPSUpgradeable, CommonErrors, OwnableUpgradeable {
     function claimableRewards() public view returns (uint256) {
         return GAUGE.rewards(address(this));
     }
+
+
+    // --------------
+    // Public Methods
+    // --------------
 
     /**
      * @notice This method is used to get a quote for adding liquidity to the pool. The method takes an amount of TOKEN0
@@ -223,7 +271,7 @@ contract AeroLooper is UUPSUpgradeable, CommonErrors, OwnableUpgradeable {
     function quoteAddLiquidity(
         uint256 amountToken0,
         uint256 amountToken1
-    ) external view returns (uint256 amount0, uint256 amount1, uint256 liquidity) {        
+    ) public view returns (uint256 amount0, uint256 amount1, uint256 liquidity) {        
         (amount0, amount1, liquidity) = AERO_ROUTER.quoteAddLiquidity(
             TOKEN0,
             TOKEN1,
@@ -235,48 +283,21 @@ contract AeroLooper is UUPSUpgradeable, CommonErrors, OwnableUpgradeable {
     }
 
 
-    // --------------
-    // Public Methods
-    // --------------
-
-    /**
-     * @notice This public method returns the reserves and ratio of pool with TOKEN0 and TOKEN1.
-     * @dev Only references pool that is stored in this contract for reserves.
-     */
-    function getCurrentRatio() internal returns (uint256 amount0, uint256 amount1, uint256 ratio) {
-        (amount0, amount1) = AERO_ROUTER.getReserves(TOKEN0, TOKEN1, STABLE, AERO_ROUTER.defaultFactory());
-        uint256 decimals0 = IERC20Metadata(TOKEN0).decimals();
-        uint256 decimals1 = IERC20Metadata(TOKEN1).decimals();
-
-        uint256 diff;
-        address lowerToken;
-        if (int256(decimals0) - int256(decimals1) != 0) {
-            (diff, lowerToken) = decimals0 > decimals1 ? (decimals0 - decimals1, TOKEN1) : (decimals1 - decimals0, TOKEN0);
-        }
-
-        if (diff != 0) {
-            if (lowerToken == TOKEN0) {
-                ratio = (amount0 * 10**diff) * 10**decimals1 / amount1;
-            }
-            else {
-                ratio = amount0 * 10**decimals0 / (amount1 * 10**diff);
-            }
-        }
-        else {
-            ratio = amount0 * 10**decimals0 / amount1;
-        }
-
-        emit Debug("diff", diff);
-        emit Debug("lowerToken", lowerToken);
-        emit Debug("ratio", ratio);
-    }
-
-
     // ----------------
     // Internal Methods
     // ----------------
 
-    function _injectLiquidity(
+    /**
+     * @notice This internal method adds liquidity to the pool and stakes the LP tokens.
+     * @dev `amountToken0` of TOKEN0 and `amountToken1` of TOKEN1 will be added to the pool. The slippage will be used
+     * to calculate the minimum required to be deposited. The amoount of LP tokens minted to this contract will be
+     * immediately staked via the Gauge contract.
+     *
+     * @param amountToken0 Amount of TOKEN0 to add to liquidity.
+     * @param amountToken1 Amount of TOKEN1 to add to liquidity.
+     * @param deadline Block timestamp deadline.
+     */
+    function _addLiquidityAndStake(
         uint256 amountToken0, 
         uint256 amountToken1,
         uint256 deadline
@@ -295,43 +316,28 @@ contract AeroLooper is UUPSUpgradeable, CommonErrors, OwnableUpgradeable {
             deadline // deadline
         );
         emit LiquidityInjected(amountToken0, amountToken1, liquidity);
+        _stakeLPTokens(liquidity);
     }
 
+    /**
+     * @notice This internal method allows us to stake LP tokens in the Gauge contract.
+     * @param amount Amount of LP tokens to stake/deposit.
+     */
     function _stakeLPTokens(uint256 amount) internal {
+        emit LiquidityStaked(amount);
         IERC20(POOL).approve(address(GAUGE), amount);
         GAUGE.deposit(amount);
     }
 
-    event Debug(string key, uint256 val);
-    event Debug(string key, address val);
-
-    function _sellEmissions(uint256 amount) internal returns (uint256 token0Received, uint256 token1Received) {
-        // TODO: Get reserves
-        (,,uint256 ratio) = getCurrentRatio();
-
-        uint256 balToken0 = IERC20(TOKEN0).balanceOf(address(this));
-        uint256 balToken1 = IERC20(TOKEN1).balanceOf(address(this));
-
-        uint256 amountForToken0 = amount * ratio / 1e18;
-
-        emit Debug("amountForToken0", amountForToken0);
-        emit Debug("AERO pre-bal", AERO.balanceOf(address(this)));
-
-        // TODO: Sell for TOKEN0
-        emit Debug("amount AERO for TOKEN0", amountForToken0);
-        token0Received = _swapAero(amountForToken0, TOKEN0);
-
-        // TODO: Sell for TOKEN1
-        uint256 amountForToken1 = amount - amountForToken0;
-        emit Debug("amount AERO for TOKEN1", amountForToken1);
-        token1Received = _swapAero(amountForToken1, TOKEN1);
-
-        emit Debug("check ratio", amountForToken0 * 1e18/amountForToken1);
-        emit Debug("AERO post-bal", AERO.balanceOf(address(this)));
-
-    }
-
-    function _swapAero(uint256 amount, address targetToken) internal returns (uint256 amountReceived) { // TODO: Refactor
+    /**
+     * @notice This internal method swaps AERO rewards for a target token.
+     * @dev Currently, this method is only meant to handle single hop swaps. Anything that requires a route
+     * with multiple hops, will fail.
+     *
+     * @param amount Amount AERO to swap.
+     * @param targetToken Specified token out.
+     */
+    function _swapAero(uint256 amount, address targetToken) internal {
         IRouter.Route[] memory route = new IRouter.Route[](1);
         route[0] = IRouter.Route({
             from: address(AERO),
@@ -339,20 +345,19 @@ contract AeroLooper is UUPSUpgradeable, CommonErrors, OwnableUpgradeable {
             stable: STABLE,
             factory: AERO_ROUTER.defaultFactory()
         });
+        uint256[] memory amounts = AERO_ROUTER.getAmountsOut(amount, route);
+
+        emit AeroSwapped(amount, targetToken, amounts[1]);
 
         AERO.approve(address(AERO_ROUTER), amount);
-        uint256[] memory amounts = AERO_ROUTER.swapExactTokensForTokens(
+        AERO_ROUTER.swapExactTokensForTokens(
             amount,
-            0,
+            amounts[1],
             route,
             address(this),
             block.timestamp
-        ); // TODO Get quote
-
-        return amounts[1];
+        );
     }
-
-    function _claimEmissions() internal returns (uint256) {}
 
     /**
      * @notice Overriden from UUPSUpgradeable

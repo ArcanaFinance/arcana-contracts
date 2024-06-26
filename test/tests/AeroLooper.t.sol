@@ -4,7 +4,7 @@ pragma solidity ^0.8.19;
 /* solhint-disable private-vars-leading-underscore  */
 
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Metadata, IERC20} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 import {IPool} from "@aero/contracts/interfaces/IPool.sol";
@@ -72,12 +72,14 @@ contract AeroLooperTest is Test {
     // Utility
     // -------
 
+    /// @dev Deals Base USDC
     function _dealUSDC(address to, uint256 amount) internal {
         vm.prank(owner); // masterMinter
         (bool success,) = BASE_USDC.call(abi.encodeWithSignature("mint(address,uint256)", to, amount));
         require(success, "mint failed");
     }
 
+    /// @dev Will store `amount` directly to the Gauge's rewards mapping for a given `acount`.
     function _emulateRewards(address account, uint256 amount) internal {
         // deal reward token (AERO) to the Gauge
         deal(AERO, address(gauge), amount);
@@ -85,6 +87,33 @@ contract AeroLooperTest is Test {
         uint256 mapSlot = 8;
         bytes32 slot = keccak256(abi.encode(account, mapSlot));
         vm.store(address(gauge), slot, bytes32(amount));
+    }
+
+    /// @dev Will return the ratio of reserves in the pool of the pair provided.
+    function _getCurrentRatio(address token0, address token1) internal returns (uint256 amount0, uint256 amount1, uint256 ratio) {
+        (amount0, amount1) = IRouter(AERO_ROUTER).getReserves(token0, token1, false, IRouter(AERO_ROUTER).defaultFactory());
+        uint256 decimals0 = IERC20Metadata(token0).decimals();
+        uint256 decimals1 = IERC20Metadata(token1).decimals();
+
+        uint256 diff;
+        address lowerToken;
+        if (int256(decimals0) - int256(decimals1) != 0) {
+            (diff, lowerToken) = decimals0 > decimals1 ? (decimals0 - decimals1, token1) : (decimals1 - decimals0, token0);
+        }
+
+        if (diff != 0) {
+            if (lowerToken == token0) {
+                ratio = (amount0 * 10**diff) * 10**decimals1 / amount1;
+            }
+            else {
+                ratio = amount0 * 10**decimals0 / (amount1 * 10**diff);
+            }
+        }
+        else {
+            ratio = amount0 * 10**decimals0 / amount1;
+        }
+
+        emit log_named_uint("ratio", ratio);
     }
 
 
@@ -183,22 +212,39 @@ contract AeroLooperTest is Test {
         assertEq(gauge.balanceOf(address(aeroLooper)), liquidityData.liquidityMinted);
     }
 
+    /// @dev This method verifies proper state changes when AeroLooper::claimAndStakeEmissions is called.
+    ///      This method does 3 things: First, it will claim any claimable rewards from the Gauge contract. Then, it
+    ///      will sell the rewards for token0 and token1. The amounts rely on the portion that is passed when claimAndStakeEmissions
+    ///      is called. Lastly, it will inject the amounts of token0 and token1 into the pool and stake the LP tokens minted.
     function test_aeroLooper_claimAndStakeEmissions() public {
         // ~ Config ~
 
-        uint256 amount = 1 ether;
+        uint256 amount = 1_000 ether;
         _emulateRewards(address(aeroLooper), amount);
 
         // ~ Pre-state check ~
+
+        (uint256 preReserve0, uint256 preReserve1,) = IPool(address(POOL)).getReserves();
+
+        uint256 preDeposit = gauge.balanceOf(address(aeroLooper));
 
         assertEq(gauge.rewards(address(aeroLooper)), amount);
 
         // ~ claimAndStakeEmissions ~
 
         vm.prank(owner);
-        aeroLooper.claimAndStakeEmissions();
+        aeroLooper.claimAndStakeEmissions(.50 * 1e18);
 
-        // post state
+        // post-state check ~
+
+        (uint256 postReserve0, uint256 postReserve1,) = IPool(address(POOL)).getReserves();
+        assertGt(postReserve0, preReserve0);
+        assertGt(postReserve1, preReserve1);
+
+        assertGt(gauge.balanceOf(address(aeroLooper)), preDeposit);
+
+        assertEq(gauge.rewards(address(aeroLooper)), 0);
+
     }
 
     /// @dev Verifies proper state changes when AeroLooper::setSlippage is executed.
@@ -221,7 +267,7 @@ contract AeroLooperTest is Test {
     function test_aeroLooper_setSlippage_restrictions() public {
         // caller must be owner
         vm.prank(bob);
-        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, bob));
+        vm.expectRevert(abi.encodeWithSelector(AeroLooper.Unauthorized.selector, bob));
         aeroLooper.setSlippage(20);
 
         // new slippage mustn't be over 1000
@@ -275,7 +321,7 @@ contract AeroLooperTest is Test {
 
         // only owner can withdraw
         vm.prank(bob);
-        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, bob));
+        vm.expectRevert(abi.encodeWithSelector(AeroLooper.Unauthorized.selector, bob));
         aeroLooper.withdrawFromGauge(liquidity);
 
         // cannot withdraw more than what's deposited
@@ -314,7 +360,7 @@ contract AeroLooperTest is Test {
 
         // only owner can call withdrawETH
         vm.prank(bob);
-        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, bob));
+        vm.expectRevert(abi.encodeWithSelector(AeroLooper.Unauthorized.selector, bob));
         aeroLooper.withdrawETH(amount);
 
         // cannot withraw more than balance
@@ -353,12 +399,46 @@ contract AeroLooperTest is Test {
 
         // only owner can call withdrawERC20
         vm.prank(bob);
-        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, bob));
+        vm.expectRevert(abi.encodeWithSelector(AeroLooper.Unauthorized.selector, bob));
         aeroLooper.withdrawERC20(BASE_USDC, amount);
 
         // cannot withraw more than balance
         vm.prank(owner);
         vm.expectRevert(abi.encodeWithSelector(CommonErrors.ValueTooHigh.selector, amount+1, amount));
         aeroLooper.withdrawERC20(BASE_USDC, amount+1);
+
+        // token cannot be address(0)
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(CommonErrors.InvalidZeroAddress.selector));
+        aeroLooper.withdrawERC20(address(0), amount);
+    }
+
+    /// @dev Verifies proper state changes when AeroLooper::setAdmin is executed.
+    function test_aeroLooper_setAdmin() public {
+        // ~ Pre-state check ~
+
+        assertEq(aeroLooper.admin(), address(0));
+
+        // ~ setAdmin ~
+
+        vm.prank(owner);
+        aeroLooper.setAdmin(bob);
+
+        // ~ Pre-state check ~
+
+        assertEq(aeroLooper.admin(), bob);
+    }
+
+    /// @dev Verifies proper state changes when AeroLooper::setAdmin is called with unacceptable conditions.
+    function test_aeroLooper_setAdmin_restrictions() public {
+        // only owner can call setAdmin
+        vm.prank(bob);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, bob));
+        aeroLooper.setAdmin(bob);
+
+        // cannot input address(0)
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(CommonErrors.InvalidZeroAddress.selector));
+        aeroLooper.setAdmin(address(0));
     }
 }
