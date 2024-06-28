@@ -211,7 +211,7 @@ contract AeroLooper is UUPSUpgradeable, CommonErrors, OwnableUpgradeable {
      * @notice This permissioned external method is used to withdraw TOKEN0 from this contract.
      * @param amount Amount of TOKEN0 to withdraw.
      */
-    function withdrawETH(uint256 amount) external onlyAdmin {
+    function withdrawETH(uint256 amount) external onlyOwner {
         amount.requireLessThanOrEqualToUint256(address(this).balance);
         emit FundsWithdrawn(address(0), amount);
         (bool success,) = owner().call{value:amount}("");
@@ -223,7 +223,7 @@ contract AeroLooper is UUPSUpgradeable, CommonErrors, OwnableUpgradeable {
      * @param token Contract address of ERC20 token that's being withdrawn.
      * @param amount Amount of ERC20 tokens to withdraw.
      */
-    function withdrawERC20(address token, uint256 amount) external onlyAdmin {
+    function withdrawERC20(address token, uint256 amount) external onlyOwner {
         token.requireNonZeroAddress();
         amount.requireLessThanOrEqualToUint256(IERC20(token).balanceOf(address(this)));
         emit FundsWithdrawn(token, amount);

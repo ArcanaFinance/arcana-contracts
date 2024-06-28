@@ -360,7 +360,7 @@ contract AeroLooperTest is Test {
 
         // only owner can call withdrawETH
         vm.prank(bob);
-        vm.expectRevert(abi.encodeWithSelector(AeroLooper.Unauthorized.selector, bob));
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, bob));
         aeroLooper.withdrawETH(amount);
 
         // cannot withraw more than balance
@@ -399,7 +399,7 @@ contract AeroLooperTest is Test {
 
         // only owner can call withdrawERC20
         vm.prank(bob);
-        vm.expectRevert(abi.encodeWithSelector(AeroLooper.Unauthorized.selector, bob));
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, bob));
         aeroLooper.withdrawERC20(BASE_USDC, amount);
 
         // cannot withraw more than balance
