@@ -84,7 +84,8 @@ contract DeployArcUSD is DeployUtility {
                 rpc_url: vm.envString("BASE_RPC_URL"), 
                 lz_endpoint: BASE_LZ_ENDPOINT_V1, 
                 chainId: BASE_LZ_CHAIN_ID_V1, 
-                tokenAddress: _loadDeploymentAddress("base", "arcUSD")}
+                tokenAddress: _loadDeploymentAddress("base", "arcUSD")
+            }
         ));
         allChains.push(NetworkData(
             {
@@ -92,6 +93,33 @@ contract DeployArcUSD is DeployUtility {
                 rpc_url: vm.envString("BSC_RPC_URL"), 
                 lz_endpoint: BSC_LZ_ENDPOINT_V1, 
                 chainId: BSC_LZ_CHAIN_ID_V1, 
+                tokenAddress: _loadDeploymentAddress("bsc", "arcUSD")
+            }
+        ));
+        // allChains.push(NetworkData(
+        //     {
+        //         chainName: "blast", 
+        //         rpc_url: vm.envString("BLAST_RPC_URL"), 
+        //         lz_endpoint: BLAST_LZ_ENDPOINT_V1, 
+        //         chainId: BLAST_LZ_CHAIN_ID_V1, 
+        //         tokenAddress: address(0)
+        //     }
+        // ));
+        // allChains.push(NetworkData(
+        //     {
+        //         chainName: "scroll", 
+        //         rpc_url: vm.envString("SCROLL_RPC_URL"), 
+        //         lz_endpoint: SCROLL_LZ_ENDPOINT_V1, 
+        //         chainId: SCROLL_LZ_CHAIN_ID_V1, 
+        //         tokenAddress: address(0)
+        //     }
+        // ));
+        allChains.push(NetworkData(
+            {
+                chainName: "arb", 
+                rpc_url: vm.envString("ARB_RPC_URL"), 
+                lz_endpoint: ARB_LZ_ENDPOINT_V1, 
+                chainId: ARB_LZ_CHAIN_ID_V1, 
                 tokenAddress: address(0)
             }
         ));
@@ -140,8 +168,6 @@ contract DeployArcUSD is DeployUtility {
                 vm.stopBroadcast();
             }
         }
-        
-        // TODO: Deploy core contracts -> DeployCore
     }
 
     /**
