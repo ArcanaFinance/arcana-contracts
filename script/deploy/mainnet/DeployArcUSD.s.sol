@@ -22,16 +22,20 @@ import "../../../test/utils/Constants.sol";
 /**
     @dev To run:
     forge script script/deploy/mainnet/DeployArcUSD.s.sol:DeployArcUSD --broadcast --legacy \
-    --gas-estimate-multiplier 600 -vvvv
+    --gas-estimate-multiplier 200 -vvvv
 
-    @dev To verify manually (RE.AL):
-    forge verify-contract <CONTRACT_ADDRESS> --chain-id 111188 --watch \
-    src/arcUSD.sol:arcUSD --verifier blockscout --verifier-url https://explorer.re.al//api
+    @dev To verify manually (RE.AL - Blockscout):
+    forge verify-contract <CONTRACT_ADDRESS> --chain-id 111188 --watch src/arcUSD.sol:arcUSD --verifier blockscout --verifier-url https://explorer.re.al//api
 
-    @dev To verify manually (Base, Optimism, Polygon, BSC):
+    @dev To verify manually (Etherscan):
     export ETHERSCAN_API_KEY="<API_KEY>"
-    forge verify-contract <CONTRACT_ADDRESS> --chain-id <CHAIN_ID> --watch src/arcUSD.sol:arcUSD \
-    --verifier etherscan --constructor-args $(cast abi-encode "constructor(uint256, address)" 111188 <LOCAL_LZ_ADDRESS>)
+    forge verify-contract <CONTRACT_ADDRESS> --chain-id <CHAIN_ID> --watch src/arcUSD.sol:arcUSD --verifier etherscan \
+    --constructor-args $(cast abi-encode "constructor(uint256, address)" 111188 <LZ_ENDPOINT_V1>)
+
+    @dev To verify proxy manually:
+    forge verify-contract <CONTRACT_ADDRESS> --chain-id <CHAIN_ID> --watch \
+    lib/tangible-foundation-contracts/lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol:ERC1967Proxy \
+    --verifier etherscan --constructor-args $(cast abi-encode "constructor(uint256, bytes)" 0xFD4E97D5d959030f107eFfF11dBeBD34f876527f 0x)
  */
 
 /**
@@ -96,24 +100,24 @@ contract DeployArcUSD is DeployUtility {
                 tokenAddress: _loadDeploymentAddress("bsc", "arcUSD")
             }
         ));
-        // allChains.push(NetworkData(
-        //     {
-        //         chainName: "blast", 
-        //         rpc_url: vm.envString("BLAST_RPC_URL"), 
-        //         lz_endpoint: BLAST_LZ_ENDPOINT_V1, 
-        //         chainId: BLAST_LZ_CHAIN_ID_V1, 
-        //         tokenAddress: address(0)
-        //     }
-        // ));
-        // allChains.push(NetworkData(
-        //     {
-        //         chainName: "scroll", 
-        //         rpc_url: vm.envString("SCROLL_RPC_URL"), 
-        //         lz_endpoint: SCROLL_LZ_ENDPOINT_V1, 
-        //         chainId: SCROLL_LZ_CHAIN_ID_V1, 
-        //         tokenAddress: address(0)
-        //     }
-        // ));
+        allChains.push(NetworkData(
+            {
+                chainName: "blast", 
+                rpc_url: vm.envString("BLAST_RPC_URL"), 
+                lz_endpoint: BLAST_LZ_ENDPOINT_V1, 
+                chainId: BLAST_LZ_CHAIN_ID_V1, 
+                tokenAddress: address(0)
+            }
+        ));
+        allChains.push(NetworkData(
+            {
+                chainName: "scroll", 
+                rpc_url: vm.envString("SCROLL_RPC_URL"), 
+                lz_endpoint: SCROLL_LZ_ENDPOINT_V1, 
+                chainId: SCROLL_LZ_CHAIN_ID_V1, 
+                tokenAddress: address(0)
+            }
+        ));
         allChains.push(NetworkData(
             {
                 chainName: "arb", 
@@ -137,6 +141,8 @@ contract DeployArcUSD is DeployUtility {
         for (uint256 i; i < len; ++i) {
             if (allChains[i].tokenAddress == address(0)) {
 
+                console.log(allChains[i].chainName);
+
                 vm.createSelectFork(allChains[i].rpc_url);
                 vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
 
@@ -151,20 +157,24 @@ contract DeployArcUSD is DeployUtility {
                 // set trusted remote address on all other chains for each token.
                 for (uint256 j; j < len; ++j) {
                     if (i != j) {
-                        if (
-                            !arcUSD.isTrustedRemote(
-                                allChains[j].chainId, abi.encodePacked(arcUSDAddress, arcUSDAddress)
-                            )
-                        ) {
-                            arcUSD.setTrustedRemoteAddress(
-                                allChains[j].chainId, abi.encodePacked(arcUSDAddress)
-                            );
+                        if (allChains[j].tokenAddress != address(0)) {
+                            if (
+                                !arcUSD.isTrustedRemote(
+                                    allChains[j].chainId, abi.encodePacked(allChains[j].tokenAddress, arcUSDAddress)
+                                )
+                            ) {
+                                arcUSD.setTrustedRemoteAddress(
+                                    allChains[j].chainId, abi.encodePacked(allChains[j].tokenAddress)
+                                );
+                            }
                         }
                     }
                 }
 
-                // save arcUSD addresses to appropriate JSON
-                _saveDeploymentAddress(allChains[i].chainName, "arcUSD", arcUSDAddress);
+                // save arcUSD addresses to appropriate JSON if not set already
+                if (_loadDeploymentAddress(allChains[i].chainName, "arcUSD") != arcUSDAddress) {
+                    _saveDeploymentAddress(allChains[i].chainName, "arcUSD", arcUSDAddress);
+                }
                 vm.stopBroadcast();
             }
         }

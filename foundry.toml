@@ -5,6 +5,7 @@ libs = ["lib"]
 solc = "0.8.20"
 evm_version = "shanghai"
 fs_permissions = [{ access = "read-write", path = "./deployments/"}]
+bytecode_hash = "none"
 
 [fmt]
 wrap_comments = true
