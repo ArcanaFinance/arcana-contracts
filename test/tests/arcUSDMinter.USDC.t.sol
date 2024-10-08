@@ -3,808 +3,486 @@ pragma solidity ^0.8.19;
 
 /* solhint-disable func-name-mixedcase  */
 
+import {Test} from "forge-std/Test.sol";
+
 // oz imports
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 // local files
-import {BaseSetup} from "../BaseSetup.sol";
 import {arcUSDMinter} from "../../src/arcUSDMinter.sol";
+import {CustodianManager} from "../../src/CustodianManager.sol";
 import {arcUSD} from "../../src/arcUSD.sol";
-import {arcUSDTaxManager} from "../../src/arcUSDTaxManager.sol";
 import {IarcUSDDefinitions} from "../../src/interfaces/IarcUSDDefinitions.sol";
 import {IRebaseToken} from "../../src/interfaces/IRebaseToken.sol";
 
 // helpers
 import "../utils/Constants.sol";
+import {MockOracle} from "../mock/MockOracle.sol";
 
 /**
- * @title arcUSDMinterUSTBIntegrationTest
+ * @title arcUSDMinterUSDCIntegrationTest
  * @notice Unit Tests for arcUSDMinter contract interactions
  */
-contract arcUSDMinterUSTBIntegrationTest is BaseSetup {
+contract arcUSDMinterUSDCIntegrationTest is Test {
     string public REAL_RPC_URL = vm.envString("REAL_RPC_URL");
-    IERC20 public unrealUSTB = IERC20(UNREAL_USTB);
 
-    function setUp() public override {
+    arcUSD internal arcUSDToken;
+    arcUSDMinter internal arcMinter;
+    CustodianManager internal custodianManager;
+
+    IERC20 public reUSDC = IERC20(REAL_USDC);
+
+    address public constant OWNER = 0x946C569791De3283f33372731d77555083c329da;
+    address public constant REBASE_MANAGER = 0x1FB57aF994a03c49f9B1b7Eef938519463CdF996;
+    address public constant CUSTODIAN = 0x499D011d7F13c707EebEe5B677A772d853723C0F;
+    address public constant ALICE = address(bytes20(bytes("Alice")));
+    address public constant BOB = address(bytes20(bytes("Bob")));
+
+    function setUp() public {
         vm.createSelectFork(REAL_RPC_URL);
-        super.setUp();
 
-        // remove unrealUSTB from supported assets and
+        arcUSDToken = arcUSD(0xAEC9e50e3397f9ddC635C6c429C8C7eca418a143);
+        arcMinter = arcUSDMinter(0x6C2c653BCEB606bE8E7e92D008c62D0e05a83fd9);
+        custodianManager = CustodianManager(0xD0b3DfCB4383b10d964A4E0cb1a0Cea19C9F89AC);
 
-        vm.startPrank(owner);
-        arcMinter.removeSupportedAsset(address(USTB));
-        arcMinter.removeSupportedAsset(address(USDCToken));
-        arcMinter.removeSupportedAsset(address(USDTToken));
+        // Deploy oracle for reUSDC
+        MockOracle USDCOracle = new MockOracle(
+            address(reUSDC),
+            1e18,
+            18
+        );
 
-        arcMinter.addSupportedAsset(address(unrealUSTB), address(USTBOracle));
+        vm.startPrank(OWNER);
+        arcMinter.addSupportedAsset(address(reUSDC), address(USDCOracle));
+        arcMinter.modifyWhitelist(ALICE, true);
+        arcMinter.modifyWhitelist(BOB, true);
         vm.stopPrank();
+
+        _createLabels();
     }
 
-    /// @dev local deal to take into account unrealUSTB's unique storage layout
-    function _deal(address token, address give, uint256 amount) internal {
-        // deal doesn't work with unrealUSTB since the storage layout is different
-        if (token == address(unrealUSTB)) {
-            // if address is opted out, update normal balance (basket is opted out of rebasing)
-            if (give == address(arcMinter)) {
-                bytes32 USTBStorageLocation = 0x52c63247e1f47db19d5ce0460030c497f067ca4cebf71ba98eeadabe20bace00;
-                uint256 mapSlot = 0;
-                bytes32 slot = keccak256(abi.encode(give, uint256(USTBStorageLocation) + mapSlot));
-                vm.store(address(unrealUSTB), slot, bytes32(amount));
-            }
-            // else, update shares balance
-            else {
-                bytes32 USTBStorageLocation = 0x8a0c9d8ec1d9f8b365393c36404b40a33f47675e34246a2e186fbefd5ecd3b00;
-                uint256 mapSlot = 2;
-                bytes32 slot = keccak256(abi.encode(give, uint256(USTBStorageLocation) + mapSlot));
-                vm.store(address(unrealUSTB), slot, bytes32(amount));
-            }
-        }
-        // If not rebase token, use normal deal
-        else {
-            deal(token, give, amount);
-        }
+
+    // -------
+    // Utility
+    // -------
+
+    function _createLabels() internal {
+        vm.label(OWNER, "OWNER");
+        vm.label(CUSTODIAN, "CUSTODIAN");
+        vm.label(BOB, "BOB");
+        vm.label(ALICE, "ALICE");
+        vm.label(address(reUSDC), "reUSDC");
+        vm.label(address(arcUSDToken), "arcUSD");
+        vm.label(address(arcMinter), "arcUSDMinter");
     }
 
-    function test_USTB_init_state() public {
-        assertNotEq(arcUSDToken.taxManager(), address(0));
 
-        address[] memory assets = arcMinter.getActiveAssets();
-        assertEq(assets.length, 1);
-        assertEq(assets[0], address(unrealUSTB));
+    // ----------
+    // Unit Tests
+    // ----------
 
-        assertEq(arcMinter.custodian(), address(custodian));
-    }
+    function test_USDC_mint_static() public {
+        uint256 amount = 10 * 1e6;
+        deal(address(reUSDC), BOB, amount);
 
-    function test_USTB_mint() public {
-        uint256 amount = 10 ether;
-        _deal(address(unrealUSTB), bob, amount);
-
-        uint256 preBal = unrealUSTB.balanceOf(bob);
-        uint256 quoted = arcMinter.quoteMint(address(unrealUSTB), bob, amount);
+        uint256 preBal = reUSDC.balanceOf(BOB);
+        uint256 quoted = arcMinter.quoteMint(address(reUSDC), BOB, amount);
 
         // taker
-        vm.startPrank(bob);
-        unrealUSTB.approve(address(arcMinter), amount);
-        arcMinter.mint(address(unrealUSTB), amount, amount - 1);
+        vm.startPrank(BOB);
+        reUSDC.approve(address(arcMinter), amount);
+        arcMinter.mint(address(reUSDC), amount, amount - 1);
         vm.stopPrank();
 
-        assertEq(unrealUSTB.balanceOf(bob), preBal - amount);
-        assertApproxEqAbs(unrealUSTB.balanceOf(address(arcMinter)), amount, 1);
-        assertApproxEqAbs(arcUSDToken.balanceOf(bob), amount, 1);
-        assertApproxEqAbs(arcUSDToken.balanceOf(bob), quoted, 1);
+        assertEq(reUSDC.balanceOf(BOB), preBal - amount);
+        assertApproxEqAbs(reUSDC.balanceOf(address(arcMinter)), amount, 1);
+        assertApproxEqAbs(arcUSDToken.balanceOf(BOB), quoted, 1);
     }
 
-    function test_USTB_mint_fuzzing(uint256 amount) public {
-        vm.assume(amount > 0.000000000001e18 && amount < _maxMintPerBlock);
-        _deal(address(unrealUSTB), bob, amount);
+    function test_USDC_mint_fuzzing(uint256 amount) public {
+        vm.assume(amount > 0.000000000001e18 && amount < 100_000 * 1e6);
+        deal(address(reUSDC), BOB, amount);
 
-        uint256 preBal = unrealUSTB.balanceOf(bob);
+        uint256 preBal = reUSDC.balanceOf(BOB);
         uint256 deviation = amount * 1 / 100; // 1% deviation
-        uint256 quoted = arcMinter.quoteMint(address(unrealUSTB), bob, amount);
+        uint256 quoted = arcMinter.quoteMint(address(reUSDC), BOB, amount);
 
         // taker
-        vm.startPrank(bob);
-        unrealUSTB.approve(address(arcMinter), amount);
-        arcMinter.mint(address(unrealUSTB), amount, amount - deviation);
+        vm.startPrank(BOB);
+        reUSDC.approve(address(arcMinter), amount);
+        arcMinter.mint(address(reUSDC), amount, amount - deviation);
         vm.stopPrank();
 
-        assertApproxEqAbs(unrealUSTB.balanceOf(bob), preBal - amount, 2);
-        assertApproxEqAbs(unrealUSTB.balanceOf(address(arcMinter)), amount, 2);
-        assertApproxEqAbs(arcUSDToken.balanceOf(bob), amount, 2);
-        assertApproxEqAbs(arcUSDToken.balanceOf(bob), quoted, 2);
+        assertApproxEqAbs(reUSDC.balanceOf(BOB), preBal - amount, 2);
+        assertApproxEqAbs(reUSDC.balanceOf(address(arcMinter)), amount, 2);
+        assertApproxEqAbs(arcUSDToken.balanceOf(BOB), quoted, 2);
     }
 
-    function test_USTB_mint_optedOut_fuzzing(uint256 amount) public {
-        vm.assume(amount > 0.000000000001e18 && amount < _maxMintPerBlock);
-        _deal(address(unrealUSTB), bob, amount);
-
-        vm.prank(bob);
-        IRebaseToken(address(unrealUSTB)).disableRebase(bob, true);
-
-        uint256 preBal = unrealUSTB.balanceOf(bob);
-        uint256 deviation = amount * 1 / 100; // 1% deviation
-        uint256 quoted = arcMinter.quoteMint(address(unrealUSTB), bob, amount);
-
-        // taker
-        vm.startPrank(bob);
-        unrealUSTB.approve(address(arcMinter), amount);
-        arcMinter.mint(address(unrealUSTB), amount, amount - deviation);
-        vm.stopPrank();
-
-        assertApproxEqAbs(unrealUSTB.balanceOf(bob), preBal - amount, 2);
-        assertApproxEqAbs(unrealUSTB.balanceOf(address(arcMinter)), amount, 2);
-        assertApproxEqAbs(arcUSDToken.balanceOf(bob), amount, 2);
-        assertApproxEqAbs(arcUSDToken.balanceOf(bob), quoted, 2);
-    }
-
-    function test_USTB_requestTokens_to_alice_noFuzz() public {
+    function test_USDC_requestTokens_to_alice_noFuzz() public {
         // ~ config ~
 
-        uint256 amount = 10 ether;
+        uint256 amountArc = 10 * 1e18; // amount of arcUSD -> 18 decimals
+        uint256 amountToRedeem = 10 * 1e6; // amount of USDC being claimed -> 6 decimals
 
         vm.prank(address(arcMinter));
-        arcUSDToken.mint(alice, amount);
-        _deal(address(unrealUSTB), address(arcMinter), amount);
+        arcUSDToken.mint(ALICE, amountArc);
+        deal(address(reUSDC), address(arcMinter), amountToRedeem);
 
         // ~ Pre-state check ~
 
-        assertEq(arcUSDToken.balanceOf(alice), amount);
-        assertEq(unrealUSTB.balanceOf(alice), 0);
-        assertEq(unrealUSTB.balanceOf(address(arcMinter)), amount);
+        assertApproxEqAbs(arcUSDToken.balanceOf(ALICE), amountArc, 1);
+        assertEq(reUSDC.balanceOf(ALICE), 0);
+        assertEq(reUSDC.balanceOf(address(arcMinter)), amountToRedeem);
 
         arcUSDMinter.RedemptionRequest[] memory requests =
-            arcMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
+            arcMinter.getRedemptionRequests(ALICE, address(reUSDC), 0, 10);
         assertEq(requests.length, 0);
+
+        uint256 amountIn = arcUSDToken.balanceOf(ALICE);
+        uint256 quoteOut = arcMinter.quoteRedeem(address(reUSDC), ALICE, amountIn);
 
         // ~ Alice executes requestTokens ~
 
-        vm.startPrank(alice);
-        arcUSDToken.approve(address(arcMinter), amount);
-        arcMinter.requestTokens(address(unrealUSTB), amount);
+        vm.startPrank(ALICE);
+        arcUSDToken.approve(address(arcMinter), amountIn);
+        arcMinter.requestTokens(address(reUSDC), amountIn);
         vm.stopPrank();
 
         // ~ Post-state check ~
 
-        requests = arcMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
+        requests = arcMinter.getRedemptionRequests(ALICE, address(reUSDC), 0, 10);
         assertEq(requests.length, 1);
-        assertEq(requests[0].amount, amount);
-        assertEq(requests[0].claimableAfter, block.timestamp + 5 days);
+        assertEq(requests[0].amount, quoteOut);
+        assertEq(requests[0].claimableAfter, block.timestamp + 7 days);
         assertEq(requests[0].claimed, 0);
 
-        uint256 requested = arcMinter.getPendingClaims(address(unrealUSTB));
-        uint256 claimable = arcMinter.claimableTokens(alice, address(unrealUSTB));
+        uint256 requested = arcMinter.getPendingClaims(address(reUSDC));
+        uint256 claimable = arcMinter.claimableTokens(ALICE, address(reUSDC));
 
-        assertEq(requested, amount);
+        assertEq(requested, quoteOut);
         assertEq(claimable, 0);
 
         // ~ Warp to claimDelay-1 ~
 
         vm.warp(block.timestamp + arcMinter.claimDelay() - 1);
 
-        requested = arcMinter.getPendingClaims(address(unrealUSTB));
-        claimable = arcMinter.claimableTokens(alice, address(unrealUSTB));
+        requested = arcMinter.getPendingClaims(address(reUSDC));
+        claimable = arcMinter.claimableTokens(ALICE, address(reUSDC));
 
-        assertEq(requested, amount);
+        assertEq(requested, quoteOut);
         assertEq(claimable, 0);
 
         // ~ Warp to post-claimDelay and query claimable ~
 
         vm.warp(block.timestamp + arcMinter.claimDelay());
 
-        requested = arcMinter.getPendingClaims(address(unrealUSTB));
-        claimable = arcMinter.claimableTokens(alice, address(unrealUSTB));
+        requested = arcMinter.getPendingClaims(address(reUSDC));
+        claimable = arcMinter.claimableTokens(ALICE, address(reUSDC));
 
-        assertEq(requested, amount);
-        assertEq(claimable, amount);
+        assertEq(requested, quoteOut);
+        assertEq(claimable, quoteOut);
     }
 
-    function test_USTB_requestTokens_to_alice_fuzzing(uint256 amount) public {
-        vm.assume(amount > 0.000000000001e18 && amount < _maxMintPerBlock);
+    function test_USDC_requestTokens_to_alice_fuzzing(uint256 amountToRedeem) public {
+        vm.assume(amountToRedeem > 0.000000000001e18 && amountToRedeem < 100_000 * 1e6);
+
+        uint256 amountArc = amountToRedeem * 1e12; // amount of arcUSD -> 18 decimals
+        //uint256 amountToRedeem = 10 * 1e6; // amount of USDC being claimed -> 6 decimals
 
         // ~ config ~
 
         vm.prank(address(arcMinter));
-        arcUSDToken.mint(alice, amount);
-        _deal(address(unrealUSTB), address(arcMinter), amount);
+        arcUSDToken.mint(ALICE, amountArc);
+        deal(address(reUSDC), address(arcMinter), amountToRedeem);
 
         // ~ Pre-state check ~
 
-        assertEq(arcUSDToken.balanceOf(alice), amount);
-        assertEq(unrealUSTB.balanceOf(alice), 0);
-        assertEq(unrealUSTB.balanceOf(address(arcMinter)), amount);
+        assertApproxEqAbs(arcUSDToken.balanceOf(ALICE), amountArc, 2);
+        assertEq(reUSDC.balanceOf(ALICE), 0);
+        assertEq(reUSDC.balanceOf(address(arcMinter)), amountToRedeem);
 
         arcUSDMinter.RedemptionRequest[] memory requests =
-            arcMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
+            arcMinter.getRedemptionRequests(ALICE, address(reUSDC), 0, 10);
         assertEq(requests.length, 0);
+
+        uint256 amountIn = arcUSDToken.balanceOf(ALICE);
+        uint256 quoteOut = arcMinter.quoteRedeem(address(reUSDC), ALICE, amountIn);
 
         // ~ Alice executes requestTokens ~
 
-        vm.startPrank(alice);
-        arcUSDToken.approve(address(arcMinter), amount);
-        arcMinter.requestTokens(address(unrealUSTB), amount);
+        vm.startPrank(ALICE);
+        arcUSDToken.approve(address(arcMinter), amountIn);
+        arcMinter.requestTokens(address(reUSDC), amountIn);
         vm.stopPrank();
 
         // ~ Post-state check ~
 
-        assertEq(arcUSDToken.balanceOf(alice), 0);
-        assertEq(unrealUSTB.balanceOf(alice), 0);
-        assertEq(unrealUSTB.balanceOf(address(arcMinter)), amount);
+        assertEq(arcUSDToken.balanceOf(ALICE), 0);
+        assertEq(reUSDC.balanceOf(ALICE), 0);
+        assertEq(reUSDC.balanceOf(address(arcMinter)), amountToRedeem);
 
-        requests = arcMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
+        requests = arcMinter.getRedemptionRequests(ALICE, address(reUSDC), 0, 10);
         assertEq(requests.length, 1);
-        assertEq(requests[0].amount, amount);
-        assertEq(requests[0].claimableAfter, block.timestamp + 5 days);
+        assertEq(requests[0].amount, quoteOut);
+        assertEq(requests[0].claimableAfter, block.timestamp + 7 days);
         assertEq(requests[0].claimed, 0);
 
-        uint256 requested = arcMinter.getPendingClaims(address(unrealUSTB));
-        uint256 claimable = arcMinter.claimableTokens(alice, address(unrealUSTB));
+        uint256 requested = arcMinter.getPendingClaims(address(reUSDC));
+        uint256 claimable = arcMinter.claimableTokens(ALICE, address(reUSDC));
 
-        assertEq(requested, amount);
+        assertEq(requested, quoteOut);
         assertEq(claimable, 0);
 
         // ~ Warp to claimDelay-1 ~
 
         vm.warp(block.timestamp + arcMinter.claimDelay() - 1);
 
-        requested = arcMinter.getPendingClaims(address(unrealUSTB));
-        claimable = arcMinter.claimableTokens(alice, address(unrealUSTB));
+        requested = arcMinter.getPendingClaims(address(reUSDC));
+        claimable = arcMinter.claimableTokens(ALICE, address(reUSDC));
 
-        assertEq(requested, amount);
+        assertEq(requested, quoteOut);
         assertEq(claimable, 0);
 
         // ~ Warp to post-claimDelay and query claimable ~
 
         vm.warp(block.timestamp + arcMinter.claimDelay());
 
-        requested = arcMinter.getPendingClaims(address(unrealUSTB));
-        claimable = arcMinter.claimableTokens(alice, address(unrealUSTB));
+        requested = arcMinter.getPendingClaims(address(reUSDC));
+        claimable = arcMinter.claimableTokens(ALICE, address(reUSDC));
 
-        assertEq(requested, amount);
-        assertEq(claimable, amount);
+        assertEq(requested, quoteOut);
+        assertEq(claimable, quoteOut);
     }
 
-    function test_USTB_requestTokens_to_alice_multiple() public {
+    function test_USDC_claim_noFuzz() public {
         // ~ config ~
 
-        uint256 amountToMint = 10 ether;
-
-        uint256 amount1 = amountToMint / 2;
-        uint256 amount2 = amountToMint - amount1;
+        uint256 amountArc = 10 * 1e18; // amount of arcUSD -> 18 decimals
+        uint256 amountToClaim = 10 * 1e6; // amount of USDC being claimed -> 6 decimals
 
         vm.prank(address(arcMinter));
-        arcUSDToken.mint(alice, amountToMint);
-        _deal(address(unrealUSTB), address(arcMinter), amountToMint);
+        arcUSDToken.mint(ALICE, amountArc);
+        deal(address(reUSDC), address(arcMinter), amountToClaim);
 
         // ~ Pre-state check ~
 
-        assertEq(arcUSDToken.balanceOf(alice), amount1 + amount2);
-        assertEq(unrealUSTB.balanceOf(alice), 0);
-        assertEq(unrealUSTB.balanceOf(address(arcMinter)), amount1 + amount2);
+        assertApproxEqAbs(arcUSDToken.balanceOf(ALICE), amountArc, 2);
+        assertEq(reUSDC.balanceOf(ALICE), 0);
+        assertEq(reUSDC.balanceOf(address(arcMinter)), amountToClaim);
 
         arcUSDMinter.RedemptionRequest[] memory requests =
-            arcMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
+            arcMinter.getRedemptionRequests(ALICE, address(reUSDC), 0, 10);
         assertEq(requests.length, 0);
 
-        // ~ Alice executes requestTokens 1 ~
-
-        vm.startPrank(alice);
-        arcUSDToken.approve(address(arcMinter), amount1);
-        arcMinter.requestTokens(address(unrealUSTB), amount1);
-        vm.stopPrank();
-
-        uint256 request1 = block.timestamp;
-
-        // ~ Post-state check 1 ~
-
-        assertEq(arcUSDToken.balanceOf(alice), amount2);
-        assertEq(unrealUSTB.balanceOf(alice), 0);
-
-        requests = arcMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
-        assertEq(requests.length, 1);
-        assertEq(requests[0].amount, amount1);
-        assertEq(requests[0].claimableAfter, request1 + 5 days);
-        assertEq(requests[0].claimed, 0);
-
-        uint256 requested = arcMinter.getPendingClaims(address(unrealUSTB));
-        uint256 claimable = arcMinter.claimableTokens(alice, address(unrealUSTB));
-
-        assertEq(requested, amount1);
-        assertEq(claimable, 0);
-
-        // ~ Alice executes requestTokens 2 ~
-
-        vm.warp(block.timestamp + 1);
-
-        vm.startPrank(alice);
-        arcUSDToken.approve(address(arcMinter), amount2);
-        arcMinter.requestTokens(address(unrealUSTB), amount2);
-        vm.stopPrank();
-
-        uint256 request2 = block.timestamp;
-
-        // ~ Post-state check 2 ~
-
-        assertEq(arcUSDToken.balanceOf(alice), 0);
-        assertEq(unrealUSTB.balanceOf(alice), 0);
-
-        requests = arcMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
-        assertEq(requests.length, 2);
-        assertEq(requests[0].amount, amount1);
-        assertEq(requests[0].claimableAfter, request1 + 5 days);
-        assertEq(requests[0].claimed, 0);
-        assertEq(requests[1].amount, amount2);
-        assertEq(requests[1].claimableAfter, request2 + 5 days);
-        assertEq(requests[1].claimed, 0);
-
-        requested = arcMinter.getPendingClaims(address(unrealUSTB));
-        claimable = arcMinter.claimableTokens(alice, address(unrealUSTB));
-
-        assertEq(requested, amount1 + amount2);
-        assertEq(claimable, 0);
-
-        // ~ Warp to claimDelay-1 ~
-
-        vm.warp(block.timestamp + arcMinter.claimDelay() - 1);
-
-        requested = arcMinter.getPendingClaims(address(unrealUSTB));
-        claimable = arcMinter.claimableTokens(alice, address(unrealUSTB));
-
-        assertEq(requested, amount1 + amount2);
-        assertEq(claimable, amount1);
-
-        // ~ Warp to post-claimDelay and query claimable ~
-
-        vm.warp(block.timestamp + arcMinter.claimDelay());
-
-        requested = arcMinter.getPendingClaims(address(unrealUSTB));
-        claimable = arcMinter.claimableTokens(alice, address(unrealUSTB));
-
-        assertEq(requested, amount1 + amount2);
-        assertEq(claimable, amount1 + amount2);
-    }
-
-    function test_USTB_claim_noFuzz() public {
-        // ~ config ~
-
-        uint256 amount = 10 ether;
-
-        vm.prank(address(arcMinter));
-        arcUSDToken.mint(alice, amount);
-        _deal(address(unrealUSTB), address(arcMinter), amount);
-
-        // ~ Pre-state check ~
-
-        assertEq(arcUSDToken.balanceOf(alice), amount);
-        assertEq(unrealUSTB.balanceOf(alice), 0);
-        assertEq(unrealUSTB.balanceOf(address(arcMinter)), amount);
-
-        arcUSDMinter.RedemptionRequest[] memory requests =
-            arcMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
-        assertEq(requests.length, 0);
+        uint256 amountIn = arcUSDToken.balanceOf(ALICE);
+        uint256 quoteOut = arcMinter.quoteRedeem(address(reUSDC), ALICE, amountIn);
 
         // ~ Alice executes requestTokens ~
 
-        vm.startPrank(alice);
-        arcUSDToken.approve(address(arcMinter), amount);
-        arcMinter.requestTokens(address(unrealUSTB), amount);
+        vm.startPrank(ALICE);
+        arcUSDToken.approve(address(arcMinter), amountIn);
+        arcMinter.requestTokens(address(reUSDC), amountIn);
         vm.stopPrank();
 
         // ~ Post-state check 1 ~
 
-        assertEq(arcUSDToken.balanceOf(alice), 0);
-        assertEq(unrealUSTB.balanceOf(alice), 0);
-        assertEq(unrealUSTB.balanceOf(address(arcMinter)), amount);
+        assertEq(arcUSDToken.balanceOf(ALICE), 0);
+        assertEq(reUSDC.balanceOf(ALICE), 0);
+        assertEq(reUSDC.balanceOf(address(arcMinter)), amountToClaim);
 
-        requests = arcMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
+        requests = arcMinter.getRedemptionRequests(ALICE, address(reUSDC), 0, 10);
         assertEq(requests.length, 1);
-        assertEq(requests[0].amount, amount);
-        assertEq(requests[0].claimableAfter, block.timestamp + 5 days);
+        assertEq(requests[0].amount, quoteOut);
+        assertEq(requests[0].claimableAfter, block.timestamp + 7 days);
         assertEq(requests[0].claimed, 0);
 
-        uint256 requested = arcMinter.getPendingClaims(address(unrealUSTB));
-        uint256 claimable = arcMinter.claimableTokens(alice, address(unrealUSTB));
+        uint256 requested = arcMinter.getPendingClaims(address(reUSDC));
+        uint256 claimable = arcMinter.claimableTokens(ALICE, address(reUSDC));
 
-        assertEq(requested, amount);
+        assertEq(requested, quoteOut);
         assertEq(claimable, 0);
 
         // ~ Warp to post-claimDelay and query claimable ~
 
         vm.warp(block.timestamp + arcMinter.claimDelay());
 
-        requested = arcMinter.getPendingClaims(address(unrealUSTB));
-        claimable = arcMinter.claimableTokens(alice, address(unrealUSTB));
+        requested = arcMinter.getPendingClaims(address(reUSDC));
+        claimable = arcMinter.claimableTokens(ALICE, address(reUSDC));
 
-        assertEq(requested, amount);
-        assertEq(claimable, amount);
+        assertEq(requested, quoteOut);
+        assertEq(claimable, quoteOut);
 
         // ~ Alice claims ~
 
-        uint256 preBal = unrealUSTB.balanceOf(address(arcMinter));
+        uint256 preBal = reUSDC.balanceOf(address(arcMinter));
 
-        vm.prank(alice);
-        arcMinter.claimTokens(address(unrealUSTB));
+        vm.prank(ALICE);
+        arcMinter.claimTokens(address(reUSDC));
 
         // ~ Post-state check 2 ~
 
-        assertEq(arcUSDToken.balanceOf(alice), 0);
-        assertApproxEqAbs(unrealUSTB.balanceOf(alice), amount, 1);
-        assertApproxEqAbs(unrealUSTB.balanceOf(address(arcMinter)), preBal - amount, 1);
+        assertEq(arcUSDToken.balanceOf(ALICE), 0);
+        assertApproxEqAbs(reUSDC.balanceOf(ALICE), quoteOut, 1);
+        assertApproxEqAbs(reUSDC.balanceOf(address(arcMinter)), preBal - quoteOut, 1);
 
-        requests = arcMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
+        requests = arcMinter.getRedemptionRequests(ALICE, address(reUSDC), 0, 10);
         assertEq(requests.length, 1);
-        assertEq(requests[0].amount, amount);
+        assertEq(requests[0].amount, quoteOut);
         assertEq(requests[0].claimableAfter, block.timestamp);
-        assertEq(requests[0].claimed, amount);
+        assertEq(requests[0].claimed, quoteOut);
 
-        requested = arcMinter.getPendingClaims(address(unrealUSTB));
-        claimable = arcMinter.claimableTokens(alice, address(unrealUSTB));
+        requested = arcMinter.getPendingClaims(address(reUSDC));
+        claimable = arcMinter.claimableTokens(ALICE, address(reUSDC));
 
         assertEq(requested, 0);
         assertEq(claimable, 0);
     }
 
-    function test_USTB_claim_fuzzing(uint256 amount) public {
-        vm.assume(amount > 0.000000000001e18 && amount < _maxMintPerBlock);
+    function test_USDC_claim_fuzzing(uint256 amountIn) public {
+        vm.assume(amountIn > 0.000000000001e18 && amountIn < 100_000 * 1e6);
+        uint256 amount = arcMinter.quoteMint(address(reUSDC), ALICE, amountIn);
 
         // ~ config ~
 
         vm.prank(address(arcMinter));
-        arcUSDToken.mint(alice, amount);
-        _deal(address(unrealUSTB), address(arcMinter), amount);
+        arcUSDToken.mint(ALICE, amount);
+        deal(address(reUSDC), address(arcMinter), amountIn);
 
         // ~ Pre-state check ~
 
-        assertEq(arcUSDToken.balanceOf(alice), amount);
-        assertEq(unrealUSTB.balanceOf(alice), 0);
-        assertEq(unrealUSTB.balanceOf(address(arcMinter)), amount);
+        emit log_named_uint("arcUSD Balance", arcUSDToken.balanceOf(ALICE));
+        emit log_named_uint("reUSDC Amount", amountIn);
+
+        assertApproxEqAbs(arcUSDToken.balanceOf(ALICE), amount, 2);
+        assertEq(reUSDC.balanceOf(ALICE), 0);
+        assertEq(reUSDC.balanceOf(address(arcMinter)), amountIn);
+
+        amount = arcUSDToken.balanceOf(ALICE);
+        uint256 quoteOut = arcMinter.quoteRedeem(address(reUSDC), ALICE, amount);
+
+        emit log_named_uint("Redeem Quote", quoteOut);
+        emit log_named_uint("Amount arcUSD for redeem", amount);
 
         // ~ Alice executes requestTokens ~
 
-        vm.startPrank(alice);
+        vm.startPrank(ALICE);
         arcUSDToken.approve(address(arcMinter), amount);
-        arcMinter.requestTokens(address(unrealUSTB), amount);
+        arcMinter.requestTokens(address(reUSDC), amount);
         vm.stopPrank();
 
         // ~ Post-state check 1 ~
 
-        assertEq(arcUSDToken.balanceOf(alice), 0);
-        assertEq(unrealUSTB.balanceOf(alice), 0);
-        assertEq(unrealUSTB.balanceOf(address(arcMinter)), amount);
+        emit log_named_uint("Quoted reUSDC Amount", quoteOut);
+        emit log_named_uint("Amount arcUSD Burned", amount);
+
+        assertEq(arcUSDToken.balanceOf(ALICE), 0);
+        assertEq(reUSDC.balanceOf(ALICE), 0);
+        assertEq(reUSDC.balanceOf(address(arcMinter)), amountIn);
 
         arcUSDMinter.RedemptionRequest[] memory requests =
-            arcMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
+            arcMinter.getRedemptionRequests(ALICE, address(reUSDC), 0, 10);
         assertEq(requests.length, 1);
-        assertEq(requests[0].amount, amount);
-        assertEq(requests[0].claimableAfter, block.timestamp + 5 days);
+        assertEq(requests[0].amount, quoteOut);
+        assertEq(requests[0].claimableAfter, block.timestamp + 7 days);
         assertEq(requests[0].claimed, 0);
 
-        uint256 requested = arcMinter.getPendingClaims(address(unrealUSTB));
-        uint256 claimable = arcMinter.claimableTokens(alice, address(unrealUSTB));
+        uint256 requested = arcMinter.getPendingClaims(address(reUSDC));
+        uint256 claimable = arcMinter.claimableTokens(ALICE, address(reUSDC));
 
-        assertEq(requested, amount);
+        assertEq(requested, quoteOut);
         assertEq(claimable, 0);
 
         // ~ Warp to post-claimDelay and query claimable ~
 
         vm.warp(block.timestamp + arcMinter.claimDelay());
 
-        requested = arcMinter.getPendingClaims(address(unrealUSTB));
-        claimable = arcMinter.claimableTokens(alice, address(unrealUSTB));
+        requested = arcMinter.getPendingClaims(address(reUSDC));
+        claimable = arcMinter.claimableTokens(ALICE, address(reUSDC));
 
-        assertEq(requested, amount);
-        assertEq(claimable, amount);
+        assertEq(requested, quoteOut);
+        assertEq(claimable, quoteOut);
 
         // ~ Alice claims ~
 
-        uint256 preBal = unrealUSTB.balanceOf(address(arcMinter));
+        uint256 preBal = reUSDC.balanceOf(address(arcMinter));
 
-        vm.prank(alice);
-        arcMinter.claimTokens(address(unrealUSTB));
+        vm.prank(ALICE);
+        arcMinter.claimTokens(address(reUSDC));
 
         // ~ Post-state check 2 ~
 
-        assertEq(arcUSDToken.balanceOf(alice), 0);
-        assertApproxEqAbs(unrealUSTB.balanceOf(alice), amount, 2);
-        assertApproxEqAbs(unrealUSTB.balanceOf(address(arcMinter)), preBal - amount, 2);
+        assertEq(arcUSDToken.balanceOf(ALICE), 0);
+        assertApproxEqAbs(reUSDC.balanceOf(ALICE), quoteOut, 2);
+        assertApproxEqAbs(reUSDC.balanceOf(address(arcMinter)), preBal - quoteOut, 2);
 
-        requests = arcMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
+        requests = arcMinter.getRedemptionRequests(ALICE, address(reUSDC), 0, 10);
         assertEq(requests.length, 1);
-        assertEq(requests[0].amount, amount);
+        assertEq(requests[0].amount, quoteOut);
         assertEq(requests[0].claimableAfter, block.timestamp);
-        assertEq(requests[0].claimed, amount);
+        assertEq(requests[0].claimed, quoteOut);
 
-        requested = arcMinter.getPendingClaims(address(unrealUSTB));
-        claimable = arcMinter.claimableTokens(alice, address(unrealUSTB));
+        requested = arcMinter.getPendingClaims(address(reUSDC));
+        claimable = arcMinter.claimableTokens(ALICE, address(reUSDC));
 
         assertEq(requested, 0);
         assertEq(claimable, 0);
     }
 
-    function test_USTB_mint_after_rebase_fuzzing(uint256 index) public {
-        index = bound(index, 1.000000000000001e18, 2e18);
-        vm.assume(index > 1e18 && index < 2e18);
+    function test_USDC_custodianManager_withdrawable() public {
+
+        // ~ config ~
+
+        uint256 amount = 10 * 1e6;
 
         vm.prank(address(arcMinter));
-        arcUSDToken.mint(bob, 1 ether);
+        arcUSDToken.mint(ALICE, amount * 1e12); 
+        deal(address(reUSDC), address(arcMinter), amount);
 
-        uint256 preTotalSupply = arcUSDToken.totalSupply();
-        uint256 foreshadowTS = (((preTotalSupply * 1e18) / arcUSDToken.rebaseIndex()) * index) / 1e18;
+        // ~ State check ~
 
-        vm.prank(rebaseManager);
-        arcUSDToken.setRebaseIndex(index, 1);
+        assertEq(reUSDC.balanceOf(address(arcMinter)), amount);
 
-        assertApproxEqAbs(arcUSDToken.totalSupply(), foreshadowTS, 100);
+        uint256 bal = arcUSDToken.balanceOf(ALICE);
+        assertApproxEqAbs(bal, amount * 1e12, 1);
 
-        uint256 amount = 10 ether;
-        _deal(address(unrealUSTB), alice, amount);
+        assertEq(custodianManager.withdrawable(address(reUSDC)), amount);
 
-        uint256 preBal = unrealUSTB.balanceOf(alice);
+        // ~ Perform Redemption Request ~
 
-        uint256 deviation = amount * 1 / 100; // 1% deviation
-
-        // taker
-        vm.startPrank(alice);
-        unrealUSTB.approve(address(arcMinter), amount);
-        arcMinter.mint(address(unrealUSTB), amount, amount - deviation);
+        vm.startPrank(ALICE);
+        arcUSDToken.approve(address(arcMinter), bal/2);
+        arcMinter.requestTokens(address(reUSDC), bal/2);
         vm.stopPrank();
 
-        assertEq(unrealUSTB.balanceOf(alice), preBal - amount);
-        assertApproxEqAbs(unrealUSTB.balanceOf(address(arcMinter)), amount, 1);
-        assertApproxEqAbs(arcUSDToken.balanceOf(alice), amount, 3);
+        // ~ State check ~
+
+        assertApproxEqAbs(custodianManager.withdrawable(address(reUSDC)), amount/2, 10000); // diff of .01 reUSDC
+        assertEq(amount, arcMinter.getPendingClaims(address(reUSDC)) + custodianManager.withdrawable(address(reUSDC)));
     }
 
-    function test_USTB_requestTokens_after_rebase_noFuzz() public {
-        // ~ Config ~
+    function test_USDC_custodianManager_withdrawFunds() public {
+        // ~ config ~
 
-        uint256 index = 1.5 ether;
-        uint256 amount = 10 ether;
-        _deal(address(unrealUSTB), alice, amount);
+        uint256 amount = 10 * 1e6;
+        deal(address(reUSDC), address(arcMinter), amount);
 
-        // ~ Mint ~
+        // ~ State check ~
 
-        uint256 preBal = unrealUSTB.balanceOf(alice);
+        assertEq(reUSDC.balanceOf(address(arcMinter)), amount);
+        assertEq(custodianManager.withdrawable(address(reUSDC)), amount);
 
-        vm.startPrank(alice);
-        unrealUSTB.approve(address(arcMinter), amount);
-        arcMinter.mint(address(unrealUSTB), amount, amount - 1);
-        vm.stopPrank();
+        uint256 preBal = reUSDC.balanceOf(address(CUSTODIAN));
 
-        assertEq(unrealUSTB.balanceOf(alice), preBal - amount);
-        assertApproxEqAbs(unrealUSTB.balanceOf(address(arcMinter)), amount, 1);
-        assertApproxEqAbs(arcUSDToken.balanceOf(alice), amount, 1);
+        // ~ Custodian executes a withdrawal
 
-        uint256 preTotalSupply = arcUSDToken.totalSupply();
-        uint256 foreshadowTS = (preTotalSupply * index) / 1e18;
+        vm.prank(OWNER);
+        custodianManager.withdrawFunds(address(reUSDC), 0);
 
-        // ~ update rebaseIndex on arcUSD ~
+        // ~ State check ~
 
-        vm.prank(rebaseManager);
-        arcUSDToken.setRebaseIndex(index, 1);
+        assertEq(reUSDC.balanceOf(address(arcMinter)), 0);
+        assertEq(custodianManager.withdrawable(address(reUSDC)), 0);
 
-        assertApproxEqAbs(arcUSDToken.totalSupply(), foreshadowTS, 5);
-        uint256 newBal = (amount * arcUSDToken.rebaseIndex()) / 1e18;
-        assertGt(newBal, amount);
-        assertApproxEqAbs(arcUSDToken.balanceOf(alice), newBal, 2);
-        _deal(address(unrealUSTB), address(arcMinter), newBal);
-
-        newBal = arcUSDToken.balanceOf(alice);
-
-        // ~ Alice executes requestTokens ~
-
-        vm.startPrank(alice);
-        arcUSDToken.approve(address(arcMinter), newBal);
-        arcMinter.requestTokens(address(unrealUSTB), newBal);
-        vm.stopPrank();
-
-        // ~ Post-state check ~
-
-        assertEq(arcUSDToken.balanceOf(alice), 0);
-        assertEq(unrealUSTB.balanceOf(alice), preBal - amount);
-
-        arcUSDMinter.RedemptionRequest[] memory requests =
-            arcMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
-        assertEq(requests.length, 1);
-        assertEq(requests[0].amount, newBal);
-        assertEq(requests[0].claimableAfter, block.timestamp + 5 days);
-        assertEq(requests[0].claimed, 0);
-
-        uint256 requested = arcMinter.getPendingClaims(address(unrealUSTB));
-        uint256 claimable = arcMinter.claimableTokens(alice, address(unrealUSTB));
-
-        assertEq(requested, newBal);
-        assertEq(claimable, 0);
-
-        // ~ Warp to claimDelay-1 ~
-
-        vm.warp(block.timestamp + arcMinter.claimDelay() - 1);
-
-        requested = arcMinter.getPendingClaims(address(unrealUSTB));
-        claimable = arcMinter.claimableTokens(alice, address(unrealUSTB));
-
-        assertEq(requested, newBal);
-        assertEq(claimable, 0);
-
-        // ~ Warp to post-claimDelay and query claimable ~
-
-        vm.warp(block.timestamp + arcMinter.claimDelay());
-
-        requested = arcMinter.getPendingClaims(address(unrealUSTB));
-        claimable = arcMinter.claimableTokens(alice, address(unrealUSTB));
-
-        assertEq(requested, newBal);
-        assertEq(claimable, newBal);
-    }
-
-    function test_USTB_requestTokens_after_rebase_fuzzing(uint256 index) public {
-        index = bound(index, 1.0000000001e18, 2e18);
-        vm.assume(index > 1e18 && index < 2e18);
-
-        uint256 amount = 10 ether;
-        _deal(address(unrealUSTB), alice, amount);
-
-        uint256 preBal = unrealUSTB.balanceOf(alice);
-
-        // mint
-        vm.startPrank(alice);
-        unrealUSTB.approve(address(arcMinter), amount);
-        arcMinter.mint(address(unrealUSTB), amount, amount - 1);
-        vm.stopPrank();
-
-        assertEq(unrealUSTB.balanceOf(alice), preBal - amount);
-        assertApproxEqAbs(unrealUSTB.balanceOf(address(arcMinter)), amount, 1);
-        assertApproxEqAbs(arcUSDToken.balanceOf(alice), amount, 1);
-
-        uint256 preTotalSupply = arcUSDToken.totalSupply();
-        uint256 foreshadowTS = (preTotalSupply * index) / 1e18;
-
-        // setRebaseIndex
-        vm.prank(rebaseManager);
-        arcUSDToken.setRebaseIndex(index, 1);
-
-        assertApproxEqAbs(arcUSDToken.totalSupply(), foreshadowTS, 100);
-        uint256 newBal = amount * arcUSDToken.rebaseIndex() / 1e18;
-        assertGt(newBal, amount);
-        assertApproxEqAbs(arcUSDToken.balanceOf(alice), newBal, 2);
-        _deal(address(unrealUSTB), address(arcMinter), newBal);
-
-        newBal = arcUSDToken.balanceOf(alice);
-
-        // taker
-        vm.startPrank(alice);
-        arcUSDToken.approve(address(arcMinter), newBal);
-        arcMinter.requestTokens(address(unrealUSTB), newBal);
-        vm.stopPrank();
-
-        // ~ Post-state check ~
-
-        assertEq(arcUSDToken.balanceOf(alice), 0);
-        assertEq(unrealUSTB.balanceOf(alice), preBal - amount);
-
-        arcUSDMinter.RedemptionRequest[] memory requests =
-            arcMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
-        assertEq(requests.length, 1);
-        assertEq(requests[0].amount, newBal);
-        assertEq(requests[0].claimableAfter, block.timestamp + 5 days);
-        assertEq(requests[0].claimed, 0);
-
-        uint256 requested = arcMinter.getPendingClaims(address(unrealUSTB));
-        uint256 claimable = arcMinter.claimableTokens(alice, address(unrealUSTB));
-
-        assertEq(requested, newBal);
-        assertEq(claimable, 0);
-
-        // ~ Warp to claimDelay-1 ~
-
-        vm.warp(block.timestamp + arcMinter.claimDelay() - 1);
-
-        requested = arcMinter.getPendingClaims(address(unrealUSTB));
-        claimable = arcMinter.claimableTokens(alice, address(unrealUSTB));
-
-        assertEq(requested, newBal);
-        assertEq(claimable, 0);
-
-        // ~ Warp to post-claimDelay and query claimable ~
-
-        vm.warp(block.timestamp + arcMinter.claimDelay());
-
-        requested = arcMinter.getPendingClaims(address(unrealUSTB));
-        claimable = arcMinter.claimableTokens(alice, address(unrealUSTB));
-
-        assertEq(requested, newBal);
-        assertEq(claimable, newBal);
-    }
-
-    function test_USTB_claim_after_rebase_noFuzz() public {
-        // ~ Config ~
-
-        uint256 index = 1.5 ether;
-        uint256 amount = 10 ether;
-        _deal(address(unrealUSTB), alice, amount);
-
-        // ~ Mint ~
-
-        vm.startPrank(alice);
-        unrealUSTB.approve(address(arcMinter), amount);
-        arcMinter.mint(address(unrealUSTB), amount, amount - 1);
-        vm.stopPrank();
-
-        _deal(address(unrealUSTB), alice, 0);
-
-        assertEq(unrealUSTB.balanceOf(alice), 0);
-        assertApproxEqAbs(unrealUSTB.balanceOf(address(arcMinter)), amount, 1);
-        assertApproxEqAbs(arcUSDToken.balanceOf(alice), amount, 1);
-
-        uint256 preTotalSupply = arcUSDToken.totalSupply();
-        uint256 foreshadowTS = (preTotalSupply * index) / 1e18;
-
-        // ~ update rebaseIndex on arcUSD ~
-
-        vm.prank(rebaseManager);
-        arcUSDToken.setRebaseIndex(index, 1);
-
-        assertApproxEqAbs(arcUSDToken.totalSupply(), foreshadowTS, 5);
-        uint256 newBal = (preTotalSupply * arcUSDToken.rebaseIndex()) / 1e18;
-        assertGt(newBal, amount);
-        assertApproxEqAbs(arcUSDToken.balanceOf(alice), newBal, 2);
-        _deal(address(unrealUSTB), address(arcMinter), newBal);
-
-        newBal = arcUSDToken.balanceOf(alice);
-
-        // ~ Alice executes requestTokens ~
-
-        vm.startPrank(alice);
-        arcUSDToken.approve(address(arcMinter), newBal);
-        arcMinter.requestTokens(address(unrealUSTB), newBal);
-        vm.stopPrank();
-
-        // ~ Post-state check ~
-
-        assertEq(arcUSDToken.balanceOf(alice), 0);
-        assertEq(unrealUSTB.balanceOf(alice), 0);
-        assertEq(unrealUSTB.balanceOf(address(arcMinter)), newBal);
-
-        arcUSDMinter.RedemptionRequest[] memory requests =
-            arcMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
-        assertEq(requests.length, 1);
-        assertEq(requests[0].amount, newBal);
-        assertEq(requests[0].claimableAfter, block.timestamp + 5 days);
-        assertEq(requests[0].claimed, 0);
-
-        uint256 requested = arcMinter.getPendingClaims(address(unrealUSTB));
-        uint256 claimable = arcMinter.claimableTokens(alice, address(unrealUSTB));
-
-        assertEq(requested, newBal);
-        assertEq(claimable, 0);
-
-        // ~ Warp to post-claimDelay and query claimable ~
-
-        vm.warp(block.timestamp + arcMinter.claimDelay());
-
-        requested = arcMinter.getPendingClaims(address(unrealUSTB));
-        claimable = arcMinter.claimableTokens(alice, address(unrealUSTB));
-
-        assertEq(requested, newBal);
-        assertEq(claimable, newBal);
-
-        // ~ Alice claims ~
-
-        vm.prank(alice);
-        arcMinter.claimTokens(address(unrealUSTB));
-
-        // ~ Post-state check 2 ~
-
-        assertEq(arcUSDToken.balanceOf(alice), 0);
-        assertApproxEqAbs(unrealUSTB.balanceOf(alice), newBal, 1);
-
-        requests = arcMinter.getRedemptionRequests(alice, address(unrealUSTB), 0, 10);
-        assertEq(requests.length, 1);
-        assertEq(requests[0].amount, newBal);
-        assertEq(requests[0].claimed, newBal);
-
-        requested = arcMinter.getPendingClaims(address(unrealUSTB));
-        claimable = arcMinter.claimableTokens(alice, address(unrealUSTB));
-
-        assertEq(requested, 0);
-        assertEq(claimable, 0);
+        assertEq(reUSDC.balanceOf(address(CUSTODIAN)), preBal + amount);
     }
 }

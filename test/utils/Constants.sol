@@ -5,7 +5,7 @@ pragma solidity ^0.8.19;
 // UNREAL
 // ------
 
-// addresses
+// addresses - Unreal
 address constant UNREAL_USTB = 0x83feDBc0B85c6e29B589aA6BdefB1Cc581935ECD;
 address constant REAL_USTB = 0x83feDBc0B85c6e29B589aA6BdefB1Cc581935ECD;
 
@@ -18,6 +18,9 @@ address constant REAL_USTB_ORACLE = 0x268f1B53192Cbc68672008261F083cd75E8F74B6; 
 address constant UNREAL_REBASE_MANAGER = 0x1FB57aF994a03c49f9B1b7Eef938519463CdF996;
 
 address constant UNREAL_REVENUE_DISTRIBUTOR = 0x48027bfdc9923642F44aa5c199C7eF9f07B3d5D2;
+
+// addresses - Re.al
+address constant REAL_USDC = 0xc518A88c67CECA8B3f24c4562CB71deeB2AF86B7;
 
 // EOAs
 address constant UNREAL_JARON = 0x6EC858f9D87b9F7fd09f7e213ee292217E8D3B67;
