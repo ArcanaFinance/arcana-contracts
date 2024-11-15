@@ -194,6 +194,9 @@ contract BaseSetup is Test, IarcUSDDefinitions {
         arcMinter.addSupportedAsset(address(USDCToken), address(USTBOracle));
         arcMinter.addSupportedAsset(address(USDTToken), address(USTBOracle));
 
+        // set redemptionsEnabled to true
+        arcMinter.setRedemptionsEnabled(true);
+
         // Mint stEth to the actor in order to test
         USTB.mint(_amountToDeposit, bob);
         vm.stopPrank();

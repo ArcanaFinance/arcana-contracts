@@ -2150,4 +2150,34 @@ contract arcUSDMinterCoreTest is BaseSetup, CommonErrors {
         assertEq(arcMinter.quoteRedeem(address(USTB), bob, amountIn), amountIn * 1e18 / newPrice);
         assertEq(USTBOracle.latestPrice(), 1.2 * 1e18);
     }
+
+    function test_arcMinter_getOracleForAsset() public {
+        assertEq(arcMinter.getOracleForAsset(address(USTB)), address(USTBOracle));
+        assertEq(arcMinter.getOracleForAsset(address(1)), address(0));
+    }
+
+    function test_arcMinter_setRedemptionsEnabled() public {
+        assertEq(arcMinter.getRedemptionsEnabled(), true);
+
+        vm.prank(owner);
+        arcMinter.setRedemptionsEnabled(false);
+
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(CommonErrors.ValueUnchanged.selector));
+        arcMinter.setRedemptionsEnabled(false);
+
+        assertEq(arcMinter.getRedemptionsEnabled(), false);
+
+        uint256 amount = 10 ether;
+        vm.prank(address(arcMinter));
+        arcUSDToken.mint(alice, amount);
+        deal(address(USTB), address(arcMinter), amount);
+
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(arcUSDMinter.RedemptionsDisabled.selector));
+        arcMinter.requestTokens(address(USTB), amount);
+
+        vm.prank(owner);
+        arcMinter.setRedemptionsEnabled(true);
+    }
 }

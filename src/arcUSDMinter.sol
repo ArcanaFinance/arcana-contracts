@@ -79,6 +79,7 @@ contract arcUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
         uint48 claimDelay;
         uint8 activeAssetsLength;
         uint16 tax;
+        bool redemptionsEnabled;
     }
 
     IarcUSD public immutable arcUSD;
@@ -106,6 +107,7 @@ contract arcUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
     event WhitelisterUpdated(address indexed whitelister);
     event WhitelistStatusUpdated(address indexed whitelister, bool isWhitelisted);
     event TaxUpdated(uint16 newTax);
+    event RedemptionsEnabledUpdated(bool isEnabled);
     event CustodyTransfer(address indexed custodian, address indexed asset, uint256 amount);
     event Mint(address indexed user, address indexed asset, uint256 amount, uint256 received);
     event RebaseDisabled(address indexed asset);
@@ -136,6 +138,7 @@ contract arcUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
     error NotWhitelister(address account);
     error NoFundsWithdrawable(uint256 required, uint256 balance);
     error InsufficientWithdrawable(uint256 canWithdraw, uint256 amount);
+    error RedemptionsDisabled();
 
     /**
      * @dev Ensures that the function can only be called by the contract's designated custodian. This modifier enforces
@@ -504,6 +507,21 @@ contract arcUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
     }
 
     /**
+     * @notice Updates the redemptionsEnabled value.
+     * @dev This function allows the contract owner to toggle the requestTokens function. If redemptionsEnabled is set
+     * to false, requestTokens will be disabled.
+     * @param isEnabled If true, requestTokens can be called, otherwise false.
+     * @custom:error ValueUnchanges The desired value is already set.
+     * @custom:event RedemptionsEnabledUpdated contains the new enabled value.
+     */
+    function setRedemptionsEnabled(bool isEnabled) external onlyOwner {
+        arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
+        bool($.redemptionsEnabled).requireDifferentBoolean(isEnabled);
+        $.redemptionsEnabled = isEnabled;
+        emit RedemptionsEnabledUpdated(isEnabled);
+    }
+
+    /**
      * @notice Mints arcUSD tokens in exchange for a specified amount of a supported asset, which is directly transferred
      * to the custodian.
      * @dev This function facilitates a user to deposit a supported asset directly to the custodian and receive arcUSD
@@ -555,11 +573,13 @@ contract arcUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
      * @param asset The address of the supported asset the user wishes to claim.
      * @param amount The amount of arcUSD the user wishes to redeem for the asset.
      * @custom:error NotSupportedAsset The asset is not supported for redemption.
+     * @custom:error RedemptionsDisabled Redemptions are currently disabled.
      * @custom:event TokensRequested The address of the user who requested, the asset address, the amount requested, and
      * the timestamp after which the claim can be made.
      */
     function requestTokens(address asset, uint256 amount) external nonReentrant validAsset(asset, false) onlyWhitelisted {
         arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
+        if (!$.redemptionsEnabled) revert RedemptionsDisabled();
         arcUSD.burnFrom(msg.sender, amount);
         uint256 amountAsset = IOracle($.assetInfos[asset].oracle).amountOf(amount, $.maxAge, Math.Rounding.Floor);
         amountAsset = amountAsset - (amountAsset * $.tax / 1000);
@@ -740,6 +760,26 @@ contract arcUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
     function isSupportedAsset(address asset) external view returns (bool isSupported) {
         arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
         isSupported = $.assets.contains(asset) && !$.assetInfos[asset].removed;
+    }
+
+    /**
+     * @notice Returns the oracle this contract uses for a specified asset.
+     * @dev If returns address(0), asset is not supported.
+     * @param asset The ERC-20 token with the oracle in question.
+     * @return oracle The address of the oracle being used for the specified asset.
+     */
+    function getOracleForAsset(address asset) external view returns (address oracle) {
+        arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
+        oracle = $.assetInfos[asset].oracle;
+    }
+
+    /**
+     * @notice Returns whether redemption requests via requestTokens is enabled.
+     * If false, requestTokens is disabled.
+     */
+    function getRedemptionsEnabled() external view returns (bool isEnabled) {
+        arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
+        isEnabled = $.redemptionsEnabled;
     }
 
     /**

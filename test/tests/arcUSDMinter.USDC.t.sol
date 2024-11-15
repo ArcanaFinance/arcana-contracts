@@ -31,6 +31,7 @@ contract arcUSDMinterUSDCIntegrationTest is Test {
     CustodianManager internal custodianManager;
 
     IERC20 public reUSDC = IERC20(REAL_USDC);
+    address public USTB = 0x83feDBc0B85c6e29B589aA6BdefB1Cc581935ECD;
 
     address public constant OWNER = 0x946C569791De3283f33372731d77555083c329da;
     address public constant REBASE_MANAGER = 0x1FB57aF994a03c49f9B1b7Eef938519463CdF996;
@@ -39,7 +40,7 @@ contract arcUSDMinterUSDCIntegrationTest is Test {
     address public constant BOB = address(bytes20(bytes("Bob")));
 
     function setUp() public {
-        vm.createSelectFork(REAL_RPC_URL);
+        vm.createSelectFork(REAL_RPC_URL, 804278);
 
         arcUSDToken = arcUSD(0xAEC9e50e3397f9ddC635C6c429C8C7eca418a143);
         arcMinter = arcUSDMinter(0x6C2c653BCEB606bE8E7e92D008c62D0e05a83fd9);
@@ -54,6 +55,8 @@ contract arcUSDMinterUSDCIntegrationTest is Test {
 
         vm.startPrank(OWNER);
         arcMinter.addSupportedAsset(address(reUSDC), address(USDCOracle));
+        arcMinter.removeSupportedAsset(USTB);
+
         arcMinter.modifyWhitelist(ALICE, true);
         arcMinter.modifyWhitelist(BOB, true);
         vm.stopPrank();
@@ -80,6 +83,13 @@ contract arcUSDMinterUSDCIntegrationTest is Test {
     // ----------
     // Unit Tests
     // ----------
+
+    function test_USDC_no_mint_with_USTB() public {
+        uint256 amount = 10 * 1e18;
+        vm.prank(BOB);
+        vm.expectRevert(abi.encodeWithSelector(arcUSDMinter.NotSupportedAsset.selector, USTB));
+        arcMinter.mint(USTB, amount, 0);
+    }
 
     function test_USDC_mint_static() public {
         uint256 amount = 10 * 1e6;
