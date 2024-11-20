@@ -37,6 +37,8 @@ contract arcUSDMinterUSTBIntegrationTest is BaseSetup {
         arcMinter.removeSupportedAsset(address(USDTToken));
 
         arcMinter.addSupportedAsset(address(unrealUSTB), address(USTBOracle));
+        arcMinter.setRedemptionCap(address(unrealUSTB), 100_000_000 ether);
+
         vm.stopPrank();
     }
 

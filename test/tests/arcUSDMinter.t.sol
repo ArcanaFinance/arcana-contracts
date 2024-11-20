@@ -38,6 +38,9 @@ contract arcUSDMinterCoreTest is BaseSetup, CommonErrors {
         assertEq(assets[2], address(USDTToken));
 
         assertEq(arcMinter.custodian(), address(custodian));
+        assertEq(arcMinter.getRedemptionCap(address(USTB)), 100_000_000 ether);
+        assertEq(arcMinter.getRedemptionCap(address(USDCToken)), 100_000_000 ether);
+        assertEq(arcMinter.getRedemptionCap(address(USDTToken)), 100_000_000 ether);
     }
 
     function test_arcMinter_initializer() public {
@@ -2179,5 +2182,36 @@ contract arcUSDMinterCoreTest is BaseSetup, CommonErrors {
 
         vm.prank(owner);
         arcMinter.setRedemptionsEnabled(true);
+    }
+
+    function test_arcMinter_requestTokens_cap() public {
+        // ~ config ~
+
+        uint256 amount = 10 ether;
+
+        vm.prank(address(arcMinter));
+        arcUSDToken.mint(alice, amount);
+        deal(address(USTB), address(arcMinter), amount);
+
+        // set redemption cap to amount - 1
+        vm.prank(owner);
+        arcMinter.setRedemptionCap(address(USTB), amount - 1);
+
+        // revert -> amount exceeds cap
+        vm.startPrank(alice);
+        arcUSDToken.approve(address(arcMinter), amount);
+        vm.expectRevert(abi.encodeWithSelector(arcUSDMinter.RedemptionCapExceeded.selector, amount, amount-1));
+        arcMinter.requestTokens(address(USTB), amount);
+        vm.stopPrank();
+
+        // update cap to amount
+        vm.prank(owner);
+        arcMinter.setRedemptionCap(address(USTB), amount);
+
+        // successful redemption request
+        vm.startPrank(alice);
+        arcUSDToken.approve(address(arcMinter), amount);
+        arcMinter.requestTokens(address(USTB), amount);
+        vm.stopPrank();
     }
 }

@@ -80,6 +80,7 @@ contract arcUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
         uint8 activeAssetsLength;
         uint16 tax;
         bool redemptionsEnabled;
+        mapping(address asset => uint256) redemptionCap;
     }
 
     IarcUSD public immutable arcUSD;
@@ -128,6 +129,7 @@ contract arcUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
         uint256 newClaimableAfter
     );
     event TokensClaimed(address indexed user, address indexed asset, uint256 arcUSDAmount, uint256 claimed);
+    event RedemptionCapUpdated(address indexed asset, uint256 cap);
 
     error InsufficientOutputAmount(uint256 expected, uint256 actual);
     error NoTokensClaimable();
@@ -139,6 +141,7 @@ contract arcUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
     error NoFundsWithdrawable(uint256 required, uint256 balance);
     error InsufficientWithdrawable(uint256 canWithdraw, uint256 amount);
     error RedemptionsDisabled();
+    error RedemptionCapExceeded(uint256 amount, uint256 cap);
 
     /**
      * @dev Ensures that the function can only be called by the contract's designated custodian. This modifier enforces
@@ -516,9 +519,22 @@ contract arcUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
      */
     function setRedemptionsEnabled(bool isEnabled) external onlyOwner {
         arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
-        bool($.redemptionsEnabled).requireDifferentBoolean(isEnabled);
+        $.redemptionsEnabled.requireDifferentBoolean(isEnabled);
         $.redemptionsEnabled = isEnabled;
         emit RedemptionsEnabledUpdated(isEnabled);
+    }
+
+    /**
+     * @notice Allows the owner to set the redemption cap for a given asset.
+     * @dev If the redemptionCap is met via pendingClaims redemption requests will be briefly halted.
+     * @param asset The ERC-20 token which cap we're updating.
+     * @param cap New redemption cap for asset
+     */
+    function setRedemptionCap(address asset, uint256 cap) external onlyOwner validAsset(asset, true) {
+        arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
+        $.redemptionCap[asset].requireDifferentUint256(cap);
+        $.redemptionCap[asset] = cap;
+        emit RedemptionCapUpdated(asset, cap);
     }
 
     /**
@@ -584,6 +600,7 @@ contract arcUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
         uint256 amountAsset = IOracle($.assetInfos[asset].oracle).amountOf(amount, $.maxAge, Math.Rounding.Floor);
         amountAsset = amountAsset - (amountAsset * $.tax / 1000);
         $.pendingClaims[asset] += amountAsset;
+        if ($.pendingClaims[asset] > $.redemptionCap[asset]) revert RedemptionCapExceeded($.pendingClaims[asset], $.redemptionCap[asset]);
         uint48 claimableAfter = clock() + $.claimDelay;
         RedemptionRequest[] storage userRequests = $.redemptionRequests[msg.sender];
         uint256[] storage userRequestsByAsset = $.redemptionRequestsByAsset[msg.sender][asset];
@@ -780,6 +797,16 @@ contract arcUSDMinter is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
     function getRedemptionsEnabled() external view returns (bool isEnabled) {
         arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
         isEnabled = $.redemptionsEnabled;
+    }
+
+    /**
+     * @notice Returns the maximum amount of pending redemptions there's allowed to be for a given asset at one time.
+     * @dev If the redemptionCap is met via pendingClaims redemption requests will be briefly halted.
+     * @param asset The ERC-20 token which cap we're fetching.
+     */
+    function getRedemptionCap(address asset) external view returns (uint256 cap) {
+        arcUSDMinterStorage storage $ = _getarcUSDMinterStorage();
+        cap = $.redemptionCap[asset];
     }
 
     /**

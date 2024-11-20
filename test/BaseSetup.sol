@@ -197,6 +197,11 @@ contract BaseSetup is Test, IarcUSDDefinitions {
         // set redemptionsEnabled to true
         arcMinter.setRedemptionsEnabled(true);
 
+        // set redemption cap
+        arcMinter.setRedemptionCap(address(USTB), 100_000_000 ether);
+        arcMinter.setRedemptionCap(address(USDCToken), 100_000_000 ether);
+        arcMinter.setRedemptionCap(address(USDTToken), 100_000_000 ether);
+
         // Mint stEth to the actor in order to test
         USTB.mint(_amountToDeposit, bob);
         vm.stopPrank();
