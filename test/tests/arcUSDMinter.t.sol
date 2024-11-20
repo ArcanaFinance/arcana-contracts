@@ -2214,4 +2214,44 @@ contract arcUSDMinterCoreTest is BaseSetup, CommonErrors {
         arcMinter.requestTokens(address(USTB), amount);
         vm.stopPrank();
     }
+
+    function test_arcMinter_requestTokens_claim_cap() public {
+        // ~ config ~
+
+        uint256 amount = 10 ether;
+
+        vm.prank(address(arcMinter));
+        arcUSDToken.mint(alice, amount*2);
+        deal(address(USTB), address(arcMinter), amount*2);
+
+        // set redemption cap to amount - 1
+        vm.prank(owner);
+        arcMinter.setRedemptionCap(address(USTB), amount);
+
+        // successful redemption request
+        vm.startPrank(alice);
+        arcUSDToken.approve(address(arcMinter), amount);
+        arcMinter.requestTokens(address(USTB), amount);
+        vm.stopPrank();
+
+        // revert -> amount exceeds cap
+        vm.startPrank(alice);
+        arcUSDToken.approve(address(arcMinter), amount);
+        vm.expectRevert(abi.encodeWithSelector(arcUSDMinter.RedemptionCapExceeded.selector, amount+amount, amount));
+        arcMinter.requestTokens(address(USTB), amount);
+        vm.stopPrank();
+
+        // Warp to post-claimDelay
+        vm.warp(block.timestamp + arcMinter.claimDelay());
+
+        // alice claims
+        vm.prank(alice);
+        arcMinter.claimTokens(address(USTB));
+
+        // successful redemption request
+        vm.startPrank(alice);
+        arcUSDToken.approve(address(arcMinter), amount);
+        arcMinter.requestTokens(address(USTB), amount);
+        vm.stopPrank();
+    }
 }

@@ -20,7 +20,7 @@ import "../../../test/utils/Constants.sol";
 
     @dev To verify manually:
     forge verify-contract <CONTRACT_ADDRESS> --chain-id 111188 --watch \
-    src/arcUSD.sol:arcUSD --verifier blockscout --verifier-url https://explorer.re.al//api \
+    src/arcUSDMinter.sol:arcUSDMinter --verifier blockscout --verifier-url https://explorer.re.al//api \
     --constructor-args $(cast abi-encode "constructor(address)" 0xAEC9e50e3397f9ddC635C6c429C8C7eca418a143)
  */
 
